@@ -1,10 +1,15 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { getMasters, type MasterUser } from '@/lib/admin-api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  getMasters,
+  setMasterStatus,
+  type MasterUser,
+} from '@/lib/admin-api';
 import { QK } from '@/lib/query-keys';
 import DataTable, { StatusBadge, type Column } from '@/components/admin/DataTable';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { formatDateTime } from '@/lib/format';
 
 const statusText: Record<string, { t: string; tone: 'green' | 'orange' | 'gray' | 'red' }> = {
@@ -24,7 +29,10 @@ const skillsText = (s?: unknown) => {
   }
 };
 
+type MasterToggleStatus = 'active' | 'disabled';
+
 export default function MasterListPage() {
+  const qc = useQueryClient();
   // react-query 取数：同一 queryKey 的在途请求会被合并，避免初始化重复请求。
   const { data: rows = [], isLoading: loading } = useQuery<MasterUser[]>({
     queryKey: QK.adminMasters,
@@ -44,6 +52,41 @@ export default function MasterListPage() {
         : rows,
     [rows, kw],
   );
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: QK.adminMasters });
+
+  // 停用 二次确认对话框的待确认项
+  const [pending, setPending] = useState<{
+    id: string;
+    status: MasterToggleStatus;
+    label: string;
+    message: string;
+  } | null>(null);
+
+  // 启 / 停（pending 走审核流程，不在本处操作）
+  const statusMut = useMutation({
+    mutationFn: (v: { id: string; status: MasterToggleStatus }) =>
+      setMasterStatus(v.id, v.status),
+    onSuccess: () => {
+      invalidate();
+      setPending(null);
+    },
+  });
+
+  const toggleStatus = (r: MasterUser) => {
+    const next: MasterToggleStatus = r.status === 'active' ? 'disabled' : 'active';
+    const label = next === 'disabled' ? '停用' : '启用';
+    if (next === 'active') {
+      statusMut.mutate({ id: r.id, status: next });
+      return;
+    }
+    setPending({
+      id: r.id,
+      status: next,
+      label,
+      message: `确定${label}师傅「${r.realName}」？停用后该师傅将无法接单。`,
+    });
+  };
 
   const columns: Column<MasterUser>[] = [
     { key: 'realName', title: '姓名', render: (r) => r.realName || '-' },
@@ -70,6 +113,27 @@ export default function MasterListPage() {
       },
     },
     { key: 'createdAt', title: '注册时间', render: (r) => formatDateTime(r.createdAt) },
+    {
+      key: 'op',
+      title: '操作',
+      render: (r) => {
+        if (r.status === 'pending') {
+          return <span style={{ color: 'var(--color-text-soft)' }}>待审核</span>;
+        }
+        return (
+          <button
+            type="button"
+            className={
+              r.status === 'active' ? 'btn-link btn-link-danger' : 'btn-link'
+            }
+            onClick={() => toggleStatus(r)}
+            disabled={statusMut.isPending}
+          >
+            {r.status === 'active' ? '停用' : '启用'}
+          </button>
+        );
+      },
+    },
   ];
 
   return (
@@ -88,6 +152,18 @@ export default function MasterListPage() {
         </div>
         <DataTable columns={columns} rows={filtered} rowKey={(r) => r.id} loading={loading} />
       </div>
+
+      <ConfirmDialog
+        open={!!pending}
+        title="操作确认"
+        message={pending?.message}
+        confirmLabel={pending?.label}
+        loading={statusMut.isPending}
+        onConfirm={() => {
+          if (pending) statusMut.mutate({ id: pending.id, status: pending.status });
+        }}
+        onCancel={() => setPending(null)}
+      />
     </div>
   );
 }

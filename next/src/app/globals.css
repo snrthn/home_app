@@ -761,10 +761,6 @@ body {
 }
 
 /* 账号安全入口（修改密码按钮）：位于「保存修改」上方，上下留白 */
-.password-dialog-entry {
-  margin: 16px 0;
-}
-
 /* Toast 轻提示（替代页面内联提示，不占布局、动态直观） */
 .toast-container {
   position: fixed;

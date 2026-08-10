@@ -1,6 +1,6 @@
 import api from './api';
 
-// 管理端「用户」相关接口封装（平台管理员 / 客户 / 师傅 / 认证审核）
+// 管理端「用户」相关接口封装（后台账号 / 客户 / 师傅 / 认证审核）
 
 export interface AdminUser {
   id: string;
@@ -41,9 +41,42 @@ export interface MasterUser {
   user?: { phone?: string; profile?: { nickname?: string | null } | null };
 }
 
-// 平台管理员列表
+// 后台账号列表
 export function getAdmins(): Promise<AdminUser[]> {
   return api.get('/users/admins').then((r) => r.data);
+}
+
+// 新增后台账号（手机号 + 初始密码 + 选填昵称）
+export function createAdmin(dto: {
+  phone: string;
+  password: string;
+  nickname?: string;
+}): Promise<AdminUser> {
+  return api.post('/users/admins', dto).then((r) => r.data);
+}
+
+// 修改后台账号（昵称可改；密码选填，留空不改）
+export function updateAdmin(
+  id: string,
+  dto: { nickname?: string; password?: string },
+): Promise<AdminUser> {
+  return api.patch(`/users/admins/${id}`, dto).then((r) => r.data);
+}
+
+// 启 / 停 / 冻结 后台账号
+export function setAdminStatus(
+  id: string,
+  status: 'active' | 'disabled' | 'frozen',
+): Promise<AdminUser> {
+  return api.post(`/users/admins/${id}/status`, { status }).then((r) => r.data);
+}
+
+// 启 / 停 / 冻结 客户
+export function setCustomerStatus(
+  id: string,
+  status: 'active' | 'disabled' | 'frozen',
+): Promise<CustomerUser> {
+  return api.post(`/users/customers/${id}/status`, { status }).then((r) => r.data);
 }
 
 // 客户列表（后端最多取 200 条，前端再做关键词过滤）
@@ -64,6 +97,14 @@ export function getPendingMasters(): Promise<MasterUser[]> {
 // 审核师傅：status='active' 通过（并标记已实名认证）；'disabled' 拒绝
 export function approveMaster(id: string, status: 'active' | 'disabled', reason?: string) {
   return api.post(`/masters/${id}/approve`, { status, reason }).then((r) => r.data);
+}
+
+// 启用 / 停用 师傅（仅 active / disabled）
+export function setMasterStatus(
+  id: string,
+  status: 'active' | 'disabled',
+): Promise<MasterUser> {
+  return api.post(`/masters/${id}/status`, { status }).then((r) => r.data);
 }
 
 // ===================== 协议管理（运营端） =====================

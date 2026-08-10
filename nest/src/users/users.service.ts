@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
 
@@ -41,6 +41,43 @@ export class UsersService {
         role: 'admin',
         profile: { create: { nickname: nickname || `管理员${phone.slice(-4)}` } },
       },
+    });
+  }
+
+  async updateAdmin(
+    id: string,
+    dto: { nickname?: string; password?: string },
+  ) {
+    const passwordHash = dto.password
+      ? await bcrypt.hash(dto.password, 10)
+      : undefined;
+    return this.prisma.user.update({
+      where: { id, role: 'admin' },
+      data: {
+        ...(passwordHash ? { passwordHash } : {}),
+        ...(dto.nickname !== undefined
+          ? { profile: { update: { nickname: dto.nickname } } }
+          : {}),
+      },
+    });
+  }
+
+  async setAdminStatus(id: string, status: string) {
+    const allowed = ['active', 'disabled', 'frozen'];
+    if (!allowed.includes(status)) {
+      throw new BadRequestException(`非法的账号状态: ${status}`);
+    }
+    return this.prisma.user.update({ where: { id, role: 'admin' }, data: { status } });
+  }
+
+  async setCustomerStatus(id: string, status: string) {
+    const allowed = ['active', 'disabled', 'frozen'];
+    if (!allowed.includes(status)) {
+      throw new BadRequestException(`非法的账号状态: ${status}`);
+    }
+    return this.prisma.user.update({
+      where: { id, role: 'customer' },
+      data: { status },
     });
   }
 }

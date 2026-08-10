@@ -19,7 +19,7 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     path: '/admin/users',
     icon: 'users',
     children: [
-      { key: 'admins', label: '平台管理员', path: '/admin/users/admins' },
+      { key: 'admins', label: '后台账号', path: '/admin/users/admins' },
       { key: 'customers', label: '客户管理', path: '/admin/users/customers' },
       { key: 'masters', label: '师傅管理', path: '/admin/users/masters' },
       { key: 'verifications', label: '认证审核', path: '/admin/users/verifications' },
@@ -36,8 +36,6 @@ export const ADMIN_MENU: AdminMenuItem[] = [
       { key: 'me', label: '个人中心', path: '/admin/me' },
       { key: 'roles', label: '角色权限', path: '/admin/settings/roles' },
       { key: 'logs', label: '操作日志', path: '/admin/settings/logs' },
-      { key: 'accounts', label: '后台账号', path: '/admin/settings/accounts' },
-      { key: 'config', label: '全局配置', path: '/admin/settings/config' },
     ],
   },
   {

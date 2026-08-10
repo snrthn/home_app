@@ -62,6 +62,11 @@ export class MastersService {
     return this.prisma.master.update({ where: { id }, data });
   }
 
+  // 启用 / 停用（仅 active/disabled，pending 走审核流程）
+  async setStatus(id: string, status: 'active' | 'disabled') {
+    return this.prisma.master.update({ where: { id }, data: { status } });
+  }
+
   // 师傅完善自身专属资料（实名/身份证/技能/服务区域），按当前登录用户的 userId 定位
   async updateMe(userId: string, dto: UpdateMasterMeDto) {
     const master = await this.prisma.master.findUnique({ where: { userId } });

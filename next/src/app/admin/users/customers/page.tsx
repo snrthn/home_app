@@ -1,16 +1,24 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { getCustomers, type CustomerUser } from '@/lib/admin-api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  getCustomers,
+  setCustomerStatus,
+  type CustomerUser,
+} from '@/lib/admin-api';
 import { QK } from '@/lib/query-keys';
 import DataTable, { StatusBadge, type Column } from '@/components/admin/DataTable';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { formatDateTime } from '@/lib/format';
 
 const genderText = (g?: string | null) =>
   g === 'male' ? '男' : g === 'female' ? '女' : '未知';
 
+type CustomerStatus = 'active' | 'disabled' | 'frozen';
+
 export default function CustomerListPage() {
+  const qc = useQueryClient();
   // react-query 取数：同一 queryKey 的在途请求会被合并，避免初始化重复请求。
   const { data: rows = [], isLoading: loading } = useQuery<CustomerUser[]>({
     queryKey: QK.adminCustomers,
@@ -30,6 +38,41 @@ export default function CustomerListPage() {
         : rows,
     [rows, kw],
   );
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: QK.adminCustomers });
+
+  // 停用 二次确认对话框的待确认项
+  const [pending, setPending] = useState<{
+    id: string;
+    status: CustomerStatus;
+    label: string;
+    message: string;
+  } | null>(null);
+
+  // 启 / 停（冻结也归到「启用」恢复为正常态）
+  const statusMut = useMutation({
+    mutationFn: (v: { id: string; status: CustomerStatus }) =>
+      setCustomerStatus(v.id, v.status),
+    onSuccess: () => {
+      invalidate();
+      setPending(null);
+    },
+  });
+
+  const toggleStatus = (r: CustomerUser) => {
+    const next: CustomerStatus = r.status === 'active' ? 'disabled' : 'active';
+    const label = next === 'disabled' ? '停用' : '启用';
+    if (next === 'active') {
+      statusMut.mutate({ id: r.id, status: next });
+      return;
+    }
+    setPending({
+      id: r.id,
+      status: next,
+      label,
+      message: `确定${label}客户「${r.profile?.nickname || r.phone}」？停用后该客户将无法登录。`,
+    });
+  };
 
   const columns: Column<CustomerUser>[] = [
     { key: 'nickname', title: '昵称', render: (r) => r.profile?.nickname || '-' },
@@ -53,6 +96,22 @@ export default function CustomerListPage() {
     },
     { key: 'orders', title: '订单数', render: (r) => r._count?.customerOrders ?? 0 },
     { key: 'createdAt', title: '注册时间', render: (r) => formatDateTime(r.createdAt) },
+    {
+      key: 'op',
+      title: '操作',
+      render: (r) => (
+        <button
+          type="button"
+          className={
+            r.status === 'active' ? 'btn-link btn-link-danger' : 'btn-link'
+          }
+          onClick={() => toggleStatus(r)}
+          disabled={statusMut.isPending}
+        >
+          {r.status === 'active' ? '停用' : '启用'}
+        </button>
+      ),
+    },
   ];
 
   return (
@@ -71,6 +130,18 @@ export default function CustomerListPage() {
         </div>
         <DataTable columns={columns} rows={filtered} rowKey={(r) => r.id} loading={loading} />
       </div>
+
+      <ConfirmDialog
+        open={!!pending}
+        title="操作确认"
+        message={pending?.message}
+        confirmLabel={pending?.label}
+        loading={statusMut.isPending}
+        onConfirm={() => {
+          if (pending) statusMut.mutate({ id: pending.id, status: pending.status });
+        }}
+        onCancel={() => setPending(null)}
+      />
     </div>
   );
 }

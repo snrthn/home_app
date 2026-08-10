@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { PasswordForm } from './PasswordForm';
+import { FormCard } from './FormCard';
 
 // 个人中心「账号安全」入口。
 // - 非受控（默认）：自带一个「修改/设置登录密码」入口按钮，点击弹出 Modal。
@@ -29,7 +30,7 @@ export function PasswordDialog({
   return (
     <>
       {!isControlled && (
-        <div className="password-dialog-entry">
+        <FormCard title="账号安全">
           <button
             type="button"
             className="btn-secondary"
@@ -38,7 +39,7 @@ export function PasswordDialog({
           >
             {hasPassword ? '修改登录密码' : '设置登录密码'}
           </button>
-        </div>
+        </FormCard>
       )}
 
       {isOpen && (
