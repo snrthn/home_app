@@ -1,0 +1,21 @@
+// react-query 的 queryKey 唯一来源。
+// 集中定义的意义：同一份数据在不同组件里必须用「同一个 key」，
+// react-query 才能把并发/重复的请求合并成一次（这是修掉「页面初始化请求两次」的前提）。
+// 例如 /auth/profile 会被 layout 的 CurrentUserLoader 与个人中心页同时需要，
+// 两处都用 QK.profile，最终只发一次请求。
+import type { AppRole } from './auth';
+
+export const QK = {
+  // 当前登录用户资料（/auth/profile）—— 按角色分 key，避免跨角色串缓存 / 命中旧缓存
+  profile: (role: AppRole) => ['auth', 'profile', role] as const,
+  // 管理端列表
+  adminAdmins: ['admin', 'admins'] as const,
+  adminCustomers: ['admin', 'customers'] as const,
+  adminMasters: ['admin', 'masters'] as const,
+  adminPendingMasters: ['admin', 'masters', 'pending'] as const,
+  adminAgreements: ['admin', 'agreements'] as const,
+  adminNotices: ['admin', 'notices'] as const,
+  publicNotices: (scope: string) => ['public', 'notices', scope] as const,
+  siteContent: (key: string) => ['site-content', key] as const,
+  adminSiteContent: (key: string) => ['admin', 'site-content', key] as const,
+} as const;

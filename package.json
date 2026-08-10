@@ -1,0 +1,21 @@
+{
+  "name": "laoma-jiadian",
+  "version": "0.0.1",
+  "private": true,
+  "packageManager": "pnpm@8.15.4",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "prisma:generate": "pnpm --filter @laoma/backend exec prisma generate",
+    "prisma:migrate": "pnpm --filter @laoma/backend exec prisma migrate dev",
+    "prisma:studio": "pnpm --filter @laoma/backend exec prisma studio"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

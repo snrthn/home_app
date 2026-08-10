@@ -1,0 +1,130 @@
+import {
+  Controller,
+  Post,
+  Body,
+  UseGuards,
+  Req,
+  Res,
+  Get,
+  Patch,
+  Headers,
+} from '@nestjs/common';
+import { AuthService } from './auth.service';
+import { JwtAuthGuard } from './jwt-auth.guard';
+import { SendCodeDto } from './dto/send-code.dto';
+import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
+import { RefreshDto } from './dto/refresh.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { SetPasswordDto } from './dto/set-password.dto';
+import { Role } from '@laoma/shared';
+import { setRoleTokenCookie, clearRoleTokenCookie } from './cookie.util';
+
+// 从 Authorization 头解出角色（仅用于退出时清掉对应角色的 cookie，无需验签）
+function roleFromAuthHeader(auth?: string): string | null {
+  if (!auth || !auth.startsWith('Bearer ')) return null;
+  const token = auth.slice(7).trim();
+  try {
+    const part = token.split('.')[1];
+    if (!part) return null;
+    const json = JSON.parse(
+      decodeURIComponent(
+        atob(part.replace(/-/g, '+').replace(/_/g, '/')),
+      ),
+    );
+    return json.role ?? null;
+  } catch {
+    return null;
+  }
+}
+
+@Controller('auth')
+export class AuthController {
+  constructor(private auth: AuthService) {}
+
+  @Post('send-code')
+  sendCode(@Body() dto: SendCodeDto) {
+    return this.auth.sendSmsCode(dto.phone);
+  }
+
+  @Post('register')
+  async register(
+    @Body() dto: RegisterDto,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: any,
+  ) {
+    const result =
+      dto.role === Role.Master
+        ? await this.auth.registerMaster(
+            dto.phone,
+            dto.code,
+            dto.realName,
+            dto.city,
+          )
+        : await this.auth.registerCustomer(dto.phone, dto.code || '', dto.nickname);
+    setRoleTokenCookie(res, req, result.role, result.accessToken);
+    return result;
+  }
+
+  @Post('login')
+  async login(
+    @Body() dto: LoginDto,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: any,
+  ) {
+    const mode = dto.mode ?? (dto.role === Role.Admin ? 'admin' : 'code');
+    let result;
+    if (mode === 'admin') {
+      result = await this.auth.adminLogin(dto.phone, dto.password || '');
+    } else if (mode === 'password') {
+      result = await this.auth.loginByPassword(dto.phone, dto.password || '');
+    } else {
+      const role = dto.role === Role.Master ? Role.Master : Role.Customer;
+      result = await this.auth.loginByCode(dto.phone, dto.code || '', role);
+    }
+    setRoleTokenCookie(res, req, result.role, result.accessToken);
+    return result;
+  }
+
+  @Post('refresh')
+  async refresh(
+    @Body() dto: RefreshDto,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: any,
+  ) {
+    const result = await this.auth.refreshToken(dto.refreshToken);
+    setRoleTokenCookie(res, req, result.role, result.accessToken);
+    return result;
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('profile')
+  profile(@Req() req: any) {
+    return this.auth.profile(req.user.sub);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('profile')
+  updateProfile(@Req() req: any, @Body() dto: UpdateProfileDto) {
+    return this.auth.updateProfile(req.user.sub, dto);
+  }
+
+  // 设置 / 重置登录密码（需登录态）。已有密码时须传 oldPassword 校验。
+  @UseGuards(JwtAuthGuard)
+  @Post('password')
+  setPassword(@Req() req: any, @Body() dto: SetPasswordDto) {
+    return this.auth.setPassword(req.user.sub, dto);
+  }
+
+  // 退出登录：幂等（token 已失效/缺失也返回成功）；同时清除该角色的服务端 cookie
+  @Post('logout')
+  logout(
+    @Req() req: any,
+    @Res({ passthrough: true }) res: any,
+    @Headers('authorization') authorization?: string,
+  ) {
+    this.auth.logoutFromHeader(authorization);
+    clearRoleTokenCookie(res, req, roleFromAuthHeader(authorization) ?? undefined);
+    return { ok: true };
+  }
+}

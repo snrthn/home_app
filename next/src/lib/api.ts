@@ -1,0 +1,136 @@
+import axios from 'axios';
+import { getToken, clearSession, clearUserCache } from './auth';
+import { queryClient } from '@/app/providers';
+
+// 解析 API 基地址：
+// - 优先用环境变量 NEXT_PUBLIC_API_BASE（部署/联调时可显式指定）。
+// - 否则跟随「页面实际访问的 host」拼后端端口，而不是写死 localhost。
+//   原因：lm_tokens 是 HttpOnly cookie，作用域按 host 绑定。若前端用 127.0.0.1 打开、
+//   而后端 API 基地址写死 localhost:3721，后端下的 cookie 落在 localhost 主机上，
+//   浏览器不会把它带到 127.0.0.1 的页面，middleware 读不到 cookie 就会把首页重定向回 /login，
+//   表现为「登录 201 成功、但不跳首页、也不调 profile、控制台无报错」。
+//   跟随页面 host 后，localhost / 127.0.0.1 / 局域网 IP 三种打开方式都能一致拿到 cookie。
+function resolveApiBase(): string {
+  const env = process.env.NEXT_PUBLIC_API_BASE;
+  if (env) return env;
+  if (typeof window !== 'undefined') {
+    return `http://${window.location.hostname}:3721/api`;
+  }
+  return 'http://localhost:3721/api';
+}
+
+const API_BASE = resolveApiBase();
+
+const api = axios.create({
+  baseURL: API_BASE,
+  // 跨端口（前端 3824 / 后端 3721）登录时后端会下 HttpOnly 的 lm_tokens cookie，
+  // 浏览器仅在 withCredentials=true 时才会在跨域响应里留存该 cookie，middleware 才能读到。
+  withCredentials: true,
+});
+
+api.interceptors.request.use((config) => {
+  const token = getToken();
+  if (token) {
+    config.headers = config.headers || {};
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// 全局 401 处置：凭证失效时清掉本地登录态并跳登录页。
+// - 排除 /auth/ 自身（登录/刷新/登出不能触发，否则互相套娃无限循环）
+// - 清 localStorage（token + 用户缓存）、尽力清后端 HttpOnly cookie（/auth/logout 幂等，
+//   token 失效也成功返回），再清 react-query 缓存，最后硬跳 /login 保证干净状态。
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status;
+    const url: string = error?.config?.url || '';
+    if (status === 401 && !url.includes('/auth/')) {
+      clearSession();
+      clearUserCache();
+      logoutApi().catch(() => {});
+      queryClient.clear();
+      if (
+        typeof window !== 'undefined' &&
+        window.location.pathname !== '/login'
+      ) {
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  },
+);
+
+export default api;
+
+/**
+ * 统一提取后端非 200 的提示文案。
+ * NestJS 校验失败（ValidationPipe）时 message 是 string[]，需 join；
+ * 网络层异常（超时 / 断网 / CORS）没有 response，要给可读兜底。
+ * 集中在此避免各业务代码散落 e?.response?.data?.message 的写法。
+ */
+export function getApiErrorMsg(e: unknown): string {
+  const err = e as {
+    response?: { status?: number; data?: { message?: unknown } };
+  };
+  const data = err?.response?.data;
+  if (data?.message !== undefined && data?.message !== null) {
+    return Array.isArray(data.message)
+      ? data.message.join('；')
+      : String(data.message);
+  }
+  if (err?.response?.status) {
+    return `请求失败（${err.response.status}）`;
+  }
+  // 无 response：断网 / 超时 / CORS 等网络层异常
+  return '网络异常，请稍后重试';
+}
+
+// 后端上传接口基于全局前缀 api，静态资源挂在 /uploads。
+// 这里把相对路径（/uploads/xxx.jpg）解析为带源站的绝对地址，跨端口（前端 3824 / 后端 3721）也能正常显示。
+const API_ORIGIN = API_BASE.replace(/\/api$/, '');
+
+export function resolveAsset(pathOrUrl?: string | null): string {
+  if (!pathOrUrl) return '';
+  if (/^https?:\/\//.test(pathOrUrl)) return pathOrUrl;
+  return API_ORIGIN + pathOrUrl;
+}
+
+// 上传头像：multipart 表单，字段名 file，返回后端给的相对 URL（/uploads/xxx.jpg）
+export function uploadAvatar(file: File): Promise<string> {
+  const form = new FormData();
+  form.append('file', file);
+  return api
+    .post('/upload', form)
+    .then((r) => (r.data && r.data.url) || '');
+}
+
+// 退出登录：调用后端受保护接口，成功后由调用方清本地会话
+export function logoutApi() {
+  return api.post('/auth/logout');
+}
+
+// 个人中心：拉取当前用户资料（含 UserProfile / Master 字段）
+export function getProfile() {
+  return api.get('/auth/profile').then((r) => r.data);
+}
+
+// PATCH /api/auth/profile：更新 UserProfile（昵称/头像/实名/性别/生日/所在地）
+export function updateProfile(dto: Record<string, unknown>) {
+  return api.patch('/auth/profile', dto);
+}
+
+// PATCH /api/masters/me：师傅完善自身专属资料（实名/身份证/技能/服务区域）
+export function updateMasterMe(dto: Record<string, unknown>) {
+  return api.patch('/masters/me', dto);
+}
+
+// POST /api/auth/password：设置或重置登录密码（需登录态）。
+// 首次设置可不传 oldPassword；重置必须传 oldPassword 且与当前密码一致。
+export function setPassword(dto: {
+  oldPassword?: string;
+  newPassword: string;
+}) {
+  return api.post('/auth/password', dto);
+}

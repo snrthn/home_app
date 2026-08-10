@@ -1,0 +1,436 @@
+// 老马家电 — Prisma schema (MySQL)
+// 对应 plan.md v0.4 库表设计。MVP 范围：单城市、单租户、一单一师傅。
+//
+// 2026-08-06 重构（方案 B）：
+// - User 拆为「账号核心 User」+「资料画像 UserProfile」(1:1)。
+//   User 只放登录/安全/审计类字段；昵称/头像/实名/性别/生日/城市/会员/积分/余额/信用分等放 UserProfile。
+// - Master 维持独立 1:1 扩展（师傅专属：idCard/skills/rating/orderCount/服务城市/审核状态）。
+// - 全部表增加 deletedAt(DateTime?) 支持逻辑删除（软删除）。
+
+generator client {
+  provider   = "prisma-client-js"
+  // pnpm 的 @prisma/client 是只读软链，无法直接生成进 store；
+  // 显式输出到项目可写的 node_modules/.prisma/client，并在代码中从此路径导入。
+  output      = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  admin
+  master
+  customer
+}
+
+enum OrderStatus {
+  pending_accept
+  accepted
+  servicing
+  pending_payment
+  paid
+  reviewed
+  cancelled
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  confirmed
+}
+
+enum ServiceType {
+  clean
+  repair
+}
+
+enum SettlementStatus {
+  offline_pending
+  offline_done
+}
+
+enum MasterStatus {
+  pending
+  active
+  disabled
+}
+
+// ---------------- 账号核心（登录 / 安全 / 审计） ----------------
+model User {
+  id            String   @id @default(cuid())
+  role          Role
+  phone         String   @unique
+  passwordHash  String?
+  email         String?
+  status        String   @default("active") // active | disabled | frozen（暂用 String，后期可升枚举）
+
+  // 逻辑删除
+  deletedAt     DateTime?
+
+  // 账号安全：改密/后台强制下线时 +1，JWT 校验比对使旧 token 失效
+  tokenVersion  Int      @default(0)
+
+  // 登录审计
+  lastLoginTime DateTime?
+  lastLoginIp   String?  @db.Text
+  loginCount    Int      @default(0)
+  lastActiveAt  DateTime?
+
+  // 验证状态
+  phoneVerified Boolean  @default(true)
+  emailVerified Boolean  @default(false)
+
+  // 来源 / 邀请 / 跨端身份
+  registerSource String?   @db.Text // wechat | code | invite | admin
+  invitedBy     String?    @db.Text // 邀请人 userId（自关联，业务层校验）
+  inviteCode    String?    @db.Text // 自己的邀请码
+  wechatOpenid  String?    @db.Text // 微信 OAuth（不强唯一：同一微信可同时是客户/师傅）
+  wechatUnionid String?    @db.Text
+  tenantId      String?    @db.Text // 多租户预留（MVP 单租户留空）
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  profile        UserProfile?
+  master         Master?
+  customerOrders Order[]     @relation("CustomerOrders")
+  addresses      Address[]
+  payments       Payment[]
+  reviews        Review[]
+}
+
+// ---------------- 资料画像（展示 / 业务扩展，1:1） ----------------
+model UserProfile {
+  userId        String   @id
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nickname      String?
+  avatar        String?
+  realName      String?  // 客户实名/发票；师傅实名仍存 Master.realName
+  gender        String?
+  birthday      DateTime?
+  // 用户所在地：省/市/区 + 行政编码。不使用单一 city 字段，统一为 6 段结构。
+  province      String?
+  provinceCode  String?
+  city          String?  // 市名称（6 段之一）
+  cityCode      String?
+  district      String?
+  districtCode  String?
+  vipLevel      Int      @default(0)
+  points        Int      @default(0)
+  balance       Decimal  @db.Decimal(10, 2) @default(0)
+  creditScore   Int      @default(100)
+  // 个人描述（自我介绍）：客户 / 师傅 / 管理员三端通用，在个人中心最后一行维护。
+  bio           String?  @db.Text
+  notifySettings Json?   // 推送偏好（短信/微信/邮件开关）
+  tags          Json?    // 运营标签（VIP/高频/风险）
+  remark        String?  // 后台备注
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  deletedAt     DateTime?
+}
+
+// ---------------- 师傅扩展（1:1，师傅专属） ----------------
+model Master {
+  id          String       @id @default(cuid())
+  userId      String       @unique
+  user        User         @relation(fields: [userId], references: [id])
+  realName    String
+  idCard      String?
+  // 师傅服务区域：省/市/区 + 行政编码。不使用单一 city 字段，统一为 6 段结构。
+  province      String?
+  provinceCode  String?
+  city          String?  // 市名称（原 city 字段，改为可空并纳入 6 段结构）
+  cityCode      String?
+  district      String?
+  districtCode  String?
+  skills      Json?
+  idVerified  Boolean      @default(false)
+  rating      Decimal      @db.Decimal(3, 2) @default(5.0)
+  orderCount  Int          @default(0)
+  status       MasterStatus @default(pending)
+  rejectReason String?      @db.Text // 认证审核拒绝理由（仅在 status=disabled 时有意义）
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  deletedAt   DateTime?
+
+  orders      Order[]
+  payments    Payment[]
+  reviews     Review[]
+  settlements Settlement[]
+  quotations  Quotation[]
+}
+
+model ServiceCategory {
+  id    String       @id @default(cuid())
+  name  String
+  icon  String?
+  sort  Int          @default(0)
+  items ServiceItem[]
+
+  deletedAt DateTime?
+}
+
+model ServiceItem {
+  id          String      @id @default(cuid())
+  categoryId  String
+  category    ServiceCategory @relation(fields: [categoryId], references: [id])
+  name        String
+  type        ServiceType
+  city        String
+  price       Decimal     @db.Decimal(10, 2)
+  unit        String?
+  description String?
+  sort        Int         @default(0)
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  deletedAt   DateTime?
+
+  orders Order[]
+}
+
+model Address {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  contactName  String
+  contactPhone String
+  province     String?
+  city         String
+  district     String?
+  detail       String
+  tag          String?
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  deletedAt    DateTime?
+
+  orders Order[]
+}
+
+model Order {
+  id               String      @id @default(cuid())
+  orderNo          String      @unique
+  customerId       String
+  customer         User        @relation("CustomerOrders", fields: [customerId], references: [id])
+  masterId         String?
+  master           Master?     @relation(fields: [masterId], references: [id])
+  addressId        String
+  address          Address     @relation(fields: [addressId], references: [id])
+  serviceItemId    String
+  serviceItem      ServiceItem @relation(fields: [serviceItemId], references: [id])
+  serviceSnapshot  Json
+  city             String
+  amount           Decimal     @db.Decimal(10, 2)
+  appointmentDate  DateTime?
+  appointmentSlot  String?
+  status           OrderStatus @default(pending_accept)
+  remark           String?
+  customerPhotos   Json?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  deletedAt        DateTime?
+
+  logs        OrderLog[]
+  payments    Payment[]
+  quotations  Quotation[]
+  settlement  Settlement?
+  review      Review?
+}
+
+model OrderLog {
+  id         String      @id @default(cuid())
+  orderId    String
+  order      Order       @relation(fields: [orderId], references: [id])
+  action     String
+  fromStatus OrderStatus?
+  toStatus   OrderStatus?
+  operatorId String?
+  photos     Json?
+  note       String?
+  createdAt  DateTime    @default(now())
+
+  deletedAt  DateTime?
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  orderId     String
+  order       Order         @relation(fields: [orderId], references: [id])
+  customerId  String
+  customer    User          @relation(fields: [customerId], references: [id])
+  masterId    String?
+  master      Master?       @relation(fields: [masterId], references: [id])
+  qrType      String // wechat | alipay
+  proofUrl    String?
+  amount      Decimal       @db.Decimal(10, 2)
+  status      PaymentStatus @default(pending)
+  confirmedBy String?
+  paidAt      DateTime?
+  createdAt   DateTime      @default(now())
+
+  deletedAt   DateTime?
+}
+
+model Quotation {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id])
+  masterId    String
+  master      Master   @relation(fields: [masterId], references: [id])
+  laborFee    Decimal? @db.Decimal(10, 2)
+  partsFee    Decimal? @db.Decimal(10, 2)
+  total       Decimal? @db.Decimal(10, 2)
+  partsDetail Json?
+  status      String?
+  createdAt   DateTime @default(now())
+
+  deletedAt   DateTime?
+}
+
+model Settlement {
+  id           String          @id @default(cuid())
+  orderId      String          @unique
+  order        Order           @relation(fields: [orderId], references: [id])
+  masterId     String
+  master       Master          @relation(fields: [masterId], references: [id])
+  orderAmount  Decimal         @db.Decimal(10, 2)
+  platformFee  Decimal         @db.Decimal(10, 2) @default(0)
+  masterAmount Decimal         @db.Decimal(10, 2)
+  status       SettlementStatus @default(offline_pending)
+  settledAt    DateTime?
+  note         String?
+  createdAt    DateTime        @default(now())
+
+  deletedAt    DateTime?
+}
+
+model Review {
+  id          String   @id @default(cuid())
+  orderId     String   @unique
+  order       Order    @relation(fields: [orderId], references: [id])
+  customerId  String
+  customer    User     @relation(fields: [customerId], references: [id])
+  masterId    String
+  master      Master   @relation(fields: [masterId], references: [id])
+  rating      Int
+  comment     String?
+  anonymous   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  deletedAt   DateTime?
+}
+
+model PaymentQr {
+  id        String   @id @default(cuid())
+  type      String // wechat | alipay
+  imageUrl  String
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+
+  deletedAt DateTime?
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String?
+  title     String
+  content   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  deletedAt DateTime?
+}
+
+// ---------------- 协议管理（注册协议 / 隐私政策，多端多版本） ----------------
+enum AgreementScope {
+  customer
+  master
+  admin
+}
+
+enum AgreementType {
+  registration
+  privacy
+}
+
+enum AgreementStatus {
+  draft
+  published
+  offline
+}
+
+// 协议类型/模板：代表「某端 + 某类型」这一个逻辑协议（如 客户端注册协议）
+model AgreementTemplate {
+  id       String          @id @default(cuid())
+  scope    AgreementScope
+  type     AgreementType
+  code     String          @unique // 稳定唯一键，如 customer-registration / master-privacy
+  title    String
+  versions AgreementVersion[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([scope, type])
+}
+
+// 协议版本：每次新建=一条记录，版本号按模板内 max+1 自增（只增不减）
+model AgreementVersion {
+  id          String          @id @default(cuid())
+  templateId  String
+  template    AgreementTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  version     Int // 按模板 max(version)+1 自增
+  title       String
+  contentHtml String?         @db.Text // 富文本 HTML（存储前经 DOMPurify 清洗）
+  status      AgreementStatus @default(draft)
+  isCurrent   Boolean         @default(false) // 当前生效版本（同模板仅一条为 true）
+  createdBy   String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  deletedAt   DateTime?
+
+  @@index([templateId])
+  @@index([isCurrent])
+}
+
+// 公告通知：运营端编辑发布的广播（活动/规则/维护/节假日等），按端投放。
+// 单表、无版本（一次性发布物）；status 控制草稿/已发布/已下线；pinned 置顶优先；
+// startAt/endAt 为可选生效时间窗（null 表示立即/长期）。
+model Notice {
+  id          String    @id @default(cuid())
+  scope       String // 'customer' | 'master' | 'admin' —— 投放端
+  title       String
+  summary     String? // 列表/摘要展示
+  contentHtml String    @db.Text // 富文本正文（存储前经 DOMPurify 清洗）
+  status      String    @default("draft") // 'draft' | 'published' | 'offline'
+  pinned      Boolean   @default(false) // 置顶优先
+  startAt     DateTime? // 生效开始（null=立即）
+  endAt       DateTime? // 生效结束（null=长期）
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  publishedAt DateTime?
+
+  @@index([scope, status])
+}
+
+// 站点内容（运营可维护的静态文案 / 富文本）：关于我们等。
+// 按 key 唯一存取（如 about_customer / about_master / about_admin）；无版本，直接覆盖更新。
+model SiteContent {
+  id          Int      @id @default(autoincrement())
+  key         String   @unique // 稳定唯一键，如 about_customer / about_master / about_admin
+  title       String   @default("")
+  contentHtml String   @db.Text // 富文本 HTML（展示层经 DOMPurify 清洗）
+  updatedAt   DateTime @updatedAt
+
+  @@index([key])
+}
