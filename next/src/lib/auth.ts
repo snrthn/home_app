@@ -40,6 +40,9 @@ export interface UserInfo {
   hasPassword?: boolean | null;
   // master 角色额外携带
   master?: MasterInfo | null;
+  // RBAC：当前用户的岗位角色（后端 /auth/profile 已返回，用于前端角色感知与自降权保护）
+  staffRoleId?: string | null;
+  staffRoleKey?: string | null;
 }
 
 function tokenKey(role: AppRole): string {

@@ -8,6 +8,8 @@ export interface AdminUser {
   status: string;
   createdAt?: string;
   profile?: { nickname?: string | null } | null;
+  // 内部岗位角色（RBAC）：后台账号关联哪个 StaffRole，决定其权限集合
+  staffRole?: { id: string; key: string; name: string } | null;
 }
 
 export interface CustomerUser {
@@ -46,19 +48,20 @@ export function getAdmins(): Promise<AdminUser[]> {
   return api.get('/users/admins').then((r) => r.data);
 }
 
-// 新增后台账号（手机号 + 初始密码 + 选填昵称）
+// 新增后台账号（手机号 + 初始密码 + 选填昵称 + 选填内部岗位角色）
 export function createAdmin(dto: {
   phone: string;
   password: string;
   nickname?: string;
+  staffRoleId?: string | null;
 }): Promise<AdminUser> {
   return api.post('/users/admins', dto).then((r) => r.data);
 }
 
-// 修改后台账号（昵称可改；密码选填，留空不改）
+// 修改后台账号（昵称可改；密码选填，留空不改；staffRoleId 显式传 null 解除角色）
 export function updateAdmin(
   id: string,
-  dto: { nickname?: string; password?: string },
+  dto: { nickname?: string; password?: string; staffRoleId?: string | null },
 ): Promise<AdminUser> {
   return api.patch(`/users/admins/${id}`, dto).then((r) => r.data);
 }
@@ -338,4 +341,84 @@ export function upsertSiteContent(
   dto: { title?: string; contentHtml?: string },
 ): Promise<SiteContent> {
   return api.put(`/admin/site-content/${key}`, dto).then((r) => r.data);
+}
+
+// ===================== RBAC 角色权限（仅超级管理员） =====================
+
+export interface Permission {
+  id: string;
+  code: string;
+  name: string;
+  group: string;
+  description?: string | null;
+}
+
+export interface StaffRole {
+  id: string;
+  key: string;
+  name: string;
+  description?: string | null;
+  isSystem: boolean;
+  userCount: number;
+  permissions: Permission[];
+}
+
+export interface FunctionPoint {
+  key: string;
+  name: string;
+  perm: string;
+  group?: string;
+  description?: string;
+}
+
+// 角色列表（含权限明细、用户数）
+export function getRbacRoles(): Promise<StaffRole[]> {
+  return api.get('/rbac/roles').then((r) => r.data);
+}
+
+// 单角色（含权限）
+export function getRbacRole(id: string): Promise<StaffRole> {
+  return api.get(`/rbac/roles/${id}`).then((r) => r.data);
+}
+
+// 角色覆盖的功能点（用于展示「该角色能干什么」）
+export function getRbacRoleFunctions(id: string): Promise<FunctionPoint[]> {
+  return api.get(`/rbac/roles/${id}/functions`).then((r) => r.data);
+}
+
+// 全量权限码，按 group 分组（角色编辑页勾选用）
+export function getRbacPermissions(): Promise<Record<string, Permission[]>> {
+  return api.get('/rbac/permissions').then((r) => r.data);
+}
+
+// 新建角色
+export function createRbacRole(dto: {
+  key: string;
+  name: string;
+  description?: string;
+}): Promise<StaffRole> {
+  return api.post('/rbac/roles', dto).then((r) => r.data);
+}
+
+// 编辑角色（名称/描述；系统角色由后端拦截不可改）
+export function updateRbacRole(
+  id: string,
+  dto: { name?: string; description?: string },
+): Promise<StaffRole> {
+  return api.put(`/rbac/roles/${id}`, dto).then((r) => r.data);
+}
+
+// 删除角色（有绑定用户 / 系统角色由后端拦截）
+export function deleteRbacRole(id: string): Promise<void> {
+  return api.delete(`/rbac/roles/${id}`).then((r) => r.data);
+}
+
+// 整体替换某角色的权限集
+export function setRbacRolePermissions(
+  id: string,
+  permissionCodes: string[],
+): Promise<void> {
+  return api
+    .put(`/rbac/roles/${id}/permissions`, { permissionCodes })
+    .then((r) => r.data);
 }

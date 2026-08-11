@@ -11,9 +11,12 @@ import {
   createAdmin,
   updateAdmin,
   setAdminStatus,
+  getRbacRoles,
   type AdminUser,
+  type StaffRole,
 } from '@/lib/admin-api';
 import { QK } from '@/lib/query-keys';
+import { useUserStore } from '@/lib/user-store';
 import DataTable, { StatusBadge, type Column } from '@/components/admin/DataTable';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { formatDateTime } from '@/lib/format';
@@ -37,6 +40,14 @@ export default function AdminListPage() {
     queryKey: QK.adminAdmins,
     queryFn: getAdmins,
   });
+  // 内部岗位角色下拉数据源
+  const { data: roles = [] } = useQuery<StaffRole[]>({
+    queryKey: QK.rbacRoles,
+    queryFn: getRbacRoles,
+  });
+  // 当前登录的后台账号 id（用于「改自己角色」二次确认）
+  const currentUserId = useUserStore((s) => s.users.admin?.id);
+
   const [kw, setKw] = useState('');
 
   // 新增 / 编辑 弹窗状态
@@ -45,6 +56,7 @@ export default function AdminListPage() {
   const [phone, setPhone] = useState('');
   const [nickname, setNickname] = useState('');
   const [password, setPassword] = useState('');
+  const [staffRoleId, setStaffRoleId] = useState('');
   const [err, setErr] = useState('');
 
   const filtered = useMemo(
@@ -58,17 +70,28 @@ export default function AdminListPage() {
     [rows, kw],
   );
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: QK.adminAdmins });
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: QK.adminAdmins });
+    qc.invalidateQueries({ queryKey: QK.rbacRoles });
+  };
 
-  // 新增 / 编辑 保存
+  // 保存前：若正在修改「自己的角色」且角色发生变化，需二次确认
+  const [roleChangePending, setRoleChangePending] = useState(false);
+
   const saveMut = useMutation({
     mutationFn: () =>
       editing
         ? updateAdmin(editing.id, {
             nickname: nickname || undefined,
             password: password || undefined,
+            staffRoleId: staffRoleId || null,
           })
-        : createAdmin({ phone, password, nickname: nickname || undefined }),
+        : createAdmin({
+            phone,
+            password,
+            nickname: nickname || undefined,
+            staffRoleId: staffRoleId || null,
+          }),
     onSuccess: () => {
       invalidate();
       setOpen(false);
@@ -76,6 +99,19 @@ export default function AdminListPage() {
     onError: (e: any) =>
       setErr(e?.response?.data?.message || e?.message || '保存失败'),
   });
+
+  const handleSave = () => {
+    if (
+      editing &&
+      currentUserId &&
+      editing.id === currentUserId &&
+      (staffRoleId || null) !== (editing.staffRole?.id || null)
+    ) {
+      setRoleChangePending(true);
+      return;
+    }
+    saveMut.mutate();
+  };
 
   // 停用 / 冻结 二次确认对话框的待确认项
   const [pending, setPending] = useState<{
@@ -100,6 +136,7 @@ export default function AdminListPage() {
     setPhone('');
     setNickname('');
     setPassword('');
+    setStaffRoleId('');
     setErr('');
     setOpen(true);
   };
@@ -108,6 +145,7 @@ export default function AdminListPage() {
     setPhone(r.phone);
     setNickname(r.profile?.nickname || '');
     setPassword('');
+    setStaffRoleId(r.staffRole?.id || '');
     setErr('');
     setOpen(true);
   };
@@ -140,6 +178,14 @@ export default function AdminListPage() {
         const s = statusMeta[r.status] || { t: r.status, tone: 'gray' as const };
         return <StatusBadge tone={s.tone}>{s.t}</StatusBadge>;
       },
+    },
+    {
+      key: 'role',
+      title: '内部角色',
+      render: (r) =>
+        r.staffRole?.name ?? (
+          <span style={{ color: 'var(--color-text-soft)' }}>未分配</span>
+        ),
     },
     {
       key: 'createdAt',
@@ -206,6 +252,19 @@ export default function AdminListPage() {
         onCancel={() => setPending(null)}
       />
 
+      <ConfirmDialog
+        open={roleChangePending}
+        title="修改自身角色"
+        message="你正在修改自己的内部岗位角色，保存后当前账号的权限集合将立即变化，可能影响你后续的操作权限。确定继续？"
+        confirmLabel="仍然修改"
+        loading={saveMut.isPending}
+        onConfirm={() => {
+          setRoleChangePending(false);
+          saveMut.mutate();
+        }}
+        onCancel={() => setRoleChangePending(false)}
+      />
+
       {open && (
         <div
           className="modal-overlay"
@@ -249,6 +308,21 @@ export default function AdminListPage() {
                 />
               </div>
               <div className="field">
+                <label className="field-label">内部岗位角色</label>
+                <select
+                  className="input"
+                  value={staffRoleId}
+                  onChange={(e) => setStaffRoleId(e.target.value)}
+                >
+                  <option value="">未分配</option>
+                  {roles.map((role) => (
+                    <option key={role.id} value={role.id}>
+                      {role.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
                 <label className="field-label">
                   {editing ? '重置密码（留空则不修改）' : '初始密码'}
                 </label>
@@ -272,7 +346,7 @@ export default function AdminListPage() {
               <button
                 type="button"
                 className="btn-primary"
-                onClick={() => saveMut.mutate()}
+                onClick={handleSave}
                 disabled={
                   saveMut.isPending || (!editing && (!phone || !password))
                 }

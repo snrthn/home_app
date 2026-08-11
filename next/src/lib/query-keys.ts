@@ -18,4 +18,8 @@ export const QK = {
   publicNotices: (scope: string) => ['public', 'notices', scope] as const,
   siteContent: (key: string) => ['site-content', key] as const,
   adminSiteContent: (key: string) => ['admin', 'site-content', key] as const,
+  // RBAC 角色权限
+  rbacRoles: ['rbac', 'roles'] as const,
+  rbacPermissions: ['rbac', 'permissions'] as const,
+  rbacRole: (id: string) => ['rbac', 'roles', id] as const,
 } as const;
