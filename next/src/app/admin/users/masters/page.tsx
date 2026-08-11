@@ -76,16 +76,13 @@ export default function MasterListPage() {
   const toggleStatus = (r: MasterUser) => {
     const next: MasterToggleStatus = r.status === 'active' ? 'disabled' : 'active';
     const label = next === 'disabled' ? '停用' : '启用';
-    if (next === 'active') {
-      statusMut.mutate({ id: r.id, status: next });
-      return;
-    }
-    setPending({
-      id: r.id,
-      status: next,
-      label,
-      message: `确定${label}师傅「${r.realName}」？停用后该师傅将无法接单。`,
-    });
+    // 停用 / 启用：统一弹二次确认框，避免误操作
+    const message = `确定${label}师傅「${r.realName}」？${
+      next === 'disabled'
+        ? '停用后该师傅将无法接单。'
+        : '启用后该师傅将恢复接单权限。'
+    }`;
+    setPending({ id: r.id, status: next, label, message });
   };
 
   const columns: Column<MasterUser>[] = [

@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PUBLIC_ROUTES, ROLE_HOME, roleFromPathname } from './lib/route-guards';
+import { findMenuPerm } from './lib/admin-menu';
 
-// 从 JWT 第二段（payload）解出 role。浏览器/Edge runtime 均内置 atob，无需 Node 依赖。
-function roleFromToken(token: string): string | null {
+// 解码 JWT 第二段（payload）：Edge runtime 内置 atob，无需 Node 依赖。
+// 返回完整 claims（role / perms / staffRoleKey），供角色校验与 RBAC 细粒度校验共用。
+// 注意：此处仅解码不验证签名（签名由后端校验）；middleware 只做粗粒度路由引导。
+function decodeToken(token: string): {
+  role?: string;
+  perms?: string[];
+  staffRoleKey?: string | null;
+} | null {
   try {
     const part = token.split('.')[1];
     if (!part) return null;
@@ -11,7 +18,7 @@ function roleFromToken(token: string): string | null {
         atob(part.replace(/-/g, '+').replace(/_/g, '/')),
       ),
     );
-    return json.role ?? null;
+    return json;
   } catch {
     return null;
   }
@@ -50,10 +57,28 @@ export function middleware(req: NextRequest) {
   }
 
   // 5) 已登录但 token 角色与当前路径角色不符（串号/越权）：回跳本角色首页
-  const tokenRole = roleFromToken(token);
+  const claims = decodeToken(token);
+  const tokenRole = claims?.role;
   if (tokenRole && tokenRole !== role) {
     const home = ROLE_HOME[tokenRole as keyof typeof ROLE_HOME] ?? '/login';
     return NextResponse.redirect(new URL(home, req.url));
+  }
+
+  // 6) 管理端 RBAC 细粒度校验：已登录的 admin，访问受限路由但无对应权限 → 跳无权限页。
+  //    super_admin 放行全部；其余按 JWT 内 perms 集合判定（与后端 @RequirePerm 同源）。
+  //    findMenuPerm 对“无 perm 约束”的路由（工作台/个人中心/目录）返回 null，直接放行。
+  //    /admin/no-permission 自身不在 ADMIN_MENU，返回 null → 不会被二次拦截，无重定向循环。
+  if (role === 'admin') {
+    const required = findMenuPerm(pathname);
+    if (required) {
+      const isSuper = claims?.staffRoleKey === 'super_admin';
+      const hasPerm = (claims?.perms ?? []).includes(required);
+      if (!isSuper && !hasPerm) {
+        const url = req.nextUrl.clone();
+        url.pathname = '/admin/no-permission';
+        return NextResponse.redirect(url);
+      }
+    }
   }
 
   return NextResponse.next();

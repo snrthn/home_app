@@ -49,6 +49,14 @@ export class AuthService {
     return true;
   }
 
+  // 账号状态校验：非 active（禁用 / 冻结）一律拒绝登录与 token 续期，
+  // 解决「禁用后仍能登录」的问题。status 为可选（兼容历史数据），缺省视为 active。
+  private assertActive(user: { status?: string | null }) {
+    if (user.status && user.status !== 'active') {
+      throw new UnauthorizedException('该账号已被禁用或冻结，无法登录');
+    }
+  }
+
   // 签发 token：除基础字段外，额外嵌入管理端 RBAC 上下文（岗位角色 + 权限码集合）。
   // 权限以 DB 为真相源，改角色/权限后由前端重新登录或刷新 token 生效。
   private async issueTokens(user: { id: string; role: string; phone: string }) {
@@ -202,6 +210,7 @@ export class AuthService {
           ? await this.autoRegisterMaster(phone)
           : await this.autoRegisterCustomer(phone);
     }
+    this.assertActive(user);
     return await this.issueTokens(user);
   }
 
@@ -211,6 +220,7 @@ export class AuthService {
       throw new UnauthorizedException('管理员账号不存在');
     if (!user.passwordHash)
       throw new UnauthorizedException('管理员未设置密码');
+    this.assertActive(user);
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) throw new UnauthorizedException('密码错误');
     return await this.issueTokens(user);
@@ -221,6 +231,7 @@ export class AuthService {
   async loginByPassword(phone: string, password: string) {
     const user = await this.prisma.user.findUnique({ where: { phone } });
     if (!user) throw new UnauthorizedException('账号不存在，请先使用验证码登录注册');
+    this.assertActive(user);
     if (!user.passwordHash)
       throw new UnauthorizedException('该账号尚未设置密码，请先登录后在个人中心设置');
     const ok = await bcrypt.compare(password, user.passwordHash);
@@ -256,6 +267,7 @@ export class AuthService {
         where: { id: payload.sub },
       });
       if (!user) throw new UnauthorizedException();
+      this.assertActive(user);
       return await this.issueTokens(user);
     } catch {
       throw new UnauthorizedException('refresh token 无效');
@@ -276,6 +288,8 @@ export class AuthService {
       },
     });
     if (!user) throw new UnauthorizedException('用户不存在');
+    // 登录态下被禁用/冻结：拦截用户信息接口，前端据此清除登录态并跳转登录页
+    this.assertActive(user);
     // 扁平化返回：昵称/头像/实名/性别/生日/所在地已迁移到 UserProfile
     const p = user.profile;
     const rolePerms =

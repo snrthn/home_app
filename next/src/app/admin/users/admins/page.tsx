@@ -153,19 +153,15 @@ export default function AdminListPage() {
     const next: AccountStatus = r.status === 'active' ? 'disabled' : 'active';
     const label =
       next === 'disabled' ? '停用' : r.status === 'disabled' ? '启用' : '解冻';
-    // 启用 / 解冻：直接执行；停用 / 冻结：弹统一确认框
-    if (next === 'active') {
-      statusMut.mutate({ id: r.id, status: next });
-      return;
-    }
-    setPending({
-      id: r.id,
-      status: next,
-      label,
-      message: `确定${label}「${r.profile?.nickname || r.phone}」？${
-        next === 'disabled' ? '停用后该账号将无法登录。' : ''
-      }`,
-    });
+    // 启用 / 解冻 / 停用：统一弹二次确认框，避免误操作
+    const message = `确定${label}「${r.profile?.nickname || r.phone}」？${
+      next === 'disabled'
+        ? '停用后该账号将无法登录。'
+        : next === 'active'
+        ? '启用后该账号将恢复登录权限。'
+        : ''
+    }`;
+    setPending({ id: r.id, status: next, label, message });
   };
 
   const columns: Column<AdminUser>[] = [
@@ -206,7 +202,10 @@ export default function AdminListPage() {
               r.status === 'active' ? 'btn-link btn-link-danger' : 'btn-link'
             }
             onClick={() => toggleStatus(r)}
-            disabled={statusMut.isPending}
+            disabled={statusMut.isPending || r.id === currentUserId}
+            title={
+              r.id === currentUserId ? '不能停用当前登录的账号' : undefined
+            }
           >
             {r.status === 'active' ? '停用' : '启用'}
           </button>
@@ -270,7 +269,6 @@ export default function AdminListPage() {
           className="modal-overlay"
           role="dialog"
           aria-modal="true"
-          onClick={() => setOpen(false)}
         >
           <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">

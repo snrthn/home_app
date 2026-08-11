@@ -78,6 +78,14 @@ export class UsersService {
     if (!allowed.includes(status)) {
       throw new BadRequestException(`非法的账号状态: ${status}`);
     }
+    // 超级管理员（根账号）不可被禁用 / 冻结，避免后台锁死、无人可恢复
+    const target = await this.prisma.user.findUnique({
+      where: { id, role: 'admin' },
+      select: { staffRole: { select: { key: true } } },
+    });
+    if (target?.staffRole?.key === 'super_admin') {
+      throw new BadRequestException('超级管理员账号不可被禁用或冻结');
+    }
     return this.prisma.user.update({ where: { id, role: 'admin' }, data: { status } });
   }
 

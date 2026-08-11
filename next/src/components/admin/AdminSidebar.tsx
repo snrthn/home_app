@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ADMIN_MENU } from '@/lib/admin-menu';
+import { useAdminPerms } from '@/lib/usePerm';
 import { Icon } from './admin-icons';
 
 const EXPANDED_KEY = 'admin_sidebar_expanded';
@@ -21,6 +22,9 @@ export default function AdminSidebar() {
   const [collapsed, setCollapsed] = useState(true);
   // 二级（子）菜单默认全部收起；仅当前所在分组的子菜单默认展开。
   const [openKeys, setOpenKeys] = useState<string[]>([]);
+  // 当前后台账号的权限上下文：can(perm) 判断某权限码是否可见；
+  // 超级管理员(staffRoleKey=super_admin)放行全部，无权限账号仅见“无 perm 约束”的项。
+  const { can } = useAdminPerms();
 
   useEffect(() => {
     if (localStorage.getItem(EXPANDED_KEY) === '1') setCollapsed(false);
@@ -72,11 +76,19 @@ export default function AdminSidebar() {
       <nav className="admin-nav">
         {ADMIN_MENU.map((item) => {
           const isDir = !!item.children?.length;
+          // 按权限过滤：路由项无 perm 约束或命中权限码则可见；
+          // 目录项需至少一个子项可见才显示（否则整组隐藏）。
+          const visibleChildren = isDir
+            ? item.children!.filter((c) => can(c.perm))
+            : [];
+          const visible = isDir ? visibleChildren.length > 0 : can(item.perm);
+          if (!visible) return null;
+
           const open = openKeys.includes(item.key);
           // 目录：无页面，整行不跳转；路由：可点击跳转。
-          // 高亮规则：路由自身匹配则高亮；目录在其某个子路由激活时高亮。
+          // 高亮规则：路由自身匹配则高亮；目录在其某个（可见）子路由激活时高亮。
           const itemActive = isDir
-            ? item.children!.some((c) => isActive(c.path))
+            ? visibleChildren.some((c) => isActive(c.path))
             : isActive(item.path);
           const rowClass = `admin-nav-item${itemActive ? ' active' : ''}${isDir ? ' is-dir' : ''}`;
           const rowInner = (
@@ -124,7 +136,7 @@ export default function AdminSidebar() {
 
               {isDir && open && !collapsed && (
                 <div className="admin-nav-children">
-                  {item.children!.map((child) => (
+                  {visibleChildren.map((child) => (
                     <Link
                       key={child.key}
                       href={child.path}

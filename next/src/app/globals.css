@@ -1036,6 +1036,10 @@ body {
 .toolbar-search {
   max-width: 280px;
 }
+/* 管理端工具栏内的「新增 / 新建」按钮统一靠右对齐 */
+.toolbar > .btn-primary {
+  margin-left: auto;
+}
 
 .data-table-wrap {
   position: relative;

@@ -297,7 +297,6 @@ export default function RoleManagePage() {
           className="modal-overlay"
           role="dialog"
           aria-modal="true"
-          onClick={() => setModal(null)}
         >
           <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">

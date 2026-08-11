@@ -62,16 +62,13 @@ export default function CustomerListPage() {
   const toggleStatus = (r: CustomerUser) => {
     const next: CustomerStatus = r.status === 'active' ? 'disabled' : 'active';
     const label = next === 'disabled' ? '停用' : '启用';
-    if (next === 'active') {
-      statusMut.mutate({ id: r.id, status: next });
-      return;
-    }
-    setPending({
-      id: r.id,
-      status: next,
-      label,
-      message: `确定${label}客户「${r.profile?.nickname || r.phone}」？停用后该客户将无法登录。`,
-    });
+    // 停用 / 启用：统一弹二次确认框，避免误操作
+    const message = `确定${label}客户「${r.profile?.nickname || r.phone}」？${
+      next === 'disabled'
+        ? '停用后该客户将无法登录。'
+        : '启用后该客户将恢复登录权限。'
+    }`;
+    setPending({ id: r.id, status: next, label, message });
   };
 
   const columns: Column<CustomerUser>[] = [

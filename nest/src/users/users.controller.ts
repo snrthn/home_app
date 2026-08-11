@@ -73,9 +73,14 @@ export class UsersController {
   @Roles(Role.Admin)
   @Post('admins/:id/status')
   setAdminStatus(
+    @Req() req: any,
     @Param('id') id: string,
     @Body() body: { status: string },
   ) {
+    // 防自锁死：禁止管理员禁用 / 冻结自己的账号
+    if (id === req.user?.sub) {
+      throw new BadRequestException('不能禁用或冻结自己当前登录的账号');
+    }
     return this.users.setAdminStatus(id, body.status);
   }
 

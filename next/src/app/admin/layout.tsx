@@ -3,6 +3,7 @@ import LogoutButton from '../../components/LogoutButton';
 import CurrentUserLoader from '../../components/CurrentUserLoader';
 import UserBadge from '../../components/UserBadge';
 import AdminSidebar from '../../components/admin/AdminSidebar';
+import AdminRouteGuard from '../../components/admin/AdminRouteGuard';
 
 // 管理端应用外壳：顶栏（品牌 / 用户 / 退出）+ 左侧可折叠菜单 + 右侧内容区。
 // 「个人中心」已从顶栏移入左侧菜单「系统设置」的第一项（见 lib/admin-menu.ts）。
@@ -28,7 +29,9 @@ export default function AdminLayout({
       <div className="admin-body">
         <AdminSidebar />
         <main className="admin-main">
-          <div className="admin-main-inner">{children}</div>
+          <div className="admin-main-inner">
+            <AdminRouteGuard>{children}</AdminRouteGuard>
+          </div>
         </main>
       </div>
     </div>

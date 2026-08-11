@@ -43,6 +43,8 @@ export interface UserInfo {
   // RBAC：当前用户的岗位角色（后端 /auth/profile 已返回，用于前端角色感知与自降权保护）
   staffRoleId?: string | null;
   staffRoleKey?: string | null;
+  // RBAC：当前账号拥有的权限码集合（后端 /auth/profile 已返回，用于侧边栏/按钮按权限过滤）
+  perms?: string[] | null;
 }
 
 function tokenKey(role: AppRole): string {
