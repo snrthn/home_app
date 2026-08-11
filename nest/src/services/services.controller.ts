@@ -2,7 +2,7 @@ import {
   Controller,
   Get,
   Post,
-  Put,
+  Patch,
   Delete,
   Body,
   Param,
@@ -17,41 +17,120 @@ import { Roles } from '../common/roles.decorator';
 import { RequirePerm } from '../common/perm.decorator';
 import { Audit } from '../common/audit.decorator';
 import { Role } from '@laoma/shared';
-import { CreateServiceItemDto } from './services.dto';
+import {
+  CreateCategoryDto,
+  UpdateCategoryDto,
+  CreateServiceItemDto,
+  UpdateServiceItemDto,
+} from './services.dto';
 
+// 管理端：服务类目 + 服务项目的增删改查（仅管理员）
+@Controller('admin/services')
+export class ServicesAdminController {
+  constructor(private s: ServicesService) {}
+
+  // ---------- 类目 ----------
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.Admin)
+  @Get('categories')
+  listCategories() {
+    return this.s.listCategories();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.Admin)
+  @Get('categories/:id')
+  getCategory(@Param('id') id: string) {
+    return this.s.getCategory(id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
+  @Roles(Role.Admin)
+  @Audit('services', 'services:category_manage')
+  @RequirePerm('services:category_manage')
+  @Post('categories')
+  createCategory(@Body() dto: CreateCategoryDto) {
+    return this.s.createCategory(dto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
+  @Roles(Role.Admin)
+  @Audit('services', 'services:category_manage')
+  @RequirePerm('services:category_manage')
+  @Patch('categories/:id')
+  updateCategory(@Param('id') id: string, @Body() dto: UpdateCategoryDto) {
+    return this.s.updateCategory(id, dto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
+  @Roles(Role.Admin)
+  @Audit('services', 'services:category_manage')
+  @RequirePerm('services:category_manage')
+  @Delete('categories/:id')
+  removeCategory(@Param('id') id: string) {
+    return this.s.removeCategory(id);
+  }
+
+  // ---------- 项目 ----------
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.Admin)
+  @Get('items')
+  listItems(@Query('categoryId') categoryId?: string) {
+    return this.s.listItems(categoryId ? { categoryId } : undefined);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.Admin)
+  @Get('items/:id')
+  getItem(@Param('id') id: string) {
+    return this.s.getItem(id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
+  @Roles(Role.Admin)
+  @Audit('services', 'services:item_manage')
+  @RequirePerm('services:item_manage')
+  @Post('items')
+  createItem(@Body() dto: CreateServiceItemDto) {
+    return this.s.createItem(dto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
+  @Roles(Role.Admin)
+  @Audit('services', 'services:item_manage')
+  @RequirePerm('services:item_manage')
+  @Patch('items/:id')
+  updateItem(@Param('id') id: string, @Body() dto: UpdateServiceItemDto) {
+    return this.s.updateItem(id, dto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
+  @Roles(Role.Admin)
+  @Audit('services', 'services:item_manage')
+  @RequirePerm('services:item_manage')
+  @Delete('items/:id')
+  removeItem(@Param('id') id: string) {
+    return this.s.removeItem(id);
+  }
+}
+
+// 公开：服务类目 + 服务项目（下单/选服务时用，无需鉴权）
 @Controller('services')
-export class ServicesController {
-  constructor(private services: ServicesService) {}
+export class ServicesPublicController {
+  constructor(private s: ServicesService) {}
+
+  @Get('categories')
+  listPublicCategories() {
+    return this.s.listPublicCategories();
+  }
 
   @Get()
-  list(@Query('city') city?: string, @Query('type') type?: string) {
-    return this.services.list(city, type);
+  listPublicItems(@Query('city') city?: string, @Query('type') type?: string) {
+    return this.s.listPublicItems({ city, type });
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
-  @Roles(Role.Admin)
-  @Audit('services', 'services:category_manage')
-  @RequirePerm('services:category_manage')
-  @Post()
-  create(@Body() dto: CreateServiceItemDto) {
-    return this.services.create(dto);
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
-  @Roles(Role.Admin)
-  @Audit('services', 'services:category_manage')
-  @RequirePerm('services:category_manage')
-  @Put(':id')
-  update(@Param('id') id: string, @Body() dto: any) {
-    return this.services.update(id, dto);
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
-  @Roles(Role.Admin)
-  @Audit('services', 'services:category_manage')
-  @RequirePerm('services:category_manage')
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.services.remove(id);
+  @Get(':id')
+  getPublicItem(@Param('id') id: string) {
+    return this.s.getItem(id);
   }
 }

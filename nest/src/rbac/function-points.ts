@@ -26,7 +26,7 @@ export const FUNCTION_POINTS: FunctionPoint[] = [
   { code: 'menu:users:verifications', label: '认证审核', perm: 'users:verify', type: 'menu', path: '/admin/users/verifications' },
   // 服务与类目
   { code: 'menu:services:categories', label: '服务类目', perm: 'services:category_manage', type: 'menu', path: '/admin/services/categories' },
-  { code: 'menu:services:specs', label: '服务规格', perm: 'services:spec_manage', type: 'menu', path: '/admin/services/specs' },
+  { code: 'menu:services:items', label: '服务项目', perm: 'services:item_manage', type: 'menu', path: '/admin/services/items' },
   { code: 'menu:services:areas', label: '服务区域', perm: 'services:area_manage', type: 'menu', path: '/admin/services/areas' },
   // 调度派单
   { code: 'menu:dispatch:smart', label: '智能派单', perm: 'dispatch:smart', type: 'menu', path: '/admin/dispatch/smart' },

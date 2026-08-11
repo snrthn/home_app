@@ -49,7 +49,8 @@ export class OrdersService {
         addressId: dto.addressId,
         serviceItemId: dto.serviceItemId,
         serviceSnapshot: item as any,
-        city: item.city,
+        // city 为最佳努力名称字段（6 段式区域可留空表示全城），为空时回退为空串以兼容 Order.city NOT NULL
+        city: item.city ?? '',
         amount: item.price,
         appointmentDate: dto.appointmentDate ? new Date(dto.appointmentDate) : null,
         appointmentSlot: dto.appointmentSlot,

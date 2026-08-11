@@ -44,6 +44,8 @@ enum PaymentStatus {
 enum ServiceType {
   clean
   repair
+  cleaning
+  dredging
 }
 
 enum SettlementStatus {
@@ -169,31 +171,41 @@ model Master {
 }
 
 model ServiceCategory {
-  id    String       @id @default(cuid())
-  name  String
-  icon  String?
-  sort  Int          @default(0)
-  items ServiceItem[]
+  id          String   @id @default(cuid())
+  name        String
+  icon        String?
+  sort        Int      @default(0)
+  isActive    Boolean  @default(true)
+  description String?   @db.Text
+  items       ServiceItem[]
 
-  deletedAt DateTime?
+  deletedAt   DateTime?
 }
 
 model ServiceItem {
-  id          String      @id @default(cuid())
-  categoryId  String
-  category    ServiceCategory @relation(fields: [categoryId], references: [id])
-  name        String
-  type        ServiceType
-  city        String
-  price       Decimal     @db.Decimal(10, 2)
-  unit        String?
-  description String?
-  sort        Int         @default(0)
-  isActive    Boolean     @default(true)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id              String      @id @default(cuid())
+  categoryId      String
+  category        ServiceCategory @relation(fields: [categoryId], references: [id])
+  name            String
+  type            ServiceType
+  // 服务区域：6 段式，与 UserProfile / Master 对齐（保留 city 名称字段以兼容 Order.city 复制）
+  province        String?
+  provinceCode    String?
+  city            String?
+  cityCode        String?
+  district        String?
+  districtCode    String?
+  price           Decimal     @db.Decimal(10, 2)
+  unit            String?
+  description     String?   @db.Text
+  coverImage      String?   @db.Text
+  estimatedDuration Int?      // 预计服务时长（分钟），派单排期参考
+  sort            Int         @default(0)
+  isActive        Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
-  deletedAt   DateTime?
+  deletedAt       DateTime?
 
   orders Order[]
 }

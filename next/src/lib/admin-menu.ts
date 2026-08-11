@@ -52,7 +52,7 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     icon: 'layers',
     children: [
       { key: 'categories', label: '服务类目', path: '/admin/services/categories', perm: 'services:category_manage' },
-      { key: 'specs', label: '服务规格', path: '/admin/services/specs', perm: 'services:spec_manage' },
+      { key: 'items', label: '服务项目', path: '/admin/services/items', perm: 'services:item_manage' },
       { key: 'areas', label: '服务区域', path: '/admin/services/areas', perm: 'services:area_manage' },
     ],
   },

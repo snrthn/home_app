@@ -95,7 +95,7 @@ Function(功能点：菜单项 / 按钮 / 接口)  —— 代码注册表，非 
 | 认证审核 | `/admin/users/verifications` | `users:verify` | 实名认证审核 |
 | **服务与类目** | | | |
 | 服务类目 | `/admin/services/categories` | `services:category_manage` | |
-| 服务规格 | `/admin/services/specs` | `services:spec_manage` | |
+| 服务项目 | `/admin/services/items` | `services:item_manage` | |
 | 服务区域 | `/admin/services/areas` | `services:area_manage` | |
 | **调度派单** | | | |
 | 智能派单 | `/admin/dispatch/smart` | `dispatch:smart` | |

@@ -459,3 +459,139 @@ export interface OperationLogResult {
 export function getOperationLogs(q: OperationLogQuery): Promise<OperationLogResult> {
   return api.get('/audit-logs', { params: q }).then((r) => r.data);
 }
+
+// ===================== 服务类目 / 服务项目（运营端） =====================
+
+export type ServiceTypeValue = 'clean' | 'repair' | 'cleaning' | 'dredging';
+
+export const SERVICE_TYPE_LABEL: Record<ServiceTypeValue, string> = {
+  clean: '清洗',
+  repair: '维修',
+  cleaning: '保洁',
+  dredging: '疏通',
+};
+
+// 服务类目（管理端）
+export interface ServiceCategory {
+  id: string;
+  name: string;
+  icon?: string | null;
+  sort: number;
+  isActive: boolean;
+  description?: string | null;
+  _count?: { items: number };
+  createdAt: string;
+  updatedAt: string;
+}
+
+// 服务项目（管理端，含所属类目）
+export interface ServiceItem {
+  id: string;
+  categoryId: string;
+  category?: { id: string; name: string } | null;
+  name: string;
+  type: ServiceTypeValue;
+  province?: string | null;
+  provinceCode?: string | null;
+  city?: string | null;
+  cityCode?: string | null;
+  district?: string | null;
+  districtCode?: string | null;
+  price: string; // Decimal 序列化后为字符串
+  unit?: string | null;
+  description?: string | null;
+  coverImage?: string | null;
+  estimatedDuration?: number | null;
+  sort: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ---------- 类目 ----------
+export function getServiceCategories(): Promise<ServiceCategory[]> {
+  return api.get('/admin/services/categories').then((r) => r.data ?? []);
+}
+
+export function createServiceCategory(dto: {
+  name: string;
+  description?: string;
+  icon?: string;
+  sort?: number;
+  isActive?: boolean;
+}): Promise<ServiceCategory> {
+  return api.post('/admin/services/categories', dto).then((r) => r.data);
+}
+
+export function updateServiceCategory(
+  id: string,
+  dto: {
+    name?: string;
+    description?: string;
+    icon?: string;
+    sort?: number;
+    isActive?: boolean;
+  },
+): Promise<ServiceCategory> {
+  return api.patch(`/admin/services/categories/${id}`, dto).then((r) => r.data);
+}
+
+export function deleteServiceCategory(id: string): Promise<void> {
+  return api.delete(`/admin/services/categories/${id}`).then((r) => r.data);
+}
+
+// ---------- 项目 ----------
+export function getServiceItems(categoryId?: string): Promise<ServiceItem[]> {
+  return api
+    .get('/admin/services/items', { params: categoryId ? { categoryId } : {} })
+    .then((r) => r.data ?? []);
+}
+
+export function createServiceItem(dto: {
+  categoryId: string;
+  name: string;
+  type: ServiceTypeValue;
+  province?: string;
+  provinceCode?: string;
+  city?: string;
+  cityCode?: string;
+  district?: string;
+  districtCode?: string;
+  price: number;
+  unit?: string;
+  description?: string;
+  coverImage?: string;
+  estimatedDuration?: number;
+  sort?: number;
+  isActive?: boolean;
+}): Promise<ServiceItem> {
+  return api.post('/admin/services/items', dto).then((r) => r.data);
+}
+
+export function updateServiceItem(
+  id: string,
+  dto: {
+    categoryId?: string;
+    name?: string;
+    type?: ServiceTypeValue;
+    province?: string;
+    provinceCode?: string;
+    city?: string;
+    cityCode?: string;
+    district?: string;
+    districtCode?: string;
+    price?: number;
+    unit?: string;
+    description?: string;
+    coverImage?: string;
+    estimatedDuration?: number;
+    sort?: number;
+    isActive?: boolean;
+  },
+): Promise<ServiceItem> {
+  return api.patch(`/admin/services/items/${id}`, dto).then((r) => r.data);
+}
+
+export function deleteServiceItem(id: string): Promise<void> {
+  return api.delete(`/admin/services/items/${id}`).then((r) => r.data);
+}

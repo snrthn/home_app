@@ -685,6 +685,49 @@ body {
   }
 }
 
+/* 封面图字段：矩形预览 + 上传按钮 + URL 兜底（与个人中心头像上传同源，仅预览形状不同） */
+.cover-field {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.cover-preview {
+  width: 180px;
+  height: 110px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--color-primary-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #eef0f2;
+}
+.cover-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.cover-empty {
+  font-size: 13px;
+  color: var(--color-text-soft);
+}
+.cover-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+@media (max-width: 480px) {
+  .cover-field {
+    flex-wrap: wrap;
+  }
+  .cover-actions {
+    flex-wrap: wrap;
+  }
+}
+
 /* 弹窗（修改密码等轻量操作） */
 .modal-overlay {
   position: fixed;
@@ -1075,6 +1118,14 @@ body {
   text-align: center;
   color: var(--color-text-soft);
   font-size: 14px;
+}
+
+/* 表格单元格文本截断（长文本列使用，避免破坏列宽协调） */
+.cell-ellipsis {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 状态标签 */
