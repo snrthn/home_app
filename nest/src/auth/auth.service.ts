@@ -49,12 +49,36 @@ export class AuthService {
     return true;
   }
 
-  private issueTokens(user: { id: string; role: string; phone: string }) {
+  // 签发 token：除基础字段外，额外嵌入管理端 RBAC 上下文（岗位角色 + 权限码集合）。
+  // 权限以 DB 为真相源，改角色/权限后由前端重新登录或刷新 token 生效。
+  private async issueTokens(user: { id: string; role: string; phone: string }) {
+    const staff = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        staffRoleId: true,
+        staffRole: {
+          select: {
+            key: true,
+            permissions: {
+              select: { permission: { select: { code: true } } },
+            },
+          },
+        },
+      },
+    });
+    const staffRoleId = staff?.staffRoleId ?? null;
+    const staffRoleKey = staff?.staffRole?.key ?? null;
+    const perms =
+      staff?.staffRole?.permissions?.map((p) => p.permission.code) ?? [];
+
     const jti = randomUUID();
-    const payload: JwtPayload & { jti: string } = {
+    const payload = {
       sub: user.id,
       role: user.role,
       phone: user.phone,
+      staffRoleId,
+      staffRoleKey,
+      perms,
       jti,
     };
     const accessToken = this.jwt.sign(payload, {
@@ -134,7 +158,7 @@ export class AuthService {
     const exist = await this.prisma.user.findUnique({ where: { phone } });
     if (exist) throw new BadRequestException('该手机号已注册');
     const user = await this.autoRegisterCustomer(phone, nickname);
-    return this.issueTokens(user);
+    return await this.issueTokens(user);
   }
 
   async registerMaster(
@@ -160,7 +184,7 @@ export class AuthService {
       });
       return u;
     });
-    return this.issueTokens(user);
+    return await this.issueTokens(user);
   }
 
   // 验证码登录：首次登录即自动注册（OTP 登录=注册），不再提示“无此用户”
@@ -178,7 +202,7 @@ export class AuthService {
           ? await this.autoRegisterMaster(phone)
           : await this.autoRegisterCustomer(phone);
     }
-    return this.issueTokens(user);
+    return await this.issueTokens(user);
   }
 
   async adminLogin(phone: string, password: string) {
@@ -189,7 +213,7 @@ export class AuthService {
       throw new UnauthorizedException('管理员未设置密码');
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) throw new UnauthorizedException('密码错误');
-    return this.issueTokens(user);
+    return await this.issueTokens(user);
   }
 
   // 密码登录（客户/师傅/管理员通用）：按手机号查用户，校验 passwordHash。
@@ -201,7 +225,7 @@ export class AuthService {
       throw new UnauthorizedException('该账号尚未设置密码，请先登录后在个人中心设置');
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) throw new UnauthorizedException('密码错误');
-    return this.issueTokens(user);
+    return await this.issueTokens(user);
   }
 
   // 设置 / 重置登录密码（需登录态）。
@@ -232,7 +256,7 @@ export class AuthService {
         where: { id: payload.sub },
       });
       if (!user) throw new UnauthorizedException();
-      return this.issueTokens(user);
+      return await this.issueTokens(user);
     } catch {
       throw new UnauthorizedException('refresh token 无效');
     }
@@ -241,11 +265,21 @@ export class AuthService {
   async profile(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: { profile: true, master: true },
+      include: {
+        profile: true,
+        master: true,
+        staffRole: {
+          include: {
+            permissions: { include: { permission: { select: { code: true } } } },
+          },
+        },
+      },
     });
     if (!user) throw new UnauthorizedException('用户不存在');
     // 扁平化返回：昵称/头像/实名/性别/生日/所在地已迁移到 UserProfile
     const p = user.profile;
+    const rolePerms =
+      user.staffRole?.permissions?.map((rp) => rp.permission.code) ?? [];
     const base = {
       id: user.id,
       role: user.role,
@@ -264,6 +298,11 @@ export class AuthService {
       districtCode: p?.districtCode ?? null,
       bio: p?.bio ?? null,
       hasPassword: !!user.passwordHash,
+      // 管理端 RBAC 上下文（仅 role=admin 有意义，其它端为 null/[]）
+      staffRole: user.staffRole
+        ? { id: user.staffRole.id, key: user.staffRole.key, name: user.staffRole.name }
+        : null,
+      perms: rolePerms,
     };
     // 师傅额外返回自身专属资料（实名/身份证/技能/服务区域/审核状态）
     if (user.role === Role.Master && user.master) {

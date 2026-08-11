@@ -15,6 +15,7 @@ export class UsersService {
         status: true,
         createdAt: true,
         profile: { select: { nickname: true } },
+        staffRole: { select: { id: true, key: true, name: true } },
       },
     });
   }
@@ -32,13 +33,21 @@ export class UsersService {
     });
   }
 
-  async createAdmin(phone: string, password: string, nickname?: string) {
+  async createAdmin(
+    phone: string,
+    password: string,
+    nickname?: string,
+    staffRoleId?: string,
+  ) {
     const passwordHash = await bcrypt.hash(password, 10);
     return this.prisma.user.create({
       data: {
         phone,
         passwordHash,
         role: 'admin',
+        ...(staffRoleId
+          ? { staffRole: { connect: { id: staffRoleId } } }
+          : {}),
         profile: { create: { nickname: nickname || `管理员${phone.slice(-4)}` } },
       },
     });
@@ -46,20 +55,22 @@ export class UsersService {
 
   async updateAdmin(
     id: string,
-    dto: { nickname?: string; password?: string },
+    dto: { nickname?: string; password?: string; staffRoleId?: string },
   ) {
     const passwordHash = dto.password
       ? await bcrypt.hash(dto.password, 10)
       : undefined;
-    return this.prisma.user.update({
-      where: { id, role: 'admin' },
-      data: {
-        ...(passwordHash ? { passwordHash } : {}),
-        ...(dto.nickname !== undefined
-          ? { profile: { update: { nickname: dto.nickname } } }
-          : {}),
-      },
-    });
+    const data: Record<string, unknown> = {};
+    if (passwordHash) data.passwordHash = passwordHash;
+    if (dto.nickname !== undefined) {
+      data.profile = { update: { nickname: dto.nickname } };
+    }
+    if (dto.staffRoleId !== undefined) {
+      data.staffRole = dto.staffRoleId
+        ? { connect: { id: dto.staffRoleId } }
+        : { disconnect: true };
+    }
+    return this.prisma.user.update({ where: { id, role: 'admin' }, data });
   }
 
   async setAdminStatus(id: string, status: string) {

@@ -99,6 +99,10 @@ model User {
   addresses      Address[]
   payments       Payment[]
   reviews        Review[]
+
+  // 管理端 RBAC：单角色，一个后台账号(role=admin)绑一个岗位角色；role≠admin 时恒为空
+  staffRoleId String?
+  staffRole   StaffRole? @relation(fields: [staffRoleId], references: [id])
 }
 
 // ---------------- 资料画像（展示 / 业务扩展，1:1） ----------------
@@ -433,4 +437,48 @@ model SiteContent {
   updatedAt   DateTime @updatedAt
 
   @@index([key])
+}
+
+// ---------------- 管理端 RBAC（角色权限，2026-08-11 新增，对应 docs/rbac-design.md） ----------------
+// 设计要点：权限定义放 DB（运行时可改角色不碰代码）；功能点(菜单/按钮/接口)走代码注册表，不在此建表。
+// 两层角色分离：① 账号类型 Role 枚举(admin/master/customer) 仅作入口闸门；② 内部岗位角色 StaffRole 决定管理端内能干什么。
+
+// 岗位角色：预设 7 个（super_admin 为系统角色，不可删/不可改权限）
+model StaffRole {
+  id          String   @id @default(cuid())
+  key         String   @unique // 'super_admin' | 'ops_lead' | 'cs_agent' | 'finance' | 'auditor' | 'editor' | 'dispatcher'
+  name        String // 中文显示名，如 '超级管理员'
+  description String?
+  isSystem    Boolean  @default(false) // 系统角色不可删、不可改权限
+  users       User[] // 单角色：一个后台账号绑一个岗位角色
+  permissions StaffRolePermission[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  deletedAt   DateTime?
+}
+
+// 权限：抽象权 resource:action（如 orders:refund）。粒度适中，不按页面、也不按每个按钮。
+model Permission {
+  id          String   @id @default(cuid())
+  code        String   @unique // 'orders:refund'
+  name        String // '订单退款'
+  resource    String // 'orders'
+  action      String // 'refund'
+  group       String // 分组（管理页展示用，如 '订单管理'）
+  description String?
+  roles       StaffRolePermission[]
+  createdAt   DateTime @default(now())
+
+  @@index([group])
+}
+
+// 角色-权限 多对多中间表（取代用户-多角色，初期单角色即可满足）
+model StaffRolePermission {
+  roleId       String
+  permissionId String
+  role         StaffRole  @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
 }

@@ -4,6 +4,7 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { JwtPayload, Role } from '@laoma/shared';
 import { isBlacklisted } from './token-blacklist';
+import { AuthUser } from './auth-user.interface';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -15,7 +16,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: JwtPayload & { jti?: string; exp?: number }) {
+  async validate(
+    payload: JwtPayload & {
+      jti?: string;
+      exp?: number;
+      staffRoleId?: string | null;
+      staffRoleKey?: string | null;
+      perms?: string[];
+    },
+  ): Promise<AuthUser> {
     if (!payload?.sub || !payload?.role) throw new UnauthorizedException();
     if (isBlacklisted(payload.jti))
       throw new UnauthorizedException('登录已失效，请重新登录');
@@ -25,6 +34,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       phone: payload.phone,
       jti: payload.jti,
       exp: payload.exp,
+      staffRoleId: payload.staffRoleId ?? null,
+      staffRoleKey: payload.staffRoleKey ?? null,
+      perms: payload.perms ?? [],
     };
   }
 }

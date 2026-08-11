@@ -5,7 +5,9 @@ import {
   Get,
   Patch,
   Param,
+  Req,
   UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -35,18 +37,35 @@ export class UsersController {
   @Roles(Role.Admin)
   @Post('admins')
   createAdmin(
-    @Body() body: { phone: string; password: string; nickname?: string },
+    @Body()
+    body: { phone: string; password: string; nickname?: string; staffRoleId?: string },
   ) {
-    return this.users.createAdmin(body.phone, body.password, body.nickname);
+    return this.users.createAdmin(
+      body.phone,
+      body.password,
+      body.nickname,
+      body.staffRoleId,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.Admin)
   @Patch('admins/:id')
   updateAdmin(
+    @Req() req: any,
     @Param('id') id: string,
-    @Body() body: { nickname?: string; password?: string },
+    @Body()
+    body: { nickname?: string; password?: string; staffRoleId?: string },
   ) {
+    // 防自锁死：禁止管理员把自己的 super_admin 角色改走（当前为 super_admin 且目标角色变更）
+    if (
+      id === req.user?.sub &&
+      req.user?.staffRoleKey === 'super_admin' &&
+      body.staffRoleId !== undefined &&
+      body.staffRoleId !== req.user?.staffRoleId
+    ) {
+      throw new BadRequestException('不能修改自己的超级管理员角色');
+    }
     return this.users.updateAdmin(id, body);
   }
 

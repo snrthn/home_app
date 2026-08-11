@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { RbacModule } from './rbac/rbac.module';
 import { MastersModule } from './masters/masters.module';
 import { ServicesModule } from './services/services.module';
 import { OrdersModule } from './orders/orders.module';
@@ -20,6 +21,7 @@ import { SiteContentModule } from './site-content/site-content.module';
     PrismaModule,
     AuthModule,
     UsersModule,
+    RbacModule,
     MastersModule,
     ServicesModule,
     OrdersModule,
