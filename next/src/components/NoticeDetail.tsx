@@ -44,6 +44,7 @@ export default function NoticeDetail({ scope }: { scope: Exclude<NoticeScope, 'a
                   fontWeight: 700,
                   margin: '0 0 6px',
                   color: 'var(--color-text)',
+                  textAlign: 'center',
                 }}
               >
                 {notice.title}
