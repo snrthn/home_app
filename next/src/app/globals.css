@@ -1552,21 +1552,11 @@ body {
   margin: 0 0 8px;
   text-align: center;
 }
-.agreement-meta-row {
-  position: relative;
-  margin-bottom: 24px;
-}
 .agreement-public-meta {
   font-size: 13px;
   color: var(--color-text-soft);
   text-align: center;
-}
-.agreement-meta-row .agreement-back {
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  margin-bottom: 0;
+  margin-bottom: 24px;
 }
 /* 富文本只读渲染统一排版基类：只负责「解析后内容的元素样式」，
    不携带任何卡片/容器皮肤（卡片由 .agreement-public-content 等外层容器提供）。
@@ -1683,17 +1673,4 @@ body {
   text-align: center;
   color: var(--color-text-soft);
   padding: 48px 16px;
-}
-.agreement-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  margin-bottom: 16px;
-  font-size: 14px;
-  color: var(--color-primary);
-  text-decoration: none;
-}
-.agreement-back:hover {
-  color: var(--color-primary-deep);
-  text-decoration: underline;
 }

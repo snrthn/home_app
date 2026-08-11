@@ -16,6 +16,14 @@ type Mode = 'code' | 'password' | 'admin';
 // context='page' → 用于手机端，独立圆角面板置于页面顶部（移出卡片）
 function BrandHeader({ context }: { context: 'card' | 'page' }) {
   const isPage = context === 'page';
+  const toggleFullscreen = () => {
+    if (typeof document === 'undefined') return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.().catch(() => {});
+    } else {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    }
+  };
   return (
     <div
       className={
@@ -39,6 +47,8 @@ function BrandHeader({ context }: { context: 'card' | 'page' }) {
         <div
           className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full shadow-md"
           style={{ background: 'var(--color-primary-weak)' }}
+          onDoubleClick={toggleFullscreen}
+          title="双击切换全屏"
         >
           <svg
             className="h-9 w-9 text-white"

@@ -66,6 +66,15 @@ export default function PageNav({
     };
   }, [menuOpen]);
 
+  const toggleFullscreen = () => {
+    if (typeof document === 'undefined') return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen?.().catch(() => {});
+    } else {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    }
+  };
+
   const backNode = showBack ? (
     backHref ? (
       <Link href={backHref} className="page-nav-back" aria-label="返回">
@@ -79,7 +88,7 @@ export default function PageNav({
   ) : null;
 
   return (
-    <div className="page-nav">
+    <div className="page-nav" onDoubleClick={toggleFullscreen} title="双击切换全屏">
       <div className="page-nav-inner">
         <div className="page-nav-left">{backNode}</div>
         <div className="page-nav-title">{title}</div>
