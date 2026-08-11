@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import {
   getAgreementDefault,
   type AgreementPublic,
@@ -41,6 +41,15 @@ export default function AgreementPublicPage() {
     enabled: !!resolved,
   });
 
+  const router = useRouter();
+  const handleBack = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      router.back();
+    } else {
+      router.push('/');
+    }
+  };
+
   return (
     <div className="agreement-public">
       <div className="agreement-public-inner">
@@ -52,7 +61,26 @@ export default function AgreementPublicPage() {
           <div className="card agreement-public-empty">该协议暂未发布</div>
         ) : (
           <>
-            <h1 className="agreement-public-title">{data.title}</h1>
+            <div className="agreement-title-row">
+              <button
+                type="button"
+                className="agreement-back"
+                onClick={handleBack}
+                aria-label="返回"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M15 18l-6-6 6-6"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                返回
+              </button>
+              <h1 className="agreement-public-title">{data.title}</h1>
+            </div>
             <div className="agreement-public-meta">
               {SCOPE_LABEL[data.scope]} · 当前版本 v{data.version} · 最近更新{' '}
               {formatDateTime(data.updatedAt)}
