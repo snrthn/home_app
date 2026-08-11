@@ -12,7 +12,10 @@ import {
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/roles.guard';
+import { PermGuard } from '../common/perm.guard';
 import { Roles } from '../common/roles.decorator';
+import { RequirePerm } from '../common/perm.decorator';
+import { Audit } from '../common/audit.decorator';
 import { Role } from '@laoma/shared';
 
 @Controller('users')
@@ -33,8 +36,10 @@ export class UsersController {
     return this.users.listCustomers();
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
   @Roles(Role.Admin)
+  @Audit('users', 'users:admin_manage')
+  @RequirePerm('users:admin_manage')
   @Post('admins')
   createAdmin(
     @Body()
@@ -48,8 +53,10 @@ export class UsersController {
     );
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
   @Roles(Role.Admin)
+  @Audit('users', 'users:admin_manage')
+  @RequirePerm('users:admin_manage')
   @Patch('admins/:id')
   updateAdmin(
     @Req() req: any,
@@ -69,8 +76,10 @@ export class UsersController {
     return this.users.updateAdmin(id, body);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
   @Roles(Role.Admin)
+  @Audit('users', 'users:admin_manage')
+  @RequirePerm('users:admin_manage')
   @Post('admins/:id/status')
   setAdminStatus(
     @Req() req: any,
@@ -84,8 +93,10 @@ export class UsersController {
     return this.users.setAdminStatus(id, body.status);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
   @Roles(Role.Admin)
+  @Audit('users', 'users:customer_toggle')
+  @RequirePerm('users:customer_toggle')
   @Post('customers/:id/status')
   setCustomerStatus(
     @Param('id') id: string,

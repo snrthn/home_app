@@ -11,7 +11,10 @@ import {
 import { OrdersService } from './orders.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/roles.guard';
+import { PermGuard } from '../common/perm.guard';
 import { Roles } from '../common/roles.decorator';
+import { RequirePerm } from '../common/perm.decorator';
+import { Audit } from '../common/audit.decorator';
 import { Role } from '@laoma/shared';
 import { CreateOrderDto, AssignDto } from './orders.dto';
 
@@ -59,8 +62,10 @@ export class OrdersController {
     return this.orders.grab(id, req.user.sub);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PermGuard)
   @Roles(Role.Admin)
+  @Audit('orders', 'orders:edit')
+  @RequirePerm('orders:edit')
   @Post(':id/assign')
   assign(
     @Param('id') id: string,

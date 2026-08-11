@@ -236,7 +236,7 @@ function AboutItem({ role }: { role: AboutRole }) {
         </div>
         <button
           type="button"
-          className="btn-secondary btn-sm about-list-edit"
+          className="btn-link about-list-edit"
           onClick={(e) => {
             e.stopPropagation();
             openEdit();

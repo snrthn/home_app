@@ -476,14 +476,14 @@ export default function AgreementsPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Link
                       href={`/agreements/${tpl.code}`}
-                      className="btn-secondary btn-sm"
+                      className="btn-link btn-sm"
                       title="查看前台展示效果（在当前页面打开）"
                     >
                       查看前台
                     </Link>
                     <button
                       type="button"
-                      className="btn-secondary btn-sm"
+                      className="btn-link btn-sm"
                       onClick={() => setAddVersionTpl(tpl)}
                     >
                       + 新建版本

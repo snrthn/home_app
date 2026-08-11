@@ -96,6 +96,7 @@ export default function CustomerListPage() {
     {
       key: 'op',
       title: '操作',
+      width: '90px',
       render: (r) => (
         <button
           type="button"

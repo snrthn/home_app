@@ -113,6 +113,7 @@ export default function MasterListPage() {
     {
       key: 'op',
       title: '操作',
+      width: '90px',
       render: (r) => {
         if (r.status === 'pending') {
           return <span style={{ color: 'var(--color-text-soft)' }}>待审核</span>;

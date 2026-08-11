@@ -14,6 +14,7 @@ import { RolesGuard } from '../common/roles.guard';
 import { Roles } from '../common/roles.decorator';
 import { PermGuard } from '../common/perm.guard';
 import { RequirePerm } from '../common/perm.decorator';
+import { Audit } from '../common/audit.decorator';
 import { Role } from '@laoma/shared';
 
 /**
@@ -26,11 +27,15 @@ import { Role } from '@laoma/shared';
 export class RbacController {
   constructor(private rbac: RbacService) {}
 
+  @Audit('rbac', 'settings:role_manage')
+
   @RequirePerm('settings:role_manage')
   @Get('permissions')
   listPermissions() {
     return this.rbac.listPermissions();
   }
+
+  @Audit('rbac', 'settings:role_manage')
 
   @RequirePerm('settings:role_manage')
   @Get('roles')
@@ -38,17 +43,23 @@ export class RbacController {
     return this.rbac.listRoles();
   }
 
+  @Audit('rbac', 'settings:role_manage')
+
   @RequirePerm('settings:role_manage')
   @Get('roles/:id')
   getRole(@Param('id') id: string) {
     return this.rbac.getRole(id);
   }
 
+  @Audit('rbac', 'settings:role_manage')
+
   @RequirePerm('settings:role_manage')
   @Get('roles/:id/functions')
   getRoleFunctions(@Param('id') id: string) {
     return this.rbac.getRoleFunctions(id);
   }
+
+  @Audit('rbac', 'settings:role_manage')
 
   @RequirePerm('settings:role_manage')
   @Post('roles')
@@ -57,6 +68,8 @@ export class RbacController {
   ) {
     return this.rbac.createRole(body);
   }
+
+  @Audit('rbac', 'settings:role_manage')
 
   @RequirePerm('settings:role_manage')
   @Put('roles/:id')
@@ -67,11 +80,15 @@ export class RbacController {
     return this.rbac.updateRole(id, body);
   }
 
+  @Audit('rbac', 'settings:role_manage')
+
   @RequirePerm('settings:role_manage')
   @Delete('roles/:id')
   deleteRole(@Param('id') id: string) {
     return this.rbac.deleteRole(id);
   }
+
+  @Audit('rbac', 'settings:role_manage')
 
   @RequirePerm('settings:role_manage')
   @Put('roles/:id/permissions')

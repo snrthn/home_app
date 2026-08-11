@@ -65,17 +65,18 @@ export default function VerificationPage() {
       key: 'action',
       title: '操作',
       align: 'center',
+      width: '130px',
       render: (r) => (
         <div className="row-actions">
           <button
-            className="btn-primary btn-sm"
+            className="btn-link"
             disabled={busyId === r.id}
             onClick={() => openConfirm(r.id, 'active', r.realName)}
           >
             通过
           </button>
           <button
-            className="btn-danger btn-sm"
+            className="btn-link btn-link-danger"
             disabled={busyId === r.id}
             onClick={() => openConfirm(r.id, 'disabled', r.realName)}
           >

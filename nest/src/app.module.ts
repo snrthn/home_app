@@ -14,6 +14,7 @@ import { UploadModule } from './upload/upload.module';
 import { AgreementsModule } from './agreements/agreements.module';
 import { NoticesModule } from './notices/notices.module';
 import { SiteContentModule } from './site-content/site-content.module';
+import { AuditModule } from './audit/audit.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { SiteContentModule } from './site-content/site-content.module';
     AgreementsModule,
     NoticesModule,
     SiteContentModule,
+    AuditModule,
   ],
 })
 export class AppModule {}

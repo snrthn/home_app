@@ -482,3 +482,24 @@ model StaffRolePermission {
 
   @@id([roleId, permissionId])
 }
+
+// ---------------- 管理端操作审计日志（P5 收口，2026-08-11 新增） ----------------
+// 记录管理端高风险写操作（账号/角色/服务/订单/内容等），供「操作日志」页审计追溯。
+// 由后端 AuditInterceptor 在 @Audit 标记的接口执行后自动落库；权限码 logs:view 控制可见性。
+model OperationLog {
+  id           String    @id @default(cuid())
+  userId       String? // 操作者 id（AuthUser.sub）
+  username     String? // 操作者账号/手机号
+  staffRoleKey String? // 操作者内部岗位角色 key
+  action       String // 动作码，如 'users:admin_create' / 'rbac:role_update'
+  module       String // 模块：users / masters / services / orders / content / rbac ...
+  resourceId   String? // 被操作资源 id（用户/订单/角色 ...）
+  detail       Json? // 操作参数摘要（脱敏后）
+  ip           String?   @db.Text
+  createdAt    DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([module])
+  @@index([userId])
+  @@index([action])
+}

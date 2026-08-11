@@ -228,6 +228,7 @@ export default function RoleManagePage() {
     {
       key: 'op',
       title: '操作',
+      width: '220px',
       render: (r) => (
         <div style={{ display: 'flex', gap: 12 }}>
           <button

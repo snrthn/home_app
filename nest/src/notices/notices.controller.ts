@@ -13,7 +13,10 @@ import {
 import { NoticesService } from './notices.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/roles.guard';
+import { PermGuard } from '../common/perm.guard';
 import { Roles } from '../common/roles.decorator';
+import { RequirePerm } from '../common/perm.decorator';
+import { Audit } from '../common/audit.decorator';
 import { Role } from '@laoma/shared';
 
 // 管理端：公告的增删改查 / 发布 / 下线（仅管理员）
@@ -37,8 +40,10 @@ export class NoticesController {
   }
 
   // 新建（默认草稿）
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
   @Roles(Role.Admin)
+  @Audit('content', 'content:manage')
+  @RequirePerm('content:manage')
   @Post()
   create(
     @Req() req: any,
@@ -57,8 +62,10 @@ export class NoticesController {
   }
 
   // 编辑（标题/正文/所属端/时间窗等）
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
   @Roles(Role.Admin)
+  @Audit('content', 'content:manage')
+  @RequirePerm('content:manage')
   @Patch(':id')
   update(
     @Param('id') id: string,
@@ -77,24 +84,30 @@ export class NoticesController {
   }
 
   // 发布：status=published，并记录发布时间
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
   @Roles(Role.Admin)
+  @Audit('content', 'content:manage')
+  @RequirePerm('content:manage')
   @Post(':id/publish')
   publish(@Param('id') id: string) {
     return this.s.publish(id);
   }
 
   // 下线：status=offline（公开页不再展示）
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
   @Roles(Role.Admin)
+  @Audit('content', 'content:manage')
+  @RequirePerm('content:manage')
   @Post(':id/offline')
   offline(@Param('id') id: string) {
     return this.s.offline(id);
   }
 
   // 删除（硬删；公告无版本依赖，删除即移除）
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
   @Roles(Role.Admin)
+  @Audit('content', 'content:manage')
+  @RequirePerm('content:manage')
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.s.remove(id);

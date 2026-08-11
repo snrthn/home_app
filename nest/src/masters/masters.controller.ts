@@ -13,7 +13,10 @@ import {
 import { MastersService } from './masters.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/roles.guard';
+import { PermGuard } from '../common/perm.guard';
 import { Roles } from '../common/roles.decorator';
+import { RequirePerm } from '../common/perm.decorator';
+import { Audit } from '../common/audit.decorator';
 import { Role } from '@laoma/shared';
 import { CreateMasterDto, ApproveMasterDto, UpdateMasterMeDto } from './masters.dto';
 
@@ -30,22 +33,28 @@ export class MastersController {
     return this.masters.list(city, status, pendingOnly);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
   @Roles(Role.Admin)
+  @Audit('masters', 'users:master_verify')
+  @RequirePerm('users:master_verify')
   @Post()
   create(@Body() dto: CreateMasterDto) {
     return this.masters.create(dto);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
   @Roles(Role.Admin)
+  @Audit('masters', 'users:master_verify')
+  @RequirePerm('users:master_verify')
   @Post(':id/approve')
   approve(@Param('id') id: string, @Body() dto: ApproveMasterDto) {
     return this.masters.approve(id, dto.status, dto.reason);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
   @Roles(Role.Admin)
+  @Audit('masters', 'users:master_toggle')
+  @RequirePerm('users:master_toggle')
   @Post(':id/status')
   setStatus(
     @Param('id') id: string,

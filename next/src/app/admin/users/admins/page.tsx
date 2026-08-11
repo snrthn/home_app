@@ -191,6 +191,7 @@ export default function AdminListPage() {
     {
       key: 'op',
       title: '操作',
+      width: '130px',
       render: (r) => (
         <div style={{ display: 'flex', gap: 12 }}>
           <button type="button" className="btn-link" onClick={() => openEdit(r)}>

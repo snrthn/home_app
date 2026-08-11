@@ -422,3 +422,40 @@ export function setRbacRolePermissions(
     .put(`/rbac/roles/${id}/permissions`, { permissionCodes })
     .then((r) => r.data);
 }
+
+// ===================== 操作日志（审计） =====================
+
+export interface OperationLog {
+  id: string;
+  userId: string | null;
+  username: string | null;
+  staffRoleKey: string | null;
+  action: string;
+  module: string;
+  resourceId: string | null;
+  detail: unknown;
+  ip: string | null;
+  createdAt: string;
+}
+
+export interface OperationLogQuery {
+  module?: string;
+  action?: string;
+  userId?: string;
+  from?: string; // ISO datetime
+  to?: string; // ISO datetime
+  page?: number;
+  pageSize?: number;
+}
+
+export interface OperationLogResult {
+  list: OperationLog[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+// 操作日志分页查询（需 logs:view 权限，由后端 @RequirePerm 校验）
+export function getOperationLogs(q: OperationLogQuery): Promise<OperationLogResult> {
+  return api.get('/audit-logs', { params: q }).then((r) => r.data);
+}
