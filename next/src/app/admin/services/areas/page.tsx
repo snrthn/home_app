@@ -479,7 +479,7 @@ export default function ServiceAreasPage() {
   const rtRow: CSSProperties = {
     display: 'flex',
     alignItems: 'center',
-    gap: 6,
+    gap: 10,
     padding: '4px 0',
   };
 
@@ -498,7 +498,7 @@ export default function ServiceAreasPage() {
       <div key={node.code} style={{ paddingLeft: depth * 22 }}>
         <div style={rtRow}>
           <TriCheckbox state={parentState(node)} onChange={(v) => toggle(node.code, v)} />
-          {hasChildren ? (
+          {hasChildren && (
             <button
               type="button"
               className="rt-toggle"
@@ -507,8 +507,6 @@ export default function ServiceAreasPage() {
             >
               {expanded ? '▾' : '▸'}
             </button>
-          ) : (
-            <span style={{ width: 18, display: 'inline-block' }} />
           )}
           <span style={{ fontWeight: isProv ? 600 : 400 }}>{node.name}</span>
           {opened ? (
