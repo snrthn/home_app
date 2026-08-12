@@ -124,9 +124,14 @@ export class ServicesPublicController {
     return this.s.listPublicCategories();
   }
 
+  @Get('categories/tree')
+  getCategoryTree() {
+    return this.s.getCategoryTree();
+  }
+
   @Get()
-  listPublicItems(@Query('city') city?: string, @Query('type') type?: string) {
-    return this.s.listPublicItems({ city, type });
+  listPublicItems() {
+    return this.s.listPublicItems();
   }
 
   @Get(':id')

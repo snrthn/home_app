@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useMemo, type CSSProperties } from 'react';
+import { useEscClose } from '@/lib/useEscClose';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getServiceAreas,
@@ -150,7 +151,7 @@ function ActiveDialog({
   const isEnable = mode === 'enable';
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true">
-      <div className="modal-panel" style={{ maxWidth: 440 }}>
+      <div className="modal-panel modal-md">
         <div className="modal-header">
           <span>{isEnable ? '启用区域' : '停用区域'}</span>
           <button type="button" className="modal-close" onClick={onCancel} aria-label="关闭">
@@ -222,6 +223,11 @@ export default function ServiceAreasPage() {
 
   // 开通单个区域弹窗
   const [createOpen, setCreateOpen] = useState(false);
+  // Esc 关闭所有弹窗
+  useEscClose(() => {
+    setCreateOpen(false);
+    setActiveDialog(null);
+  });
   // 启用/停用确认弹窗
   const [activeDialog, setActiveDialog] = useState<{
     mode: 'enable' | 'disable';

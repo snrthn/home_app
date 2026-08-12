@@ -476,18 +476,11 @@ export function getOperationLogs(q: OperationLogQuery): Promise<OperationLogResu
 
 // ===================== 服务类目 / 服务项目（运营端） =====================
 
-export type ServiceTypeValue = 'clean' | 'repair' | 'cleaning' | 'dredging';
-
-export const SERVICE_TYPE_LABEL: Record<ServiceTypeValue, string> = {
-  clean: '清洗',
-  repair: '维修',
-  cleaning: '保洁',
-  dredging: '疏通',
-};
-
 // 服务类目（管理端）
 export interface ServiceCategory {
   id: string;
+  parentId?: string | null;
+  level?: number;
   name: string;
   icon?: string | null;
   sort: number;
@@ -498,19 +491,17 @@ export interface ServiceCategory {
   updatedAt: string;
 }
 
+// 类目树节点（getCategoryTree 返回嵌套结构，最多三级）
+export interface ServiceCategoryNode extends ServiceCategory {
+  children?: ServiceCategoryNode[];
+}
+
 // 服务项目（管理端，含所属类目）
 export interface ServiceItem {
   id: string;
   categoryId: string;
   category?: { id: string; name: string } | null;
   name: string;
-  type: ServiceTypeValue;
-  province?: string | null;
-  provinceCode?: string | null;
-  city?: string | null;
-  cityCode?: string | null;
-  district?: string | null;
-  districtCode?: string | null;
   price: string; // Decimal 序列化后为字符串
   unit?: string | null;
   description?: string | null;
@@ -527,8 +518,14 @@ export function getServiceCategories(): Promise<ServiceCategory[]> {
   return api.get('/admin/services/categories').then((r) => r.data ?? []);
 }
 
+// 类目树（嵌套，最多三级），用于三级联动下拉定位服务
+export function getCategoryTree(): Promise<ServiceCategoryNode[]> {
+  return api.get('/services/categories/tree').then((r) => r.data ?? []);
+}
+
 export function createServiceCategory(dto: {
   name: string;
+  parentId?: string | null;
   description?: string;
   icon?: string;
   sort?: number;
@@ -541,6 +538,7 @@ export function updateServiceCategory(
   id: string,
   dto: {
     name?: string;
+    parentId?: string | null;
     description?: string;
     icon?: string;
     sort?: number;
@@ -564,13 +562,6 @@ export function getServiceItems(categoryId?: string): Promise<ServiceItem[]> {
 export function createServiceItem(dto: {
   categoryId: string;
   name: string;
-  type: ServiceTypeValue;
-  province?: string;
-  provinceCode?: string;
-  city?: string;
-  cityCode?: string;
-  district?: string;
-  districtCode?: string;
   price: number;
   unit?: string;
   description?: string;
@@ -587,13 +578,6 @@ export function updateServiceItem(
   dto: {
     categoryId?: string;
     name?: string;
-    type?: ServiceTypeValue;
-    province?: string;
-    provinceCode?: string;
-    city?: string;
-    cityCode?: string;
-    district?: string;
-    districtCode?: string;
     price?: number;
     unit?: string;
     description?: string;

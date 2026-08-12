@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useEscClose } from '@/lib/useEscClose';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -303,6 +304,15 @@ export default function AgreementsPage() {
   });
 
   const [createTplOpen, setCreateTplOpen] = useState(false);
+  // Esc 关闭所有弹窗
+  useEscClose(() => {
+    setCreateTplOpen(false);
+    setAddVersionTpl(null);
+    setEditVer(null);
+    setReviseVer(null);
+    setEditTpl(null);
+    setPreviewVer(null);
+  });
   const [addVersionTpl, setAddVersionTpl] = useState<AgreementTemplate | null>(null);
   const [editVer, setEditVer] = useState<{ tpl: AgreementTemplate; ver: AgreementVersion } | null>(null);
   const [previewVer, setPreviewVer] = useState<AgreementVersion | null>(null);

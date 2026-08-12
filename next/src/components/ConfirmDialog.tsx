@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Textarea } from './form/Textarea';
+import { useEscClose } from '@/lib/useEscClose';
 
 export interface ConfirmDialogProps {
   open: boolean;
@@ -13,6 +14,7 @@ export interface ConfirmDialogProps {
   reasonLabel?: string;
   reasonPlaceholder?: string;
   loading?: boolean;
+  confirmDisabled?: boolean;
   onConfirm: (reason?: string) => void;
   onCancel: () => void;
 }
@@ -27,6 +29,7 @@ export function ConfirmDialog({
   reasonLabel = '拒绝理由',
   reasonPlaceholder = '请输入理由',
   loading = false,
+  confirmDisabled = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -36,6 +39,9 @@ export function ConfirmDialog({
   useEffect(() => {
     if (!open) setReason('');
   }, [open]);
+
+  // Esc 关闭
+  useEscClose(onCancel);
 
   if (!open) return null;
 
@@ -71,7 +77,7 @@ export function ConfirmDialog({
             type="button"
             className="btn-primary"
             onClick={() => onConfirm(requireReason ? reason : undefined)}
-            disabled={loading || (requireReason && !reason.trim())}
+            disabled={loading || confirmDisabled || (requireReason && !reason.trim())}
           >
             {loading ? '处理中...' : confirmLabel}
           </button>

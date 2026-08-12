@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useEscClose } from '@/lib/useEscClose';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Icon } from '@/components/admin/admin-icons';
 import RichTextEditor from '@/components/admin/RichTextEditor';
@@ -183,6 +184,8 @@ function AboutItem({ role }: { role: AboutRole }) {
   });
 
   const [open, setOpen] = useState(false);
+  // Esc 关闭编辑弹窗
+  useEscClose(() => setOpen(false));
   const [title, setTitle] = useState('');
   const [html, setHtml] = useState('');
   const [saving, setSaving] = useState(false);

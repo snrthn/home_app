@@ -20,6 +20,7 @@ import { useUserStore } from '@/lib/user-store';
 import DataTable, { StatusBadge, type Column } from '@/components/admin/DataTable';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { formatDateTime } from '@/lib/format';
+import { useEscClose } from '@/lib/useEscClose';
 
 const statusMeta: Record<
   string,
@@ -58,6 +59,9 @@ export default function AdminListPage() {
   const [password, setPassword] = useState('');
   const [staffRoleId, setStaffRoleId] = useState('');
   const [err, setErr] = useState('');
+
+  // Esc 关闭新增/编辑账号弹窗
+  useEscClose(() => setOpen(false));
 
   const filtered = useMemo(
     () =>

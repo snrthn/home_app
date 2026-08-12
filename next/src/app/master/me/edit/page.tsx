@@ -14,10 +14,11 @@ import {
   TextInput,
   Textarea,
   RadioGroup,
-  TagInput,
   RegionCascader,
   RegionMultiSelect,
   type RegionMultiSelectHandle,
+  CategoryMultiSelect,
+  type CategoryMultiSelectHandle,
   SubmitButton,
   FormCard,
   AvatarField,
@@ -55,6 +56,7 @@ export default function MasterMeEdit() {
   const [serviceAreas, setServiceAreas] = useState<RegionValue[]>([]);
   const [bio, setBio] = useState('');
   const serviceAreasRef = useRef<RegionMultiSelectHandle>(null);
+  const skillsRef = useRef<CategoryMultiSelectHandle>(null);
 
   useEffect(() => {
     if (!data) return;
@@ -68,7 +70,7 @@ export default function MasterMeEdit() {
     setMasterStatus(m.status ?? '');
     setRealName(m.realName ?? '');
     setIdCard(m.idCard ?? '');
-    setSkills(Array.isArray(m.skills) ? m.skills : []);
+    setSkills(Array.isArray(m.skills) ? (m.skills as string[]) : []);
     setRegion({
       province: m.province ?? null,
       provinceCode: m.provinceCode ?? null,
@@ -98,6 +100,14 @@ export default function MasterMeEdit() {
     if (pending) {
       toast.error(
         `你已选择「${pending}」但尚未点「+ 添加」加入接单范围，请先添加或清空选择后再保存。`,
+      );
+      return;
+    }
+    // 拦截：已选类目节点但未点「+ 添加」加入擅长技能就直接保存
+    const skillPending = skillsRef.current?.pendingText();
+    if (skillPending) {
+      toast.error(
+        `你已选择「${skillPending}」但尚未点「+ 添加」加入擅长技能，请先添加或清空选择后再保存。`,
       );
       return;
     }
@@ -187,8 +197,11 @@ export default function MasterMeEdit() {
             <Field label="身份证号" hint="选填，用于实名认证">
               <TextInput value={idCard} onChange={(e) => setIdCard(e.target.value)} placeholder="选填" />
             </Field>
-            <Field label="擅长技能" hint="如：空调清洗、油烟机维修，回车添加">
-              <TagInput value={skills} onChange={setSkills} />
+            <Field
+              label="擅长技能"
+              hint="从服务类目树选择你擅长的类目节点（可多选；选到业务域即覆盖其下所有服务），用于精准派单匹配"
+            >
+              <CategoryMultiSelect ref={skillsRef} value={skills} onChange={setSkills} />
             </Field>
             <Field label="服务地区" required>
               <RegionCascader value={region} onChange={setRegion} />

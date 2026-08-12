@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { PasswordForm } from './PasswordForm';
 import { FormCard } from './FormCard';
+import { useEscClose } from '@/lib/useEscClose';
 
 // 个人中心「账号安全」入口。
 // - 非受控（默认）：自带一个「修改/设置登录密码」入口按钮，点击弹出 Modal。
@@ -26,6 +27,11 @@ export function PasswordDialog({
     if (!isControlled) setInnerOpen(false);
     onClose?.();
   };
+
+  // Esc 关闭（仅在打开时监听）
+  useEscClose(() => {
+    if (isOpen) close();
+  });
 
   return (
     <>

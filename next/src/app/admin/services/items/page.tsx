@@ -4,14 +4,10 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getServiceItems,
-  getServiceCategories,
   createServiceItem,
   updateServiceItem,
   deleteServiceItem,
   type ServiceItem,
-  type ServiceCategory,
-  type ServiceTypeValue,
-  SERVICE_TYPE_LABEL,
 } from '@/lib/admin-api';
 import { QK } from '@/lib/query-keys';
 import { getApiErrorMsg } from '@/lib/api';
@@ -19,16 +15,13 @@ import { useToast } from '@/components/Toast';
 import { StatusBadge } from '@/components/admin/DataTable';
 import DataTable, { type Column } from '@/components/admin/DataTable';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { RegionCascader } from '@/components/form/RegionCascader';
-import { SelectInput } from '@/components/form/SelectInput';
+import { CategoryCascader } from '@/components/form/CategoryCascader';
 import { CoverImageField } from '@/components/form/CoverImageField';
-import { regionText, type RegionValue } from '@/data/region';
+import { useEscClose } from '@/lib/useEscClose';
 
 interface ItemDraft {
   categoryId: string;
   name: string;
-  type: ServiceTypeValue;
-  region: RegionValue;
   price: string;
   unit: string;
   estimatedDuration: string;
@@ -41,8 +34,6 @@ interface ItemDraft {
 const EMPTY_DRAFT: ItemDraft = {
   categoryId: '',
   name: '',
-  type: 'clean',
-  region: {},
   price: '',
   unit: '',
   estimatedDuration: '',
@@ -55,25 +46,26 @@ const EMPTY_DRAFT: ItemDraft = {
 function ItemEditModal({
   title,
   initial,
-  categories,
   onClose,
   onSubmit,
 }: {
   title: string;
   initial: ItemDraft;
-  categories: ServiceCategory[];
   onClose: () => void;
   onSubmit: (dto: ItemDraft) => Promise<void>;
 }) {
   const toast = useToast();
   const [draft, setDraft] = useState<ItemDraft>(initial);
   const [saving, setSaving] = useState(false);
+
+  // Esc 关闭弹窗
+  useEscClose(onClose);
   const set = <K extends keyof ItemDraft>(k: K, v: ItemDraft[K]) =>
     setDraft((d) => ({ ...d, [k]: v }));
 
   const submit = async () => {
     if (!draft.categoryId) {
-      toast.warning('请选择所属类目');
+      toast.warning('请选择服务类目（三级联动定位到具体服务）');
       return;
     }
     if (!draft.name.trim()) {
@@ -105,34 +97,12 @@ function ItemEditModal({
           </button>
         </div>
         <div className="modal-body">
-          <div className="field-row" style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-            <div style={{ flex: 1, minWidth: 200 }}>
-              <label className="field-label">所属类目</label>
-              <SelectInput
-                value={draft.categoryId}
-                onChange={(e) => set('categoryId', e.target.value)}
-              >
-                <option value="">请选择类目</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </SelectInput>
-            </div>
-            <div style={{ flex: 1, minWidth: 200 }}>
-              <label className="field-label">服务类型</label>
-              <SelectInput
-                value={draft.type}
-                onChange={(e) => set('type', e.target.value as ServiceTypeValue)}
-              >
-                {(Object.keys(SERVICE_TYPE_LABEL) as ServiceTypeValue[]).map((t) => (
-                  <option key={t} value={t}>
-                    {SERVICE_TYPE_LABEL[t]}
-                  </option>
-                ))}
-              </SelectInput>
-            </div>
+          <div className="field">
+            <label className="field-label">服务类目（三级联动定位）</label>
+            <CategoryCascader value={draft.categoryId} onChange={(id) => set('categoryId', id)} />
+            <p className="field-hint" style={{ marginTop: 6 }}>
+              按「业务域 → 子类目 → 具体服务」三级选择，定位到最具体的服务节点。服务类型（工种）由所选业务域自动派生，无需单独选择。
+            </p>
           </div>
 
           <div className="field">
@@ -143,11 +113,6 @@ function ItemEditModal({
               onChange={(e) => set('name', e.target.value)}
               placeholder="如：空调深度清洗 / 洗衣机拆洗"
             />
-          </div>
-
-          <div className="field">
-            <label className="field-label">服务区域（留空表示全城可服务）</label>
-            <RegionCascader value={draft.region} onChange={(v) => set('region', v)} />
           </div>
 
           <div className="field-row" style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
@@ -241,28 +206,20 @@ export default function ServiceItemsPage() {
     queryFn: () => getServiceItems(),
   });
 
-  const { data: categories = [] } = useQuery<ServiceCategory[]>({
-    queryKey: QK.adminServiceCategories,
-    queryFn: () => getServiceCategories(),
-  });
-
   const [createOpen, setCreateOpen] = useState(false);
   const [editItem, setEditItem] = useState<ServiceItem | null>(null);
   const [confirm, setConfirm] = useState<ServiceItem | null>(null);
   const [acting, setActing] = useState(false);
 
-  const refresh = () => qc.invalidateQueries({ queryKey: QK.adminServiceItems });
+  // 项目增删改会影响类目页的「项目数」统计，一并失效类目缓存
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: QK.adminServiceItems });
+    qc.invalidateQueries({ queryKey: QK.adminServiceCategories });
+  };
 
   const buildDto = (d: ItemDraft) => ({
     categoryId: d.categoryId,
     name: d.name.trim(),
-    type: d.type,
-    province: d.region.province ?? undefined,
-    provinceCode: d.region.provinceCode ?? undefined,
-    city: d.region.city ?? undefined,
-    cityCode: d.region.cityCode ?? undefined,
-    district: d.region.district ?? undefined,
-    districtCode: d.region.districtCode ?? undefined,
     price: Number(d.price),
     unit: d.unit.trim() || undefined,
     estimatedDuration: d.estimatedDuration ? Number(d.estimatedDuration) : undefined,
@@ -312,15 +269,6 @@ export default function ServiceItemsPage() {
   const toDraft = (it: ServiceItem): ItemDraft => ({
     categoryId: it.categoryId,
     name: it.name,
-    type: it.type,
-    region: {
-      province: it.province,
-      provinceCode: it.provinceCode,
-      city: it.city,
-      cityCode: it.cityCode,
-      district: it.district,
-      districtCode: it.districtCode,
-    },
     price: String(it.price),
     unit: it.unit ?? '',
     estimatedDuration: it.estimatedDuration != null ? String(it.estimatedDuration) : '',
@@ -333,23 +281,6 @@ export default function ServiceItemsPage() {
   const columns: Column<ServiceItem>[] = [
     { key: 'name', title: '项目名称', width: '220px', render: (r) => <span style={{ fontWeight: 600 }}>{r.name}</span> },
     { key: 'category', title: '类目', width: '240px', render: (r) => r.category?.name ?? <span style={{ color: '#b6c0c8' }}>—</span> },
-    { key: 'type', title: '类型', width: '90px', render: (r) => SERVICE_TYPE_LABEL[r.type] ?? r.type },
-    {
-      key: 'region',
-      title: '服务区域',
-      width: '170px',
-      render: (r) =>
-        r.provinceCode ? (
-          <span
-            className="cell-ellipsis"
-            title={regionText({ provinceCode: r.provinceCode, cityCode: r.cityCode, districtCode: r.districtCode })}
-          >
-            {regionText({ provinceCode: r.provinceCode, cityCode: r.cityCode, districtCode: r.districtCode })}
-          </span>
-        ) : (
-          <span style={{ color: '#b6c0c8' }}>全城</span>
-        ),
-    },
     {
       key: 'price',
       title: '价格',
@@ -407,7 +338,7 @@ export default function ServiceItemsPage() {
 
       <div className="card" style={{ padding: 18 }}>
         <p className="field-hint" style={{ marginTop: -4, marginBottom: 14 }}>
-          服务项目挂在具体类目下，是客户下单时真正选择的对象。价格在下单时会被快照进订单（serviceSnapshot），后续改价不影响历史订单；所属区域、类型、预计时长用于派单与排期。
+          服务项目挂在具体类目（业务域 → 子类目 → 具体服务）下，是客户下单时真正选择的对象。服务本身是「模板」，不绑定区域；下单时的可用性由「平台开通区域 ∩ 师傅接单范围 ∩ 客户下单地址」在运行时动态判定。价格在下单时快照进订单（serviceSnapshot），后续改价不影响历史订单；服务类型（工种）由所属业务域自动派生，用于派单与统计。
         </p>
         <DataTable
           columns={columns}
@@ -422,7 +353,6 @@ export default function ServiceItemsPage() {
         <ItemEditModal
           title="新增服务项目"
           initial={EMPTY_DRAFT}
-          categories={categories}
           onClose={() => setCreateOpen(false)}
           onSubmit={handleCreate}
         />
@@ -433,7 +363,6 @@ export default function ServiceItemsPage() {
           key={editItem.id}
           title={`编辑项目 · ${editItem.name}`}
           initial={toDraft(editItem)}
-          categories={categories}
           onClose={() => setEditItem(null)}
           onSubmit={(dto) => handleUpdate(editItem.id, dto)}
         />

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useEscClose } from '@/lib/useEscClose';
 import {
   useQuery,
   useMutation,
@@ -35,6 +36,11 @@ export default function RoleManagePage() {
 
   const [view, setView] = useState<'list' | 'perms'>('list');
   const [activeRole, setActiveRole] = useState<StaffRole | null>(null);
+  // Esc 关闭所有弹窗
+  useEscClose(() => {
+    setModal(null);
+    setActiveRole(null);
+  });
 
   // 新增 / 编辑 弹窗
   const [modal, setModal] = useState<

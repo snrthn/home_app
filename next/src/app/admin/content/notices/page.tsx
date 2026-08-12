@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { useEscClose } from '@/lib/useEscClose';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getNotices,
@@ -263,6 +264,12 @@ export default function NoticesPage() {
   });
 
   const [createOpen, setCreateOpen] = useState(false);
+  // Esc 关闭所有弹窗
+  useEscClose(() => {
+    setCreateOpen(false);
+    setEditItem(null);
+    setPreviewItem(null);
+  });
   const [editItem, setEditItem] = useState<Notice | null>(null);
   const [previewItem, setPreviewItem] = useState<Notice | null>(null);
   const [confirm, setConfirm] = useState<{

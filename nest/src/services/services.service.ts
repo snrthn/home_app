@@ -2,7 +2,6 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 // pnpm 的 @prisma/client 是只读软链，生成客户端实际位于 node_modules/.prisma/client
 import {
-  ServiceType,
   ServiceItem,
   ServiceCategory,
 } from '../../node_modules/.prisma/client';
@@ -12,11 +11,17 @@ export class ServicesService {
   constructor(private prisma: PrismaService) {}
 
   // ===================== 服务类目 =====================
-  async listCategories() {
-    return this.prisma.serviceCategory.findMany({
+  async listCategories(): Promise<(ServiceCategory & { _count: { items: number } })[]> {
+    // 项目删除为软删除（仅置 deletedAt + isActive=false，外键 categoryId 保留），
+    // 因此 _count 必须按「未删除项目」过滤，否则软删项目仍会被计入类目关联数。
+    const cats = await this.prisma.serviceCategory.findMany({
       where: { deletedAt: null },
       orderBy: [{ sort: 'asc' }, { name: 'asc' }],
-      include: { _count: { select: { items: true } } },
+      include: { items: { where: { deletedAt: null }, select: { id: true } } },
+    });
+    return cats.map((c) => {
+      const { items, ...rest } = c;
+      return { ...rest, _count: { items: items.length } };
     });
   }
 
@@ -28,14 +33,25 @@ export class ServicesService {
 
   async createCategory(dto: {
     name: string;
+    parentId?: string | null;
+    level?: number;
     description?: string;
     icon?: string;
     sort?: number;
     isActive?: boolean;
   }): Promise<ServiceCategory> {
+    let level = dto.level ?? 1;
+    if (dto.parentId) {
+      const parent = await this.prisma.serviceCategory.findUnique({ where: { id: dto.parentId } });
+      if (!parent) throw new BadRequestException('上级类目不存在');
+      level = parent.level + 1;
+      if (level > 3) throw new BadRequestException('类目最多支持三级');
+    }
     return this.prisma.serviceCategory.create({
       data: {
         name: dto.name,
+        parentId: dto.parentId ?? null,
+        level,
         description: dto.description ?? null,
         icon: dto.icon ?? null,
         sort: dto.sort ?? 0,
@@ -48,6 +64,7 @@ export class ServicesService {
     id: string,
     dto: Partial<{
       name: string;
+      parentId: string | null;
       description: string;
       icon: string;
       sort: number;
@@ -61,6 +78,19 @@ export class ServicesService {
     if (dto.icon !== undefined) data.icon = dto.icon ?? null;
     if (dto.sort !== undefined) data.sort = dto.sort;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
+    if (dto.parentId !== undefined) {
+      if (dto.parentId) {
+        const parent = await this.prisma.serviceCategory.findUnique({ where: { id: dto.parentId } });
+        if (!parent) throw new BadRequestException('上级类目不存在');
+        const lvl = parent.level + 1;
+        if (lvl > 3) throw new BadRequestException('类目最多支持三级');
+        data.level = lvl;
+        data.parentId = dto.parentId;
+      } else {
+        data.level = 1;
+        data.parentId = null;
+      }
+    }
     return this.prisma.serviceCategory.update({ where: { id }, data });
   }
 
@@ -69,6 +99,13 @@ export class ServicesService {
   // 硬删会触发外键约束报错；软删既隐藏类目又不破坏历史订单引用的完整性。
   async removeCategory(id: string): Promise<ServiceCategory> {
     await this.getCategory(id);
+    // 先查子级类目：存在子节点时必须先删除子节点，否则会留下孤儿类目
+    const childCount = await this.prisma.serviceCategory.count({
+      where: { parentId: id, deletedAt: null },
+    });
+    if (childCount > 0) {
+      throw new BadRequestException(`该类目下仍有 ${childCount} 个子级类目，请先删除子节点后再删除`);
+    }
     const count = await this.prisma.serviceItem.count({
       where: { categoryId: id, deletedAt: null },
     });
@@ -105,13 +142,6 @@ export class ServicesService {
   async createItem(dto: {
     categoryId: string;
     name: string;
-    type: ServiceType;
-    province?: string;
-    provinceCode?: string;
-    city?: string;
-    cityCode?: string;
-    district?: string;
-    districtCode?: string;
     price: number;
     unit?: string;
     description?: string;
@@ -128,13 +158,6 @@ export class ServicesService {
       data: {
         categoryId: dto.categoryId,
         name: dto.name,
-        type: dto.type,
-        province: dto.province ?? null,
-        provinceCode: dto.provinceCode ?? null,
-        city: dto.city ?? null,
-        cityCode: dto.cityCode ?? null,
-        district: dto.district ?? null,
-        districtCode: dto.districtCode ?? null,
         price: dto.price,
         unit: dto.unit ?? null,
         description: dto.description ?? null,
@@ -152,13 +175,6 @@ export class ServicesService {
     dto: Partial<{
       categoryId: string;
       name: string;
-      type: ServiceType;
-      province: string;
-      provinceCode: string;
-      city: string;
-      cityCode: string;
-      district: string;
-      districtCode: string;
       price: number;
       unit: string;
       description: string;
@@ -172,13 +188,6 @@ export class ServicesService {
     const data: Record<string, unknown> = {};
     if (dto.categoryId !== undefined) data.categoryId = dto.categoryId;
     if (dto.name !== undefined) data.name = dto.name;
-    if (dto.type !== undefined) data.type = dto.type;
-    if (dto.province !== undefined) data.province = dto.province ?? null;
-    if (dto.provinceCode !== undefined) data.provinceCode = dto.provinceCode ?? null;
-    if (dto.city !== undefined) data.city = dto.city ?? null;
-    if (dto.cityCode !== undefined) data.cityCode = dto.cityCode ?? null;
-    if (dto.district !== undefined) data.district = dto.district ?? null;
-    if (dto.districtCode !== undefined) data.districtCode = dto.districtCode ?? null;
     if (dto.price !== undefined) data.price = dto.price;
     if (dto.unit !== undefined) data.unit = dto.unit ?? null;
     if (dto.description !== undefined) data.description = dto.description ?? null;
@@ -204,23 +213,41 @@ export class ServicesService {
   }
 
   // ===================== 公开（下单/选服务） =====================
-  async listPublicItems(opts?: { city?: string; type?: string }): Promise<(ServiceItem & { category: ServiceCategory })[]> {
+  async listPublicItems(): Promise<(ServiceItem & { category: ServiceCategory })[]> {
     return this.prisma.serviceItem.findMany({
       where: {
         isActive: true,
         deletedAt: null,
-        ...(opts?.city ? { city: opts.city } : {}),
-        ...(opts?.type ? { type: opts.type as ServiceType } : {}),
       },
       orderBy: [{ sort: 'asc' }, { createdAt: 'desc' }],
       include: { category: true },
     });
   }
 
-  async listPublicCategories() {
+  async listPublicCategories(): Promise<ServiceCategory[]> {
     return this.prisma.serviceCategory.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: [{ sort: 'asc' }, { name: 'asc' }],
     });
+  }
+
+  // 返回嵌套树（最多三级），供前端三级联动下拉定位服务。
+  async getCategoryTree(): Promise<any[]> {
+    const cats = await this.prisma.serviceCategory.findMany({
+      where: { isActive: true, deletedAt: null },
+      orderBy: [{ level: 'asc' }, { sort: 'asc' }, { name: 'asc' }],
+    });
+    const map = new Map<string, any>();
+    cats.forEach((c) => map.set(c.id, { ...c, children: [] as any[] }));
+    const roots: any[] = [];
+    cats.forEach((c) => {
+      const node = map.get(c.id)!;
+      if (c.parentId && map.has(c.parentId)) {
+        map.get(c.parentId)!.children.push(node);
+      } else {
+        roots.push(node);
+      }
+    });
+    return roots;
   }
 }

@@ -824,7 +824,7 @@ body {
   border-radius: var(--radius);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
   width: 100%;
-  max-width: 420px;
+  max-width: 480px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
@@ -1642,6 +1642,11 @@ body {
 }
 
 /* 弹层内预览统一由 .richtext 排版，不再单独定义 .agreement-preview */
+
+/* 中等模态：一般表单（如类目维护），比默认款宽裕 */
+.modal-panel.modal-md {
+  max-width: 600px;
+}
 
 /* 加宽模态：协议预览使用 */
 .modal-panel.modal-lg {

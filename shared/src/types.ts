@@ -22,11 +22,6 @@ export enum PaymentStatus {
   Confirmed = 'confirmed',
 }
 
-export enum ServiceType {
-  Clean = 'clean', // 清洗
-  Repair = 'repair', // 维修
-}
-
 export enum SettlementStatus {
   OfflinePending = 'offline_pending', // 待线下结算给师傅
   OfflineDone = 'offline_done', // 已线下结算

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useEscClose } from '@/lib/useEscClose';
 import { useQuery } from '@tanstack/react-query';
 import {
   getOperationLogs,
@@ -36,6 +37,8 @@ export default function OperationLogsPage() {
   const [to, setTo] = useState('');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<OperationLog | null>(null);
+  // Esc 关闭详情弹窗
+  useEscClose(() => setSelected(null));
 
   const params: OperationLogQuery = {
     module: module || undefined,
