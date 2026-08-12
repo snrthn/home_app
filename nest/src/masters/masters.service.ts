@@ -81,6 +81,7 @@ export class MastersService {
       'cityCode',
       'district',
       'districtCode',
+      'serviceAreas',
     ] as const;
     const data: Record<string, unknown> = {};
     for (const f of fields) {

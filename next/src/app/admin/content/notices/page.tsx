@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getNotices,
@@ -21,6 +21,8 @@ import { StatusBadge } from '@/components/admin/DataTable';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import RichTextEditor from '@/components/admin/RichTextEditor';
 import SanitizedHtml from '@/components/admin/SanitizedHtml';
+import { RegionMultiSelect, formatRegionScope, type RegionMultiSelectHandle } from '@/components/form';
+import type { RegionValue } from '@/data/region';
 
 const SCOPE_LABEL: Record<NoticeScope, string> = {
   customer: '用户端',
@@ -66,6 +68,7 @@ interface NoticeDraft {
   pinned: boolean;
   startAt: string;
   endAt: string;
+  targetRegions: RegionValue[];
 }
 
 // 新建 / 编辑公告
@@ -88,11 +91,23 @@ function NoticeEditModal({
   const [pinned, setPinned] = useState(initial.pinned);
   const [startAt, setStartAt] = useState(initial.startAt);
   const [endAt, setEndAt] = useState(initial.endAt);
+  const [targetRegions, setTargetRegions] = useState<RegionValue[]>(
+    initial.targetRegions ?? [],
+  );
   const [saving, setSaving] = useState(false);
+  const targetRegionsRef = useRef<RegionMultiSelectHandle>(null);
 
   const submit = async () => {
     if (!nTitle.trim()) {
       toast.warning('请填写公告标题');
+      return;
+    }
+    // 拦截：已选择地区但未点「+ 添加」就直接保存，避免误存/误以为程序 Bug
+    const pending = targetRegionsRef.current?.pendingText();
+    if (pending) {
+      toast.error(
+        `你已选择「${pending}」但尚未点「+ 添加」加入通知范围，请先添加或清空选择后再保存。`,
+      );
       return;
     }
     setSaving(true);
@@ -105,6 +120,7 @@ function NoticeEditModal({
         pinned,
         startAt,
         endAt,
+        targetRegions,
       });
       onClose();
     } catch (e: any) {
@@ -160,6 +176,17 @@ function NoticeEditModal({
           <div className="field">
             <label className="field-label">正文（支持富文本、内联图片、文件链接）</label>
             <RichTextEditor value={html} onChange={setHtml} />
+          </div>
+          <div className="field">
+            <label className="field-label">通知范围（选填）</label>
+            <RegionMultiSelect
+              ref={targetRegionsRef}
+              value={targetRegions}
+              onChange={setTargetRegions}
+            />
+            <p className="field-hint" style={{ marginTop: 4 }}>
+              留空 = 该端全部用户可见；添加省 / 市 / 区（支持只选省或省+市），则仅命中地域的用户可见。
+            </p>
           </div>
           <div className="field-row" style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
             <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -409,6 +436,11 @@ export default function NoticesPage() {
                   {n.status === 'published' && n.publishedAt
                     ? `发布于 ${formatDateTime(n.publishedAt)}`
                     : `创建于 ${formatDateTime(n.createdAt)}`}
+                  <span style={{ marginLeft: 10, color: 'var(--color-primary)' }}>
+                    {n.targetRegions && n.targetRegions.length > 0
+                      ? `范围：${n.targetRegions.map((r) => formatRegionScope(r)).join('、')}`
+                      : '范围：全国'}
+                  </span>
                   {(n.startAt || n.endAt) && (
                     <span style={{ marginLeft: 10 }}>
                       生效：{n.startAt ? formatDateTime(n.startAt) : '即起'}
@@ -434,6 +466,7 @@ export default function NoticesPage() {
             pinned: false,
             startAt: '',
             endAt: '',
+            targetRegions: [],
           }}
           onClose={() => setCreateOpen(false)}
           onSubmit={handleCreate}
@@ -452,6 +485,7 @@ export default function NoticesPage() {
             pinned: editItem.pinned,
             startAt: editItem.startAt ? editItem.startAt.slice(0, 16) : '',
             endAt: editItem.endAt ? editItem.endAt.slice(0, 16) : '',
+            targetRegions: editItem.targetRegions ?? [],
           }}
           onClose={() => setEditItem(null)}
           onSubmit={(dto) => handleUpdate(editItem.id, dto)}

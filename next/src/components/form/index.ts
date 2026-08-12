@@ -6,6 +6,8 @@ export { SelectInput } from './SelectInput';
 export { RadioGroup } from './RadioGroup';
 export { TagInput } from './TagInput';
 export { RegionCascader } from './RegionCascader';
+export { RegionMultiSelect, formatRegionScope } from './RegionMultiSelect';
+export type { RegionMultiSelectHandle } from './RegionMultiSelect';
 export type { RegionValue } from '@/data/region';
 export { SubmitButton } from './SubmitButton';
 export { FormCard } from './FormCard';

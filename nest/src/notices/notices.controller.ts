@@ -56,6 +56,7 @@ export class NoticesController {
       pinned?: boolean;
       startAt?: string;
       endAt?: string;
+      targetRegions?: any[];
     },
   ) {
     return this.s.create(req.user.sub, dto);
@@ -78,6 +79,7 @@ export class NoticesController {
       pinned?: boolean;
       startAt?: string | null;
       endAt?: string | null;
+      targetRegions?: any[];
     },
   ) {
     return this.s.update(id, dto);

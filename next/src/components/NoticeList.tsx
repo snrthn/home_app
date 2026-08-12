@@ -7,7 +7,9 @@ import {
   type NoticePublic,
   type NoticeScope,
 } from '@/lib/admin-api';
+import { getProfile } from '@/lib/api';
 import { QK } from '@/lib/query-keys';
+import { roleFromPath } from '@/lib/auth';
 import { formatDateTime } from '@/lib/format';
 
 const SCOPE_BASE: Record<Exclude<NoticeScope, 'admin'>, string> = {
@@ -36,9 +38,24 @@ function PinIcon() {
 
 // 公告列表：点击跳转到独立详情页（/client|master/notices/[id]），不再使用弹窗。
 export default function NoticeList({ scope }: { scope: NoticeScope }) {
+  const role = roleFromPath() ?? 'customer';
+  const { data: profile } = useQuery({
+    queryKey: QK.profile(role),
+    queryFn: getProfile,
+    staleTime: Infinity,
+  });
+  // 当前用户所在地，用于后端按通知范围过滤公告
+  const region =
+    profile?.provinceCode
+      ? {
+          provinceCode: profile.provinceCode ?? undefined,
+          cityCode: profile.cityCode ?? undefined,
+          districtCode: profile.districtCode ?? undefined,
+        }
+      : undefined;
   const { data: notices = [], isLoading } = useQuery<NoticePublic[]>({
-    queryKey: QK.publicNotices(scope),
-    queryFn: () => getPublicNotices(scope),
+    queryKey: [...QK.publicNotices(scope), region?.provinceCode ?? 'none'],
+    queryFn: () => getPublicNotices(scope, region),
   });
 
   if (isLoading) {

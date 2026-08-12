@@ -1,4 +1,5 @@
 import api from './api';
+import type { RegionValue } from '@/data/region';
 
 // 管理端「用户」相关接口封装（后台账号 / 客户 / 师傅 / 认证审核）
 
@@ -237,6 +238,7 @@ export interface Notice {
   createdAt: string;
   updatedAt: string;
   publishedAt: string | null;
+  targetRegions?: RegionValue[];
 }
 
 // 公开列表字段（含正文，点击即用）
@@ -249,6 +251,7 @@ export interface NoticePublic {
   pinned: boolean;
   publishedAt: string | null;
   createdAt: string;
+  targetRegions?: RegionValue[];
 }
 
 // 管理端：列表（可选 scope 过滤）
@@ -302,10 +305,21 @@ export function deleteNotice(id: string): Promise<void> {
   return api.delete(`/admin/notices/${id}`).then((r) => r.data);
 }
 
-// 公开：取某端当前生效的公告列表（无需登录），供用户端/师傅端展示
-export function getPublicNotices(scope: NoticeScope): Promise<NoticePublic[]> {
+// 公开：取某端当前生效的公告列表（无需登录），供用户端/师傅端展示。
+// region 为当前用户所在地（UserProfile 省市区）；传了则后端按通知范围过滤，
+// 不传（未登录 / 无地域）则返回全部已发布（不过滤）。
+export function getPublicNotices(
+  scope: NoticeScope,
+  region?: { provinceCode?: string; cityCode?: string; districtCode?: string },
+): Promise<NoticePublic[]> {
+  const params: Record<string, string> = { scope };
+  if (region?.provinceCode) {
+    params.provinceCode = region.provinceCode;
+    if (region.cityCode) params.cityCode = region.cityCode;
+    if (region.districtCode) params.districtCode = region.districtCode;
+  }
   return api
-    .get('/notices', { params: { scope } })
+    .get('/notices', { params })
     .then((r) => r.data ?? []);
 }
 

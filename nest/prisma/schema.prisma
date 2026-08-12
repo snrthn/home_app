@@ -152,6 +152,8 @@ model Master {
   cityCode      String?
   district      String?
   districtCode  String?
+  // 接单范围：多值区域集合，基于 ServiceArea 已开通节点，支持省/市/区部分粒度（缺级通配）。
+  serviceAreas Json?
   skills      Json?
   idVerified  Boolean      @default(false)
   rating      Decimal      @db.Decimal(3, 2) @default(5.0)
@@ -467,6 +469,7 @@ model Notice {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   publishedAt DateTime?
+  targetRegions Json? // 通知范围：数组，每项 {provinceCode?,cityCode?,districtCode?}，缺级=通配；空=全平台可见
 
   @@index([scope, status])
 }

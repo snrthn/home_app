@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { updateProfile, updateMasterMe } from '@/lib/api';
@@ -16,6 +16,8 @@ import {
   RadioGroup,
   TagInput,
   RegionCascader,
+  RegionMultiSelect,
+  type RegionMultiSelectHandle,
   SubmitButton,
   FormCard,
   AvatarField,
@@ -50,7 +52,9 @@ export default function MasterMeEdit() {
   const [idCard, setIdCard] = useState('');
   const [skills, setSkills] = useState<string[]>([]);
   const [region, setRegion] = useState<RegionValue>({});
+  const [serviceAreas, setServiceAreas] = useState<RegionValue[]>([]);
   const [bio, setBio] = useState('');
+  const serviceAreasRef = useRef<RegionMultiSelectHandle>(null);
 
   useEffect(() => {
     if (!data) return;
@@ -73,10 +77,30 @@ export default function MasterMeEdit() {
       district: m.district ?? null,
       districtCode: m.districtCode ?? null,
     });
+    setServiceAreas(
+      Array.isArray(m.serviceAreas)
+        ? m.serviceAreas.map((s: any) => ({
+            province: s.province ?? null,
+            provinceCode: s.provinceCode ?? null,
+            city: s.city ?? null,
+            cityCode: s.cityCode ?? null,
+            district: s.district ?? null,
+            districtCode: s.districtCode ?? null,
+          }))
+        : [],
+    );
   }, [data]);
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
+    // 拦截：已选择地区但未点「+ 添加」就直接保存，避免误存/误以为程序 Bug
+    const pending = serviceAreasRef.current?.pendingText();
+    if (pending) {
+      toast.error(
+        `你已选择「${pending}」但尚未点「+ 添加」加入接单范围，请先添加或清空选择后再保存。`,
+      );
+      return;
+    }
     setSaving(true);
     try {
       const [profileRes] = await Promise.all([
@@ -97,6 +121,14 @@ export default function MasterMeEdit() {
           cityCode: region.cityCode ?? undefined,
           district: region.district ?? undefined,
           districtCode: region.districtCode ?? undefined,
+          serviceAreas: serviceAreas.map((s) => ({
+            province: s.province ?? undefined,
+            provinceCode: s.provinceCode ?? undefined,
+            city: s.city ?? undefined,
+            cityCode: s.cityCode ?? undefined,
+            district: s.district ?? undefined,
+            districtCode: s.districtCode ?? undefined,
+          })),
         }),
       ]);
       setUser('master', profileRes.data);
@@ -160,6 +192,16 @@ export default function MasterMeEdit() {
             </Field>
             <Field label="服务地区" required>
               <RegionCascader value={region} onChange={setRegion} />
+            </Field>
+            <Field
+              label="接单范围"
+              hint="可添加多个省/市/区（仅选省即代表该省全部）。空 = 全平台可接单"
+            >
+              <RegionMultiSelect
+                ref={serviceAreasRef}
+                value={serviceAreas}
+                onChange={setServiceAreas}
+              />
             </Field>
             <Field
               label="个人描述"

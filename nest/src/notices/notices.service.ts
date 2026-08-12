@@ -8,6 +8,24 @@ import { PrismaService } from '../prisma/prisma.service';
 const SCOPES = ['customer', 'master', 'admin'];
 const STATUSES = ['draft', 'published', 'offline'];
 
+// 当前用户地域（来自 UserProfile 所在地，6 段式取 code）
+export interface RegionFilter {
+  provinceCode?: string;
+  cityCode?: string;
+  districtCode?: string;
+}
+
+// 单条通知范围规则：缺哪一级代表哪一级通配
+// （只给省码=全省可见，给省市=全市可见，给全=精确区可见）
+export interface NoticeTargetRegion {
+  province?: string | null;
+  provinceCode?: string | null;
+  city?: string | null;
+  cityCode?: string | null;
+  district?: string | null;
+  districtCode?: string | null;
+}
+
 export interface NoticeInput {
   scope: string;
   title: string;
@@ -16,6 +34,7 @@ export interface NoticeInput {
   pinned?: boolean;
   startAt?: string | null;
   endAt?: string | null;
+  targetRegions?: NoticeTargetRegion[];
 }
 
 @Injectable()
@@ -57,6 +76,7 @@ export class NoticesService {
         pinned: !!dto.pinned,
         startAt: dto.startAt ? new Date(dto.startAt) : null,
         endAt: dto.endAt ? new Date(dto.endAt) : null,
+        targetRegions: (dto.targetRegions as any) ?? null,
         createdBy,
         status: 'draft',
       },
@@ -80,6 +100,9 @@ export class NoticesService {
     if (dto.summary !== undefined) data.summary = dto.summary?.trim() || null;
     if (dto.contentHtml !== undefined) data.contentHtml = dto.contentHtml;
     if (dto.pinned !== undefined) data.pinned = !!dto.pinned;
+    if (dto.targetRegions !== undefined) {
+      data.targetRegions = dto.targetRegions as any;
+    }
     if (dto.startAt !== undefined) {
       data.startAt = dto.startAt ? new Date(dto.startAt) : null;
     }
@@ -110,12 +133,13 @@ export class NoticesService {
     return this.prisma.notice.delete({ where: { id } });
   }
 
-  // 公开：取某端已发布且在生效时间窗内的公告，置顶优先、发布时间倒序。
-  // 直接带 contentHtml，前端点击即用，避免二次请求。
-  async getPublicList(scope: string) {
+  // 公开：取某端已发布且在生效时间窗内的公告，按地域范围过滤，
+  // 置顶优先、发布时间倒序。直接带 contentHtml，前端点击即用，避免二次请求。
+  // region 为空（前端未传地域）→ 不做地域约束，返回全部已发布。
+  async getPublicList(scope: string, region?: RegionFilter) {
     this.assertScope(scope);
     const now = new Date();
-    return this.prisma.notice.findMany({
+    const notices = await this.prisma.notice.findMany({
       where: {
         scope,
         status: 'published',
@@ -125,6 +149,30 @@ export class NoticesService {
         ],
       },
       orderBy: [{ pinned: 'desc' }, { publishedAt: 'desc' }],
+    });
+    if (!region || !region.provinceCode) return notices;
+    return notices.filter((n) =>
+      this.matchRegion(n.targetRegions as NoticeTargetRegion[] | null, region),
+    );
+  }
+
+  // targetRegions 为空数组/null → 全国可见（不约束）；
+  // 非空 → 用户 (pCode,cCode,dCode) 命中任一条规则即可见。
+  private matchRegion(
+    targetRegions: NoticeTargetRegion[] | null,
+    region: RegionFilter,
+  ): boolean {
+    if (!targetRegions || targetRegions.length === 0) return true;
+    const pCode = region.provinceCode;
+    const cCode = region.cityCode;
+    const dCode = region.districtCode;
+    return targetRegions.some((r) => {
+      if (!r.provinceCode || r.provinceCode !== pCode) return false;
+      if (r.cityCode) {
+        if (r.cityCode !== cCode) return false;
+        if (r.districtCode && r.districtCode !== dCode) return false;
+      }
+      return true;
     });
   }
 }

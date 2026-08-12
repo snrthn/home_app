@@ -3,7 +3,9 @@
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { getPublicNotices, type NoticeScope } from '@/lib/admin-api';
+import { getProfile } from '@/lib/api';
 import { QK } from '@/lib/query-keys';
+import { roleFromPath } from '@/lib/auth';
 import { formatDateTime } from '@/lib/format';
 import { PortalNavSetter } from '@/components/PortalShell';
 import SanitizedHtml from '@/components/admin/SanitizedHtml';
@@ -20,9 +22,23 @@ export default function NoticeDetail({ scope }: { scope: Exclude<NoticeScope, 'a
   const id = params?.id;
   const base = SCOPE_BASE[scope];
 
+  const role = roleFromPath() ?? 'customer';
+  const { data: profile } = useQuery({
+    queryKey: QK.profile(role),
+    queryFn: getProfile,
+    staleTime: Infinity,
+  });
+  const region =
+    profile?.provinceCode
+      ? {
+          provinceCode: profile.provinceCode ?? undefined,
+          cityCode: profile.cityCode ?? undefined,
+          districtCode: profile.districtCode ?? undefined,
+        }
+      : undefined;
   const { data, isLoading } = useQuery({
-    queryKey: QK.publicNotices(scope),
-    queryFn: () => getPublicNotices(scope),
+    queryKey: [...QK.publicNotices(scope), region?.provinceCode ?? 'none'],
+    queryFn: () => getPublicNotices(scope, region),
   });
 
   const notice = data?.find((n) => n.id === id);

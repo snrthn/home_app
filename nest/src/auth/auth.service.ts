@@ -334,6 +334,7 @@ export class AuthService {
           cityCode: m.cityCode ?? null,
           district: m.district ?? null,
           districtCode: m.districtCode ?? null,
+          serviceAreas: m.serviceAreas ?? [],
         },
       };
     }
