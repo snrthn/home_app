@@ -127,6 +127,7 @@ export default function AdminSidebar() {
               ) : (
                 <Link
                   href={item.path}
+                  prefetch={true}
                   className={rowClass}
                   title={collapsed ? item.label : undefined}
                 >
@@ -140,6 +141,7 @@ export default function AdminSidebar() {
                     <Link
                       key={child.key}
                       href={child.path}
+                      prefetch={true}
                       className={`admin-nav-child${isActive(child.path) ? ' active' : ''}`}
                     >
                       {child.label}
