@@ -17,6 +17,7 @@ export const QK = {
   adminNotices: ['admin', 'notices'] as const,
   adminServiceCategories: ['admin', 'services', 'categories'] as const,
   adminServiceItems: ['admin', 'services', 'items'] as const,
+  adminServiceAreas: ['admin', 'services', 'areas'] as const,
   publicNotices: (scope: string) => ['public', 'notices', scope] as const,
   siteContent: (key: string) => ['site-content', key] as const,
   adminSiteContent: (key: string) => ['admin', 'site-content', key] as const,

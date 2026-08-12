@@ -29,6 +29,17 @@ export interface RegionOption {
   name: string;
 }
 
+// 6 段式区域值：全局唯一来源，供 RegionCascader / ServiceItem / ServiceArea / Master 共用，
+// 保证前后端字段名与「省code/市code/区code」范式完全一致。
+export interface RegionValue {
+  province?: string | null;
+  provinceCode?: string | null;
+  city?: string | null;
+  cityCode?: string | null;
+  district?: string | null;
+  districtCode?: string | null;
+}
+
 // 省份列表
 export const provinceOptions: RegionOption[] = (provinces as Prov[]).map((p) => ({
   code: p.code,

@@ -8,20 +8,13 @@ import {
   isMunicipality,
   getMunicipalityCity,
   type RegionOption,
+  type RegionValue,
 } from '@/data/region';
 import { SelectInput } from './SelectInput';
 
-export interface RegionValue {
-  province?: string | null;
-  provinceCode?: string | null;
-  city?: string | null;
-  cityCode?: string | null;
-  district?: string | null;
-  districtCode?: string | null;
-}
-
 // 省/市/区三级联动，产出「省code/市code/区code」+ 名称，符合后端字段要求
-// 直辖市（无地级市层级）自动带出「市辖区」，保证后面两级可正常展开。
+// 直辖市（无地级市层级）下 city 级放合成「市辖区」选项，但默认不自动选中，
+// 由用户手动勾选，保证省市区三级均可自由配置（不冻结、不跳过选区）。
 export function RegionCascader({
   value,
   onChange,
@@ -73,12 +66,6 @@ export function RegionCascader({
             district: null,
             districtCode: null,
           };
-          // 直辖市：自动带出「市辖区」，使区级可展开
-          if (code && isMunicipality(code)) {
-            const mc = getMunicipalityCity(code);
-            base.city = mc.name;
-            base.cityCode = mc.code;
-          }
           onChange(base);
         }}
       >
@@ -91,12 +78,8 @@ export function RegionCascader({
       </SelectInput>
 
       <SelectInput
-        value={
-          isMun
-            ? value.cityCode ?? syntheticCity?.code ?? ''
-            : value.cityCode ?? ''
-        }
-        disabled={isMun || !cities.length}
+        value={value.cityCode ?? ''}
+        disabled={!cities.length}
         onChange={(e) => {
           const code = e.target.value;
           const opt = cities.find((o) => o.code === code);

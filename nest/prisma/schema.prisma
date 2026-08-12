@@ -210,6 +210,38 @@ model ServiceItem {
   orders Order[]
 }
 
+// ---------------- 服务区域（平台开通城市字典，2026-08-12 新增） ----------------
+// 平台已开通的行政区域节点表，支持省/市/区三级自由配置（树形勾选开通）。
+// 是 ServiceItem.区域 / Master.服务区域 的上游白名单（本期仅管理字典，联动校验留待下一阶段）。
+// 6 段式冗余存全路径，便于按省/市维度查询；code 为 6 位行政编码，parentCode 指向上级节点。
+model ServiceArea {
+  id           String   @id @default(cuid())
+  level        Int      // 1=省 2=市 3=区
+  name         String   // 节点名称（如「北京市」「朝阳区」）
+  code         String   // 6 位行政编码（唯一业务键）
+  parentCode   String?  // 上级节点 code（省级为 null）
+
+  // 6 段式冗余全路径，便于按省/市查询（与 UserProfile/Master/ServiceItem 对齐）
+  province      String?
+  provinceCode  String?
+  city          String?
+  cityCode      String?
+  district      String?
+  districtCode  String?
+
+  isActive     Boolean  @default(true)
+  sort         Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  deletedAt    DateTime?
+
+  @@unique([code])
+  @@index([level])
+  @@index([parentCode])
+  @@index([provinceCode])
+}
+
 model Address {
   id           String   @id @default(cuid())
   userId       String

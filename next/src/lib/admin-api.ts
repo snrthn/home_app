@@ -595,3 +595,64 @@ export function updateServiceItem(
 export function deleteServiceItem(id: string): Promise<void> {
   return api.delete(`/admin/services/items/${id}`).then((r) => r.data);
 }
+
+// ===================== 服务区域（开通城市字典，运营端） =====================
+
+export interface ServiceArea {
+  id: string;
+  level: number; // 1=省 2=市 3=区
+  name: string;
+  code: string;
+  parentCode?: string | null;
+  province?: string | null;
+  provinceCode?: string | null;
+  city?: string | null;
+  cityCode?: string | null;
+  district?: string | null;
+  districtCode?: string | null;
+  isActive: boolean;
+  sort: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// 已开通区域节点列表（树形/列表共用，前端按 code 匹配静态行政区树）
+export function getServiceAreas(): Promise<ServiceArea[]> {
+  return api.get('/admin/services/areas').then((r) => r.data ?? []);
+}
+
+// 开通一个区域节点：传 6 段式（与 RegionCascader 产出同源），level/code/name/parentCode 由后端推导
+export function createServiceArea(dto: {
+  province: string;
+  provinceCode: string;
+  city?: string;
+  cityCode?: string;
+  district?: string;
+  districtCode?: string;
+  isActive?: boolean;
+  sort?: number;
+}): Promise<ServiceArea> {
+  return api.post('/admin/services/areas', dto).then((r) => r.data);
+}
+
+export function updateServiceArea(
+  id: string,
+  dto: { isActive?: boolean; sort?: number },
+): Promise<ServiceArea> {
+  return api.patch(`/admin/services/areas/${id}`, dto).then((r) => r.data);
+}
+
+export function deleteServiceArea(id: string): Promise<void> {
+  return api.delete(`/admin/services/areas/${id}`).then((r) => r.data);
+}
+
+// 级联启停：停用整支向下传递；启用默认只开自身，cascadeChildren 时连带子孙
+export function setAreaActive(
+  id: string,
+  enabled: boolean,
+  cascadeChildren = false,
+): Promise<void> {
+  return api
+    .patch(`/admin/services/areas/${id}/active`, { enabled, cascadeChildren })
+    .then((r) => r.data);
+}

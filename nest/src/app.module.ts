@@ -6,6 +6,7 @@ import { UsersModule } from './users/users.module';
 import { RbacModule } from './rbac/rbac.module';
 import { MastersModule } from './masters/masters.module';
 import { ServicesModule } from './services/services.module';
+import { AreasModule } from './areas/areas.module';
 import { OrdersModule } from './orders/orders.module';
 import { PaymentsModule } from './payments/payments.module';
 import { SettlementsModule } from './settlements/settlements.module';
@@ -25,6 +26,7 @@ import { AuditModule } from './audit/audit.module';
     RbacModule,
     MastersModule,
     ServicesModule,
+    AreasModule,
     OrdersModule,
     PaymentsModule,
     SettlementsModule,

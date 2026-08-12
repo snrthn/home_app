@@ -19,10 +19,10 @@ import { useToast } from '@/components/Toast';
 import { StatusBadge } from '@/components/admin/DataTable';
 import DataTable, { type Column } from '@/components/admin/DataTable';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { RegionCascader, type RegionValue } from '@/components/form/RegionCascader';
+import { RegionCascader } from '@/components/form/RegionCascader';
 import { SelectInput } from '@/components/form/SelectInput';
 import { CoverImageField } from '@/components/form/CoverImageField';
-import { regionText } from '@/data/region';
+import { regionText, type RegionValue } from '@/data/region';
 
 interface ItemDraft {
   categoryId: string;
