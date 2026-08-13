@@ -1,12 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getServiceCategories,
   createServiceCategory,
   updateServiceCategory,
   deleteServiceCategory,
+  setCategoryActive,
   type ServiceCategory,
 } from '@/lib/admin-api';
 import { QK } from '@/lib/query-keys';
@@ -33,6 +34,23 @@ function buildTree(flat: ServiceCategory[]): (ServiceCategory & { children?: Ser
   return roots;
 }
 
+// 递归收集所有「含子级」的节点 id：用于彻底折叠整棵树（仅保留一级可见）
+function collectCollapsible(
+  nodes: (ServiceCategory & { children?: ServiceCategory[] })[],
+): Set<string> {
+  const out = new Set<string>();
+  const walk = (list: (ServiceCategory & { children?: ServiceCategory[] })[]) => {
+    list.forEach((n) => {
+      if (n.children?.length) {
+        out.add(n.id);
+        walk(n.children);
+      }
+    });
+  };
+  walk(nodes);
+  return out;
+}
+
 // 收集某节点下的全部子孙 id（含自身），用于编辑时禁止选自己/子孙当上级
 function collectSubtreeIds(flat: ServiceCategory[], rootId: string): Set<string> {
   const out = new Set<string>();
@@ -51,11 +69,11 @@ function collectSubtreeIds(flat: ServiceCategory[], rootId: string): Set<string>
 interface CategoryDraft {
   name: string;
   parentId: string | null;
-  // 以下字段不进表单，仅编辑时透传原值，避免保存时把已有描述等清空
+  // description/icon 不进表单，仅编辑时透传原值，避免保存时把已有内容清空；
+  // sort 进表单（可编辑排序权重）；启用状态改由列表操作栏维护，不在表单里
   description: string;
   icon: string;
   sort: string;
-  isActive: boolean;
 }
 
 function CategoryEditModal({
@@ -76,17 +94,16 @@ function CategoryEditModal({
   const toast = useToast();
   const [name, setName] = useState(initial.name);
   const [parentId, setParentId] = useState<string>(initial.parentId ?? '');
-  const [isActive, setIsActive] = useState<boolean>(initial.isActive);
+  const [sort, setSort] = useState<string>(initial.sort);
   const [saving, setSaving] = useState(false);
 
   useEscClose(onClose);
 
   // 可选上级：排除自身及其子孙，且只能挂在 level<3 的节点下（保证最多三级）
+  // 顺序完全沿用后端返回，前端不做排序处理
   const parentOptions = useMemo(() => {
     const blocked = selfId ? collectSubtreeIds(allCategories, selfId) : new Set<string>();
-    return allCategories
-      .filter((c) => !blocked.has(c.id) && (c.level ?? 1) < 3)
-      .sort((a, b) => (a.level ?? 1) - (b.level ?? 1) || a.sort - b.sort);
+    return allCategories.filter((c) => !blocked.has(c.id) && (c.level ?? 1) < 3);
   }, [allCategories, selfId]);
 
   const effectiveLevel = parentId
@@ -100,15 +117,13 @@ function CategoryEditModal({
     }
     setSaving(true);
     try {
-      // 只改名称与上级；其余字段透传原值，不破坏已有数据
-      // 工种仅在一级类目（业务域）可设，子级继承，故子级提交时置空由后端回溯派生
+      // 只改名称、上级与排序；description/icon 透传原值，不破坏已有数据
       await onSubmit({
         name: name.trim(),
         parentId: parentId || null,
         description: initial.description,
         icon: initial.icon,
-        sort: initial.sort,
-        isActive,
+        sort,
       });
       onClose();
     } catch (e: any) {
@@ -153,10 +168,21 @@ function CategoryEditModal({
               autoFocus
             />
           </div>
-          <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-            <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
-            启用（在前台类目树中可见）
-          </label>
+          <div className="field">
+            <label className="field-label">排序（数值越小越靠前）</label>
+            <input
+              className="input"
+              type="number"
+              min={0}
+              step={1}
+              value={sort}
+              onChange={(e) => setSort(e.target.value)}
+              placeholder="0"
+            />
+            <p className="field-hint" style={{ marginTop: 6 }}>
+              类目列表按排序值从小到大排列（数值越小越靠前）；排序值相同时按创建时间。
+            </p>
+          </div>
         </div>
         <div className="modal-actions">
           <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>
@@ -171,6 +197,68 @@ function CategoryEditModal({
   );
 }
 
+// 停启用确认弹窗：与「服务区域」保持同一范式
+// 停用 → 整支向下同步停用；启用 → 默认只启用当前节点，需勾选才连带子级
+function ActiveDialog({
+  mode,
+  name,
+  descendantCount,
+  cascade,
+  onCascadeChange,
+  loading,
+  onCancel,
+  onConfirm,
+}: {
+  mode: 'enable' | 'disable';
+  name: string;
+  descendantCount: number;
+  cascade: boolean;
+  onCascadeChange: (v: boolean) => void;
+  loading: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const isEnable = mode === 'enable';
+  useEscClose(onCancel);
+  return (
+    <div className="modal-overlay" role="dialog" aria-modal="true">
+      <div className="modal-panel modal-md">
+        <div className="modal-header">
+          <span>{isEnable ? '启用类目' : '停用类目'}</span>
+          <button type="button" className="modal-close" onClick={onCancel} aria-label="关闭">
+            ×
+          </button>
+        </div>
+        <div className="modal-body">
+          <p style={{ marginTop: 0 }}>确定{isEnable ? '启用' : '停用'}「{name}」？</p>
+          {!isEnable && descendantCount > 0 && (
+            <p className="field-hint">
+              将同时停用其下全部 {descendantCount} 个类目（共 {descendantCount + 1} 个）。停用后该类目及下级不再对外展示，可随时重新启用。
+            </p>
+          )}
+          {isEnable && descendantCount > 0 && (
+            <label
+              className="checkbox-label"
+              style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, fontWeight: 600, color: '#b45309' }}
+            >
+              <input type="checkbox" checked={cascade} onChange={(e) => onCascadeChange(e.target.checked)} />
+              同时启用其下 {descendantCount} 个类目（默认只启用当前节点）
+            </label>
+          )}
+        </div>
+        <div className="modal-actions">
+          <button type="button" className="btn-secondary" onClick={onCancel} disabled={loading}>
+            取消
+          </button>
+          <button type="button" className="btn-primary" onClick={onConfirm} disabled={loading}>
+            {loading ? (isEnable ? '启用中…' : '停用中…') : isEnable ? '确认启用' : '确认停用'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ServiceCategoriesPage() {
   const toast = useToast();
   const qc = useQueryClient();
@@ -178,20 +266,25 @@ export default function ServiceCategoriesPage() {
   const { data: categories = [], isLoading: loading } = useQuery<ServiceCategory[]>({
     queryKey: QK.adminServiceCategories,
     queryFn: () => getServiceCategories(),
+    // 进入/切回本页必拉最新，覆盖「在项目页新增后回到类目页」及多标签常开场景
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
-  // 统一排序：树与上级类目下拉都按「层级 → 排序值」排列，保证顺序一致
-  const sortedCategories = useMemo(
-    () =>
-      [...categories].sort(
-        (a, b) => (a.level ?? 1) - (b.level ?? 1) || (a.sort ?? 0) - (b.sort ?? 0),
-      ),
-    [categories],
-  );
-  const tree = useMemo(() => buildTree(sortedCategories), [sortedCategories]);
+  // 顺序完全由后端决定（sort 升序，相同则 createdAt），前端不做排序处理
+  const tree = useMemo(() => buildTree(categories), [categories]);
 
   // 折叠状态：记录被折叠的节点 id，其子树不渲染
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const autoCollapsed = useRef(false);
+  // 默认收起：数据首次到达后递归折叠所有含子级的节点（仅展开一级）。
+  // 用 useEffect 而非 useState 惰性初始化——首次渲染时列表还是空数组，惰性初始值会被定格成空集。
+  useEffect(() => {
+    if (autoCollapsed.current || tree.length === 0) return;
+    autoCollapsed.current = true;
+    setCollapsed(collectCollapsible(tree));
+  }, [tree]);
+
   const toggle = (id: string) =>
     setCollapsed((prev) => {
       const n = new Set(prev);
@@ -200,7 +293,8 @@ export default function ServiceCategoriesPage() {
       return n;
     });
   const allExpanded = collapsed.size === 0;
-  const toggleAll = () => setCollapsed(allExpanded ? new Set(tree.map((n) => n.id)) : new Set());
+  // 折叠全部：递归收全部层级，避免只收最外层
+  const toggleAll = () => setCollapsed(allExpanded ? collectCollapsible(tree) : new Set());
 
   // 展平为带层级的表格行（尊重折叠状态）
   const rows = useMemo(() => {
@@ -220,22 +314,26 @@ export default function ServiceCategoriesPage() {
   const [createParentId, setCreateParentId] = useState<string | null>(null);
   const [editItem, setEditItem] = useState<ServiceCategory | null>(null);
   const [confirm, setConfirm] = useState<ServiceCategory | null>(null);
+  const [activeTarget, setActiveTarget] = useState<ServiceCategory | null>(null);
+  const [cascadeEnable, setCascadeEnable] = useState(false);
   const [acting, setActing] = useState(false);
 
   const refresh = () => qc.invalidateQueries({ queryKey: QK.adminServiceCategories });
 
   // 该类目下的未删除子级类目数量（用于删除前拦截）
   const childCountOf = (id: string) => categories.filter((c) => c.parentId === id).length;
+  // 该类目下的全部子孙数量（不含自身），用于停启用弹窗提示
+  const descendantCountOf = (id: string) => collectSubtreeIds(categories, id).size - 1;
 
   const handleCreate = async (dto: CategoryDraft) => {
     try {
+      // 不传 isActive：新建类目默认启用（与「服务区域」开通后默认启用一致）
       await createServiceCategory({
         name: dto.name,
         parentId: dto.parentId,
         description: dto.description || undefined,
         icon: dto.icon || undefined,
         sort: Number(dto.sort),
-        isActive: dto.isActive,
       });
       toast.success('类目已创建');
       refresh();
@@ -253,7 +351,6 @@ export default function ServiceCategoriesPage() {
         description: dto.description || undefined,
         icon: dto.icon || undefined,
         sort: Number(dto.sort),
-        isActive: dto.isActive,
       });
       toast.success('类目已保存');
       refresh();
@@ -270,6 +367,24 @@ export default function ServiceCategoriesPage() {
       await deleteServiceCategory(confirm.id);
       toast.success('类目已删除');
       setConfirm(null);
+      refresh();
+    } catch (e: any) {
+      toast.error(getApiErrorMsg(e));
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const handleToggleActive = async () => {
+    if (!activeTarget) return;
+    const enable = !activeTarget.isActive;
+    setActing(true);
+    try {
+      // 停用时后端无条件整支停用；启用时是否连带子级由 cascadeEnable 决定
+      await setCategoryActive(activeTarget.id, enable, enable ? cascadeEnable : true);
+      toast.success(enable ? '类目已启用' : '类目已停用');
+      setActiveTarget(null);
+      setCascadeEnable(false);
       refresh();
     } catch (e: any) {
       toast.error(getApiErrorMsg(e));
@@ -314,6 +429,13 @@ export default function ServiceCategoriesPage() {
       render: (r) => r.node.level ?? 1,
     },
     {
+      key: 'sort',
+      title: '排序',
+      width: '70px',
+      align: 'center',
+      render: (r) => r.node.sort,
+    },
+    {
       key: 'count',
       title: '项目数',
       width: '90px',
@@ -333,7 +455,7 @@ export default function ServiceCategoriesPage() {
     {
       key: 'op',
       title: '操作',
-      width: '170px',
+      width: '230px',
       render: (r) => (
         <div className="row-actions">
           <button
@@ -347,6 +469,16 @@ export default function ServiceCategoriesPage() {
             }}
           >
             新增子级
+          </button>
+          <button
+            type="button"
+            className={r.node.isActive ? 'btn-link btn-link-danger' : 'btn-link'}
+            onClick={() => {
+              setCascadeEnable(false);
+              setActiveTarget(r.node);
+            }}
+          >
+            {r.node.isActive ? '停用' : '启用'}
           </button>
           <button type="button" className="btn-link" onClick={() => setEditItem(r.node)}>
             编辑
@@ -387,7 +519,7 @@ export default function ServiceCategoriesPage() {
       <div className="card" style={{ padding: 18 }}>
         <p className="field-hint" style={{ marginTop: -4, marginBottom: 14 }}>
           服务类目为树形结构（最多三级）：一级为业务域（如「家电清洗」「家电维修」），其下可挂二级、三级。
-          一级类目可设置「工种」（在编辑中维护），其下所有服务项目自动继承该工种。点击行首箭头可折叠/展开子节点。
+          默认仅展开一级类目，点击行首箭头可折叠/展开子节点。
         </p>
         <DataTable
           columns={columns}
@@ -407,9 +539,8 @@ export default function ServiceCategoriesPage() {
             description: '',
             icon: '',
             sort: '0',
-            isActive: true,
           }}
-          allCategories={sortedCategories}
+          allCategories={categories}
           onClose={() => {
             setCreateOpen(false);
             setCreateParentId(null);
@@ -428,12 +559,27 @@ export default function ServiceCategoriesPage() {
             description: editItem.description ?? '',
             icon: editItem.icon ?? '',
             sort: String(editItem.sort),
-            isActive: editItem.isActive,
           }}
-          allCategories={sortedCategories}
+          allCategories={categories}
           selfId={editItem.id}
           onClose={() => setEditItem(null)}
           onSubmit={(dto) => handleUpdate(editItem.id, dto)}
+        />
+      )}
+
+      {activeTarget && (
+        <ActiveDialog
+          mode={activeTarget.isActive ? 'disable' : 'enable'}
+          name={activeTarget.name}
+          descendantCount={descendantCountOf(activeTarget.id)}
+          cascade={cascadeEnable}
+          onCascadeChange={setCascadeEnable}
+          loading={acting}
+          onCancel={() => {
+            setActiveTarget(null);
+            setCascadeEnable(false);
+          }}
+          onConfirm={handleToggleActive}
         />
       )}
 

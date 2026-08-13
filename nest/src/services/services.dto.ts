@@ -32,6 +32,12 @@ export class UpdateCategoryDto {
   @IsOptional() @IsBoolean() isActive?: boolean;
 }
 
+// 级联启停：enabled=停/启用；cascadeChildren 仅启用时生效（停用永远整支向下传递）
+export class SetCategoryActiveDto {
+  @IsBoolean() enabled: boolean;
+  @IsOptional() @IsBoolean() cascadeChildren?: boolean;
+}
+
 // ===================== 服务项目 =====================
 // 服务项目为「服务模板」，地理无关：区域可用性由运行时（平台开通区域 ∩ 师傅接单范围 ∩ 订单地址）
 // 动态判定，模板上不再存储省市区，也不再挂「工种类型」字段——业务域由所属一级类目表达。

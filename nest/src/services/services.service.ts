@@ -16,7 +16,7 @@ export class ServicesService {
     // 因此 _count 必须按「未删除项目」过滤，否则软删项目仍会被计入类目关联数。
     const cats = await this.prisma.serviceCategory.findMany({
       where: { deletedAt: null },
-      orderBy: [{ sort: 'asc' }, { name: 'asc' }],
+      orderBy: [{ sort: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
       include: { items: { where: { deletedAt: null }, select: { id: true } } },
     });
     return cats.map((c) => {
@@ -116,6 +116,59 @@ export class ServicesService {
       where: { id },
       data: { deletedAt: new Date(), isActive: false },
     });
+  }
+
+  // 级联启停（与「服务区域」setAreaEnabled 对齐）：
+  // - 停用：自身 + 全体子孙 isActive=false（整支向下传递）
+  // - 启用：仅自身 isActive=true；cascadeChildren 为真时连带全体子孙一并启用
+  // 仅作用于未软删（deletedAt=null）的类目；树关系由 parentId 推导。
+  async setCategoryEnabled(
+    id: string,
+    enabled: boolean,
+    cascadeChildren = false,
+  ): Promise<void> {
+    await this.getCategory(id);
+
+    // 载入全部未软删类目，按 parentId 建子表，BFS 收集子孙 id
+    const all = await this.prisma.serviceCategory.findMany({
+      where: { deletedAt: null },
+      select: { id: true, parentId: true },
+    });
+    const childMap = new Map<string, string[]>();
+    for (const n of all) {
+      if (n.parentId) {
+        const arr = childMap.get(n.parentId) ?? [];
+        arr.push(n.id);
+        childMap.set(n.parentId, arr);
+      }
+    }
+    const descendantIds: string[] = [];
+    const stack = [id];
+    while (stack.length) {
+      const cur = stack.pop() as string;
+      for (const childId of childMap.get(cur) ?? []) {
+        descendantIds.push(childId);
+        stack.push(childId);
+      }
+    }
+
+    if (!enabled) {
+      await this.prisma.serviceCategory.updateMany({
+        where: { id: { in: [id, ...descendantIds] } },
+        data: { isActive: false },
+      });
+      return;
+    }
+    await this.prisma.serviceCategory.update({
+      where: { id },
+      data: { isActive: true },
+    });
+    if (cascadeChildren && descendantIds.length) {
+      await this.prisma.serviceCategory.updateMany({
+        where: { id: { in: descendantIds } },
+        data: { isActive: true },
+      });
+    }
   }
 
   // ===================== 服务项目 =====================
@@ -227,7 +280,7 @@ export class ServicesService {
   async listPublicCategories(): Promise<ServiceCategory[]> {
     return this.prisma.serviceCategory.findMany({
       where: { isActive: true, deletedAt: null },
-      orderBy: [{ sort: 'asc' }, { name: 'asc' }],
+      orderBy: [{ sort: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
     });
   }
 
@@ -235,7 +288,7 @@ export class ServicesService {
   async getCategoryTree(): Promise<any[]> {
     const cats = await this.prisma.serviceCategory.findMany({
       where: { isActive: true, deletedAt: null },
-      orderBy: [{ level: 'asc' }, { sort: 'asc' }, { name: 'asc' }],
+      orderBy: [{ sort: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
     });
     const map = new Map<string, any>();
     cats.forEach((c) => map.set(c.id, { ...c, children: [] as any[] }));

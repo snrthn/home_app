@@ -20,6 +20,7 @@ import { Role } from '@laoma/shared';
 import {
   CreateCategoryDto,
   UpdateCategoryDto,
+  SetCategoryActiveDto,
   CreateServiceItemDto,
   UpdateServiceItemDto,
 } from './services.dto';
@@ -60,6 +61,16 @@ export class ServicesAdminController {
   @Patch('categories/:id')
   updateCategory(@Param('id') id: string, @Body() dto: UpdateCategoryDto) {
     return this.s.updateCategory(id, dto);
+  }
+
+  // 级联启停：停用整支向下传递；启用默认只开自身，cascadeChildren 时连带子孙
+  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
+  @Roles(Role.Admin)
+  @Audit('services', 'services:category_manage')
+  @RequirePerm('services:category_manage')
+  @Patch('categories/:id/active')
+  setCategoryActive(@Param('id') id: string, @Body() dto: SetCategoryActiveDto) {
+    return this.s.setCategoryEnabled(id, dto.enabled, dto.cascadeChildren);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)

@@ -552,6 +552,17 @@ export function deleteServiceCategory(id: string): Promise<void> {
   return api.delete(`/admin/services/categories/${id}`).then((r) => r.data);
 }
 
+// 级联启停：停用整支向下传递；启用默认只开自身，cascadeChildren 时连带子孙（与「服务区域」对齐）
+export function setCategoryActive(
+  id: string,
+  enabled: boolean,
+  cascadeChildren = false,
+): Promise<void> {
+  return api
+    .patch(`/admin/services/categories/${id}/active`, { enabled, cascadeChildren })
+    .then((r) => r.data);
+}
+
 // ---------- 项目 ----------
 export function getServiceItems(categoryId?: string): Promise<ServiceItem[]> {
   return api

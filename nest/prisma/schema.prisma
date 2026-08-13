@@ -178,6 +178,8 @@ model ServiceCategory {
   items       ServiceItem[]
   children    ServiceCategory[] @relation("CategoryTree")
 
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   deletedAt   DateTime?
 }
 
