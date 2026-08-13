@@ -27,4 +27,12 @@ export const QK = {
   rbacRole: (id: string) => ['rbac', 'roles', id] as const,
   // 支付配置（商户信息 / 一键接入）
   paymentConfig: ['admin', 'payment-config'] as const,
+  // 订单全流程（客户 / 师傅 / 管理 共用，按场景分 key）
+  orderMine: ['orders', 'mine'] as const,
+  orderPool: ['orders', 'pool'] as const,
+  orderMaster: ['orders', 'master'] as const,
+  orderAll: ['orders', 'all'] as const,
+  settlements: ['admin', 'settlements'] as const,
+  myAddresses: ['client', 'addresses'] as const,
+  publicServices: ['public', 'services'] as const,
 } as const;

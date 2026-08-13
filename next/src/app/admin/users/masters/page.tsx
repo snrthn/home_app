@@ -5,7 +5,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getMasters,
   setMasterStatus,
+  getCategoryTree,
   type MasterUser,
+  type ServiceCategoryNode,
 } from '@/lib/admin-api';
 import { QK } from '@/lib/query-keys';
 import DataTable, { StatusBadge, type Column } from '@/components/admin/DataTable';
@@ -18,16 +20,65 @@ const statusText: Record<string, { t: string; tone: 'green' | 'orange' | 'gray' 
   disabled: { t: '禁用', tone: 'gray' },
 };
 
-const skillsText = (s?: unknown) => {
-  if (!s) return '-';
-  if (Array.isArray(s)) return s.join(' / ');
-  if (typeof s === 'string') return s;
-  try {
-    return JSON.stringify(s);
-  } catch {
-    return '-';
+// 把类目树拍平，得到 id->name 以及 id->所有后代 id 集合（用于判断某个选中节点是否为叶子选中）
+function buildTreeMaps(nodes: ServiceCategoryNode[]) {
+  const nameMap = new Map<string, string>();
+  const childrenMap = new Map<string, string[]>();
+
+  function walk(ns: ServiceCategoryNode[]) {
+    ns.forEach((n) => {
+      nameMap.set(n.id, n.name);
+      if (n.children?.length) {
+        childrenMap.set(
+          n.id,
+          n.children.map((c) => c.id),
+        );
+        walk(n.children);
+      }
+    });
   }
-};
+  walk(nodes);
+
+  const descendantCache = new Map<string, string[]>();
+  function getDescendants(id: string): string[] {
+    if (descendantCache.has(id)) return descendantCache.get(id)!;
+    const children = childrenMap.get(id) ?? [];
+    const result = [...children];
+    children.forEach((childId) => {
+      result.push(...getDescendants(childId));
+    });
+    descendantCache.set(id, result);
+    return result;
+  }
+
+  return { nameMap, getDescendants };
+}
+
+/**
+ * 渲染师傅技能：
+ * - 最新格式为类目节点 id 数组（Json）。
+ * - 只展示「用户选择的末尾标签」：在选中集合里，如果某个节点的后代也被选中，
+ *   则只展示后代（叶子），父节点不再重复展示。
+ */
+function formatSkills(skills: unknown, tree: ServiceCategoryNode[]): string {
+  if (!skills) return '-';
+  const ids = Array.isArray(skills)
+    ? skills.filter((x): x is string => typeof x === 'string')
+    : [];
+  if (ids.length === 0) return '-';
+
+  const { nameMap, getDescendants } = buildTreeMaps(tree);
+  const idSet = new Set(ids);
+
+  // 只保留叶子选中：该节点没有后代也被选中
+  const leafIds = ids.filter((id) => {
+    const descendants = getDescendants(id);
+    return !descendants.some((d) => idSet.has(d));
+  });
+
+  if (leafIds.length === 0) return '-';
+  return leafIds.map((id) => nameMap.get(id) ?? id).join(' / ');
+}
 
 type MasterToggleStatus = 'active' | 'disabled';
 
@@ -37,6 +88,10 @@ export default function MasterListPage() {
   const { data: rows = [], isLoading: loading } = useQuery<MasterUser[]>({
     queryKey: QK.adminMasters,
     queryFn: () => getMasters(),
+  });
+  const { data: catTree = [], isLoading: catLoading } = useQuery({
+    queryKey: ['categoryTree'],
+    queryFn: getCategoryTree,
   });
   const [kw, setKw] = useState('');
 
@@ -89,7 +144,7 @@ export default function MasterListPage() {
     { key: 'realName', title: '姓名', render: (r) => r.realName || '-' },
     { key: 'phone', title: '手机号', render: (r) => r.user?.phone || '-' },
     { key: 'city', title: '服务城市', render: (r) => r.city || '-' },
-    { key: 'skills', title: '技能', render: (r) => skillsText(r.skills) },
+    { key: 'skills', title: '技能', render: (r) => formatSkills(r.skills, catTree) },
     { key: 'rating', title: '评分', render: (r) => Number(r.rating).toFixed(1) },
     { key: 'orderCount', title: '订单数', render: (r) => r.orderCount },
     {
@@ -148,7 +203,7 @@ export default function MasterListPage() {
             onChange={(e) => setKw(e.target.value)}
           />
         </div>
-        <DataTable columns={columns} rows={filtered} rowKey={(r) => r.id} loading={loading} />
+        <DataTable columns={columns} rows={filtered} rowKey={(r) => r.id} loading={loading || catLoading} />
       </div>
 
       <ConfirmDialog

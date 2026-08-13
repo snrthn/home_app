@@ -80,6 +80,15 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     ],
   },
   {
+    key: 'finance',
+    label: '财务结算',
+    path: '/admin/settlements',
+    icon: 'wallet',
+    children: [
+      { key: 'settlements', label: '结算台账', path: '/admin/settlements', perm: 'orders:read' },
+    ],
+  },
+  {
     key: 'reviews',
     label: '评价客服',
     path: '/admin/reviews',

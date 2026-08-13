@@ -8,17 +8,19 @@ interface Tab {
   key: string;
   label: string;
   href: string;
-  icon: 'home' | 'notice' | 'me';
+  icon: 'home' | 'notice' | 'me' | 'orders';
 }
 
 const TABS: Record<AppRole, Tab[]> = {
   customer: [
     { key: 'home', label: '首页', href: '/client', icon: 'home' },
+    { key: 'orders', label: '订单', href: '/client/orders', icon: 'orders' },
     { key: 'notice', label: '公告', href: '/client/notices', icon: 'notice' },
     { key: 'me', label: '我的', href: '/client/me', icon: 'me' },
   ],
   master: [
     { key: 'home', label: '首页', href: '/master', icon: 'home' },
+    { key: 'orders', label: '接单', href: '/master/orders/pool', icon: 'orders' },
     { key: 'notice', label: '公告', href: '/master/notices', icon: 'notice' },
     { key: 'me', label: '我的', href: '/master/me', icon: 'me' },
   ],
@@ -42,6 +44,12 @@ const ICONS: Record<Tab['icon'], JSX.Element> = {
     <>
       <circle cx="12" cy="8" r="3.5" />
       <path d="M5.5 20a6.5 6.5 0 0 1 13 0" />
+    </>
+  ),
+  orders: (
+    <>
+      <path d="M6 2h12a1 1 0 0 1 1 1v18l-3-2-3 2-3-2-3 2V3a1 1 0 0 1 1-1Z" />
+      <path d="M9 8h6M9 12h6" />
     </>
   ),
 };
