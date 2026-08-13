@@ -99,11 +99,24 @@ function CategoryEditModal({
 
   useEscClose(onClose);
 
-  // 可选上级：排除自身及其子孙，且只能挂在 level<3 的节点下（保证最多三级）
-  // 顺序完全沿用后端返回，前端不做排序处理
+  // 可选上级：排除自身及其子孙，且只能挂在 level<3 的节点下（保证最多三级）。
+  // 顺序按「类目树 DFS」展开，与类目列表完全展开时的缩进结构一致（父级始终排在其全部子孙之前），
+  // 避免扁平后端排序把子级插到父级前面，导致选中某结构下的叶子结点时心智负担高。
   const parentOptions = useMemo(() => {
     const blocked = selfId ? collectSubtreeIds(allCategories, selfId) : new Set<string>();
-    return allCategories.filter((c) => !blocked.has(c.id) && (c.level ?? 1) < 3);
+    const tree = buildTree(allCategories);
+    const out: { id: string; name: string; level: number }[] = [];
+    const walk = (nodes: (ServiceCategory & { children?: ServiceCategory[] })[]) => {
+      nodes.forEach((n) => {
+        const level = n.level ?? 1;
+        if (!blocked.has(n.id) && level < 3) {
+          out.push({ id: n.id, name: n.name, level });
+        }
+        if (n.children?.length) walk(n.children);
+      });
+    };
+    walk(tree);
+    return out;
   }, [allCategories, selfId]);
 
   const effectiveLevel = parentId
