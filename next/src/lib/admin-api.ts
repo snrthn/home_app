@@ -306,17 +306,18 @@ export function deleteNotice(id: string): Promise<void> {
 }
 
 // 公开：取某端当前生效的公告列表（无需登录），供用户端/师傅端展示。
-// region 为当前用户所在地（UserProfile 省市区）；传了则后端按通知范围过滤，
-// 不传（未登录 / 无地域）则返回全部已发布（不过滤）。
+// regions 为当前用户的「匹配地域集合」；命中任一即可见：
+//   - 用户/管理端：仅所在地区（单元素）
+//   - 师傅端：所在地区 ∪ 接单范围（serviceAreas）
+// 不传 regions（未登录 / 无地域）→ 后端返回全部已发布（不过滤）。
 export function getPublicNotices(
   scope: NoticeScope,
-  region?: { provinceCode?: string; cityCode?: string; districtCode?: string },
+  regions?: { provinceCode?: string; cityCode?: string; districtCode?: string }[],
 ): Promise<NoticePublic[]> {
   const params: Record<string, string> = { scope };
-  if (region?.provinceCode) {
-    params.provinceCode = region.provinceCode;
-    if (region.cityCode) params.cityCode = region.cityCode;
-    if (region.districtCode) params.districtCode = region.districtCode;
+  if (regions && regions.length) {
+    const valid = regions.filter((r) => r.provinceCode);
+    if (valid.length) params.regions = JSON.stringify(valid);
   }
   return api
     .get('/notices', { params })

@@ -321,8 +321,21 @@ export class AuthService {
     // 师傅额外返回自身专属资料（实名/身份证/技能/服务区域/审核状态）
     if (user.role === Role.Master && user.master) {
       const m = user.master;
-      return {
+      // 师傅的「所在地」实际由 Master.provinceCode/cityCode/districtCode 承载
+      // （师傅端个人中心的「所在地区」级联选择器写入此处）。UserProfile 的省市区对师傅通常为空，
+      // 故用 Master 所在地回填顶层省市区；UserProfile 有值则优先（逐字段 ?? 兜底），
+      // 保证下游（公告地域过滤等）能读到师傅地域。
+      const mergedBase = {
         ...base,
+        province: p?.province ?? m.province ?? null,
+        provinceCode: p?.provinceCode ?? m.provinceCode ?? null,
+        city: p?.city ?? m.city ?? null,
+        cityCode: p?.cityCode ?? m.cityCode ?? null,
+        district: p?.district ?? m.district ?? null,
+        districtCode: p?.districtCode ?? m.districtCode ?? null,
+      };
+      return {
+        ...mergedBase,
         master: {
           realName: m.realName,
           idCard: m.idCard,

@@ -244,7 +244,7 @@ export default function MasterMeEdit() {
                 onChange={setSkills}
               />
             </PickerTrigger>
-            <Field label="服务地区" required>
+            <Field label="所在地区" required>
               <RegionCascader value={region} onChange={setRegion} />
             </Field>
             <PickerTrigger

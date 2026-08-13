@@ -1,24 +1,42 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import { NoticesService } from './notices.service';
+import { NoticesService, type RegionFilter } from './notices.service';
 
 // 公开：取某端当前生效的公告列表（无需登录），供用户端/师傅端「平台公告」展示。
 @Controller('notices')
 export class NoticesPublicController {
   constructor(private s: NoticesService) {}
 
-  // GET /notices?scope=customer&provinceCode=110000&cityCode=110100&districtCode=...
-  // 返回已发布且在生效时间窗内的公告（含正文），并按当前用户地域做通知范围过滤
+  // GET /notices?scope=master&regions=<JSON数组>
+  // 数组元素为 { provinceCode, cityCode?, districtCode? }，命中任一即可见。
+  // 兼容旧调用：未传 regions 但传了 provinceCode 时，按单 region 处理。
   @Get()
   async list(
     @Query('scope') scope: string,
+    @Query('regions') regionsRaw?: string,
     @Query('provinceCode') provinceCode?: string,
     @Query('cityCode') cityCode?: string,
     @Query('districtCode') districtCode?: string,
   ) {
     if (!scope) return [];
-    const region = provinceCode
-      ? { provinceCode, cityCode, districtCode }
-      : undefined;
-    return this.s.getPublicList(scope, region);
+    let regions: RegionFilter[] | undefined;
+    if (regionsRaw) {
+      try {
+        const parsed = JSON.parse(regionsRaw);
+        if (Array.isArray(parsed)) {
+          regions = parsed.filter(
+            (r: any) => r && typeof r.provinceCode === 'string',
+          ) as RegionFilter[];
+        }
+      } catch {
+        regions = undefined;
+      }
+    }
+    if (!regions || regions.length === 0) {
+      if (provinceCode) regions = [{ provinceCode, cityCode, districtCode }];
+    }
+    return this.s.getPublicList(
+      scope,
+      regions && regions.length ? regions : undefined,
+    );
   }
 }

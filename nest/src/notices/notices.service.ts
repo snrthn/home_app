@@ -135,8 +135,9 @@ export class NoticesService {
 
   // 公开：取某端已发布且在生效时间窗内的公告，按地域范围过滤，
   // 置顶优先、发布时间倒序。直接带 contentHtml，前端点击即用，避免二次请求。
-  // region 为空（前端未传地域）→ 不做地域约束，返回全部已发布。
-  async getPublicList(scope: string, region?: RegionFilter) {
+  // regions 为空（前端未传地域）→ 不做地域约束，返回全部已发布。
+  // regions 非空 → 公告命中「任一」region 即可见（师傅端 = 所在地区 ∪ 接单范围）。
+  async getPublicList(scope: string, regions?: RegionFilter[]) {
     this.assertScope(scope);
     const now = new Date();
     const notices = await this.prisma.notice.findMany({
@@ -150,9 +151,16 @@ export class NoticesService {
       },
       orderBy: [{ pinned: 'desc' }, { publishedAt: 'desc' }],
     });
-    if (!region || !region.provinceCode) return notices;
+    if (!regions || regions.length === 0) return notices;
+    // 所有 region 都缺省码才视为「无地域约束」；否则按地域过滤
+    const hasAny = regions.some((r) => r?.provinceCode);
+    if (!hasAny) return notices;
     return notices.filter((n) =>
-      this.matchRegion(n.targetRegions as NoticeTargetRegion[] | null, region),
+      regions.some(
+        (r) =>
+          r?.provinceCode &&
+          this.matchRegion(n.targetRegions as NoticeTargetRegion[] | null, r),
+      ),
     );
   }
 

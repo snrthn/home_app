@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -44,18 +45,41 @@ export default function NoticeList({ scope }: { scope: NoticeScope }) {
     queryFn: getProfile,
     staleTime: Infinity,
   });
-  // 当前用户所在地，用于后端按通知范围过滤公告
-  const region =
-    profile?.provinceCode
-      ? {
-          provinceCode: profile.provinceCode ?? undefined,
-          cityCode: profile.cityCode ?? undefined,
-          districtCode: profile.districtCode ?? undefined,
+  // 当前用户匹配地域集合：用户/管理端仅所在地区；师傅端 = 所在地区 ∪ 接单范围
+  const regions = useMemo(() => {
+    if (!profile) return [];
+    const arr: {
+      provinceCode?: string;
+      cityCode?: string;
+      districtCode?: string;
+    }[] = [];
+    if (profile.provinceCode) {
+      arr.push({
+        provinceCode: profile.provinceCode,
+        cityCode: profile.cityCode ?? undefined,
+        districtCode: profile.districtCode ?? undefined,
+      });
+    }
+    if (role === 'master') {
+      const sa = (profile as any).master?.serviceAreas;
+      if (Array.isArray(sa)) {
+        for (const r of sa) {
+          if (r?.provinceCode) {
+            arr.push({
+              provinceCode: r.provinceCode,
+              cityCode: r.cityCode ?? undefined,
+              districtCode: r.districtCode ?? undefined,
+            });
+          }
         }
-      : undefined;
+      }
+    }
+    return arr;
+  }, [profile, role]);
+
   const { data: notices = [], isLoading } = useQuery<NoticePublic[]>({
-    queryKey: [...QK.publicNotices(scope), region?.provinceCode ?? 'none'],
-    queryFn: () => getPublicNotices(scope, region),
+    queryKey: [...QK.publicNotices(scope), JSON.stringify(regions)],
+    queryFn: () => getPublicNotices(scope, regions),
   });
 
   if (isLoading) {
