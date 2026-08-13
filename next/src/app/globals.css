@@ -485,6 +485,18 @@ body {
   margin: 6px 0 0;
 }
 
+/* 字段头：范围 Label 在左、操作按钮在右（同一行、两端对齐），节省纵向空间（弹窗化选择器触发器） */
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.field-label-row .field-label {
+  margin-bottom: 0;
+}
+
 /* 行内字段：标签在左、取值在右，整行两端对齐（用于审核状态等只读信息） */
 .field-inline-row {
   display: flex;

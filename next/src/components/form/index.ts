@@ -1,4 +1,5 @@
 export { Field } from './Field';
+export { PickerTrigger } from './PickerTrigger';
 export { InlineField } from './InlineField';
 export { TextInput } from './TextInput';
 export { Textarea } from './Textarea';
@@ -7,10 +8,11 @@ export { RadioGroup } from './RadioGroup';
 export { TagInput } from './TagInput';
 export { RegionCascader } from './RegionCascader';
 export { CategoryCascader } from './CategoryCascader';
-export { CategoryMultiSelect } from './CategoryMultiSelect';
-export type { CategoryMultiSelectHandle } from './CategoryMultiSelect';
-export { RegionMultiSelect, formatRegionScope } from './RegionMultiSelect';
-export type { RegionMultiSelectHandle } from './RegionMultiSelect';
+export {
+  RegionPickerModal,
+  CategoryPickerModal,
+  formatRegionScope,
+} from './MultiSelectPickerModal';
 export type { RegionValue } from '@/data/region';
 export { SubmitButton } from './SubmitButton';
 export { FormCard } from './FormCard';

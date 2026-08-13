@@ -1,8 +1,8 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import { useEscClose } from '@/lib/useEscClose';
+import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Modal } from '@/components/Modal';
 import {
   getNotices,
   createNotice,
@@ -22,8 +22,13 @@ import { StatusBadge } from '@/components/admin/DataTable';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import RichTextEditor from '@/components/admin/RichTextEditor';
 import SanitizedHtml from '@/components/admin/SanitizedHtml';
-import { RegionMultiSelect, formatRegionScope, type RegionMultiSelectHandle } from '@/components/form';
+import { RegionPickerModal, formatRegionScope, PickerTrigger } from '@/components/form';
 import type { RegionValue } from '@/data/region';
+
+// 与 RegionPickerModal 内部一致的去重 key（用于列表内已选范围的移除）
+function regionScopeKey(v: RegionValue): string {
+  return [v.provinceCode, v.cityCode, v.districtCode].filter(Boolean).join('/');
+}
 
 const SCOPE_LABEL: Record<NoticeScope, string> = {
   customer: '用户端',
@@ -96,19 +101,11 @@ function NoticeEditModal({
     initial.targetRegions ?? [],
   );
   const [saving, setSaving] = useState(false);
-  const targetRegionsRef = useRef<RegionMultiSelectHandle>(null);
+  const [regionPickerOpen, setRegionPickerOpen] = useState(false);
 
   const submit = async () => {
     if (!nTitle.trim()) {
       toast.warning('请填写公告标题');
-      return;
-    }
-    // 拦截：已选择地区但未点「+ 添加」就直接保存，避免误存/误以为程序 Bug
-    const pending = targetRegionsRef.current?.pendingText();
-    if (pending) {
-      toast.error(
-        `你已选择「${pending}」但尚未点「+ 添加」加入通知范围，请先添加或清空选择后再保存。`,
-      );
       return;
     }
     setSaving(true);
@@ -132,125 +129,136 @@ function NoticeEditModal({
   };
 
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true">
-      <div className="modal-panel modal-lg" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <span>{title}</span>
-          <button type="button" className="modal-close" onClick={onClose} aria-label="关闭">
-            ×
-          </button>
-        </div>
-        <div className="modal-body">
-          <div className="field">
-            <label className="field-label">投放端</label>
-            <select
-              className="input"
-              value={scope}
-              onChange={(e) => setScope(e.target.value as NoticeScope)}
-            >
-              {SCOPE_ORDER.map((s) => (
-                <option key={s} value={s}>
-                  {SCOPE_LABEL[s]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label className="field-label">公告标题</label>
-            <input
-              className="input"
-              value={nTitle}
-              onChange={(e) => setNTitle(e.target.value)}
-              placeholder="如：春节暂停接单通知 / 清洗服务5折活动"
-            />
-          </div>
-          <div className="field">
-            <label className="field-label">摘要（列表展示，选填）</label>
-            <textarea
-              className="input"
-              style={{ minHeight: 56 }}
-              value={summary}
-              onChange={(e) => setSummary(e.target.value)}
-              placeholder="一句话概述，不填则列表仅显示标题"
-            />
-          </div>
-          <div className="field">
-            <label className="field-label">正文（支持富文本、内联图片、文件链接）</label>
-            <RichTextEditor value={html} onChange={setHtml} />
-          </div>
-          <div className="field">
-            <label className="field-label">通知范围（选填）</label>
-            <RegionMultiSelect
-              ref={targetRegionsRef}
-              value={targetRegions}
-              onChange={setTargetRegions}
-            />
-            <p className="field-hint" style={{ marginTop: 4 }}>
-              留空 = 该端全部用户可见；添加省 / 市 / 区（支持只选省或省+市），则仅命中地域的用户可见。
-            </p>
-          </div>
-          <div className="field-row" style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-            <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <input
-                type="checkbox"
-                checked={pinned}
-                onChange={(e) => setPinned(e.target.checked)}
-              />
-              置顶（优先展示）
-            </label>
-            <div style={{ flex: 1, minWidth: 200 }}>
-              <label className="field-label">生效开始（选填，留空=立即）</label>
-              <input
-                type="datetime-local"
-                className="input"
-                value={startAt}
-                onChange={(e) => setStartAt(e.target.value)}
-              />
-            </div>
-            <div style={{ flex: 1, minWidth: 200 }}>
-              <label className="field-label">生效结束（选填，留空=长期）</label>
-              <input
-                type="datetime-local"
-                className="input"
-                value={endAt}
-                onChange={(e) => setEndAt(e.target.value)}
-              />
-            </div>
-          </div>
-        </div>
-        <div className="modal-actions">
+    <Modal
+      open
+      onClose={onClose}
+      title={title}
+      width="lg"
+      footer={
+        <>
           <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>
             取消
           </button>
           <button type="button" className="btn-primary" onClick={submit} disabled={saving}>
             {saving ? '保存中…' : '保存'}
           </button>
+        </>
+      }
+    >
+      <div className="field">
+        <label className="field-label">投放端</label>
+        <select
+          className="input"
+          value={scope}
+          onChange={(e) => setScope(e.target.value as NoticeScope)}
+        >
+          {SCOPE_ORDER.map((s) => (
+            <option key={s} value={s}>
+              {SCOPE_LABEL[s]}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="field">
+        <label className="field-label">公告标题</label>
+        <input
+          className="input"
+          value={nTitle}
+          onChange={(e) => setNTitle(e.target.value)}
+          placeholder="如：春节暂停接单通知 / 清洗服务5折活动"
+        />
+      </div>
+      <div className="field">
+        <label className="field-label">摘要（列表展示，选填）</label>
+        <textarea
+          className="input"
+          style={{ minHeight: 56 }}
+          value={summary}
+          onChange={(e) => setSummary(e.target.value)}
+          placeholder="一句话概述，不填则列表仅显示标题"
+        />
+      </div>
+      <div className="field">
+        <label className="field-label">正文（支持富文本、内联图片、文件链接）</label>
+        <RichTextEditor value={html} onChange={setHtml} />
+      </div>
+      <PickerTrigger
+        label="通知范围（选填）"
+        buttonText={targetRegions.length ? `已选 ${targetRegions.length} 项 · 修改` : '设置通知范围'}
+        onOpen={() => setRegionPickerOpen(true)}
+        hint="留空 = 该端全部用户可见；添加省 / 市 / 区（支持只选省或省+市），则仅命中地域的用户可见。"
+      >
+        {targetRegions.length > 0 && (
+          <div className="region-chips" style={{ marginTop: 8 }}>
+            {targetRegions.map((r) => (
+              <span key={regionScopeKey(r)} className="region-chip">
+                {formatRegionScope(r)}
+                <button
+                  type="button"
+                  className="region-chip-remove"
+                  aria-label="移除"
+                  onClick={() =>
+                    setTargetRegions(
+                      targetRegions.filter((x) => regionScopeKey(x) !== regionScopeKey(r)),
+                    )
+                  }
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        <RegionPickerModal
+          open={regionPickerOpen}
+          onClose={() => setRegionPickerOpen(false)}
+          title="选择通知范围"
+          value={targetRegions}
+          onChange={setTargetRegions}
+        />
+      </PickerTrigger>
+      <div className="field-row" style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <input
+            type="checkbox"
+            checked={pinned}
+            onChange={(e) => setPinned(e.target.checked)}
+          />
+          置顶（优先展示）
+        </label>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <label className="field-label">生效开始（选填，留空=立即）</label>
+          <input
+            type="datetime-local"
+            className="input"
+            value={startAt}
+            onChange={(e) => setStartAt(e.target.value)}
+          />
+        </div>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <label className="field-label">生效结束（选填，留空=长期）</label>
+          <input
+            type="datetime-local"
+            className="input"
+            value={endAt}
+            onChange={(e) => setEndAt(e.target.value)}
+          />
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
 // 预览（只读，DOMPurify 已清洗）
 function PreviewModal({ notice, onClose }: { notice: Notice; onClose: () => void }) {
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true">
-      <div className="modal-panel modal-lg" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <span>{notice.title}</span>
-          <button type="button" className="modal-close" onClick={onClose} aria-label="关闭">
-            ×
-          </button>
-        </div>
-        <div className="modal-body">
-          {notice.contentHtml ? (
-            <SanitizedHtml html={notice.contentHtml} />
-          ) : (
-            <div className="data-empty">该公告暂无正文内容</div>
-          )}
-        </div>
-      </div>
-    </div>
+    <Modal open onClose={onClose} title={notice.title} width="lg">
+      {notice.contentHtml ? (
+        <SanitizedHtml html={notice.contentHtml} />
+      ) : (
+        <div className="data-empty">该公告暂无正文内容</div>
+      )}
+    </Modal>
   );
 }
 
@@ -264,12 +272,6 @@ export default function NoticesPage() {
   });
 
   const [createOpen, setCreateOpen] = useState(false);
-  // Esc 关闭所有弹窗
-  useEscClose(() => {
-    setCreateOpen(false);
-    setEditItem(null);
-    setPreviewItem(null);
-  });
   const [editItem, setEditItem] = useState<Notice | null>(null);
   const [previewItem, setPreviewItem] = useState<Notice | null>(null);
   const [confirm, setConfirm] = useState<{
