@@ -666,3 +666,29 @@ export function setAreaActive(
     .patch(`/admin/services/areas/${id}/active`, { enabled, cascadeChildren })
     .then((r) => r.data);
 }
+
+// ===================== 支付配置（商户信息 / 一键接入真实支付） =====================
+
+export type PaymentProviderKey = 'mock' | 'wechat' | 'alipay';
+
+// 后台读取的商户配置（脱敏，不含明文密钥）
+export interface MerchantConfigDto {
+  provider: PaymentProviderKey;
+  enabled: boolean;
+  appId?: string;
+  mchId?: string;
+  appSecret?: string;
+  apiKey?: string;
+  certContent?: string;
+  remark?: string;
+}
+
+// 读取支付配置（脱敏）
+export function getPaymentConfig(): Promise<MerchantConfigDto> {
+  return api.get('/payments/config').then((r) => r.data);
+}
+
+// 保存支付配置（敏感字段加密落盘；未启用的通道，商户字段可被禁用）
+export function savePaymentConfig(dto: MerchantConfigDto): Promise<MerchantConfigDto> {
+  return api.put('/payments/config', dto).then((r) => r.data);
+}

@@ -26,13 +26,15 @@ export class ReviewsService {
     if (!order) throw new NotFoundException('订单不存在');
     if (order.customerId !== customerId)
       throw new ForbiddenException('无权评价');
-    if (
-      order.status !== OrderStatus.Paid &&
-      order.status !== OrderStatus.Reviewed
-    )
-      throw new BadRequestException('订单未完成支付，不可评价');
-    if (order.status === OrderStatus.Reviewed)
-      throw new BadRequestException('订单已评价');
+    // 支付前置模型：验收(confirm)是资金释放唯一终态入口（PendingConfirm→Reviewed + 释放托管金）。
+    // 评价模块依附于「已确认验收」的订单，自身不再修改订单状态，避免与 orders.confirm 形成双入口
+    // （双入口会导致一方置 Reviewed 但未走 confirm，托管金永不释放）。
+    if (order.status !== OrderStatus.Reviewed)
+      throw new BadRequestException('请先在订单中确认验收，再评价');
+    const existed = await this.prisma.review.findUnique({
+      where: { orderId: dto.orderId },
+    });
+    if (existed) throw new BadRequestException('订单已评价');
 
     const review = await this.prisma.review.create({
       data: {
@@ -54,10 +56,6 @@ export class ReviewsService {
     await this.prisma.master.update({
       where: { id: order.masterId! },
       data: { rating: stats._avg.rating ?? 5, orderCount: stats._count.id },
-    });
-    await this.prisma.order.update({
-      where: { id: dto.orderId },
-      data: { status: OrderStatus.Reviewed },
     });
     return review;
   }

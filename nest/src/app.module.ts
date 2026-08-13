@@ -15,6 +15,7 @@ import { UploadModule } from './upload/upload.module';
 import { AgreementsModule } from './agreements/agreements.module';
 import { NoticesModule } from './notices/notices.module';
 import { SiteContentModule } from './site-content/site-content.module';
+import { GatewayModule } from './gateway/gateway.module';
 import { AuditModule } from './audit/audit.module';
 
 @Module({
@@ -35,6 +36,7 @@ import { AuditModule } from './audit/audit.module';
     AgreementsModule,
     NoticesModule,
     SiteContentModule,
+    GatewayModule,
     AuditModule,
   ],
 })

@@ -36,6 +36,8 @@ export class OrdersController {
     return this.orders.listForCustomer(req.user.sub);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Roles(Role.Master)
   @Get('pool')
   pool(@Query('city') city?: string) {
     return this.orders.pool(city);
@@ -89,16 +91,17 @@ export class OrdersController {
     return this.orders.complete(id, req.user.sub);
   }
 
+  // 客户验收：待验收 → 已评价（释放托管金），替代旧「评价即终态」
   @UseGuards(JwtAuthGuard)
   @Roles(Role.Customer)
-  @Post(':id/pay')
-  pay(@Param('id') id: string, @Req() req: any) {
-    return this.orders.pay(id, req.user.sub);
+  @Post(':id/confirm')
+  confirm(@Param('id') id: string, @Req() req: any) {
+    return this.orders.confirm(id, req.user.sub);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post(':id/cancel')
   cancel(@Param('id') id: string, @Req() req: any) {
-    return this.orders.cancel(id, req.user.sub);
+    return this.orders.cancel(id, req.user.sub, req.user.role === 'admin');
   }
 }

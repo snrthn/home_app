@@ -26,19 +26,23 @@ enum Role {
 }
 
 enum OrderStatus {
+  pending_payment
   pending_accept
   accepted
   servicing
-  pending_payment
-  paid
+  pending_confirm
   reviewed
+  refunding
+  refunded
   cancelled
+  paid
 }
 
 enum PaymentStatus {
   pending
   paid
   confirmed
+  refunded
 }
 
 enum SettlementStatus {
