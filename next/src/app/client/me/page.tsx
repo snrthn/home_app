@@ -120,7 +120,7 @@ export default function ClientMe() {
         <div className="me-grid">
           <MeEntry label="我的订单" icon={<IconOrder />} onClick={() => toast.info('订单功能建设中')} />
           <MeEntry label="平台公告" icon={<IconNotice />} href="/client/notices" />
-          <MeEntry label="我的地址" icon={<IconAddress />} onClick={() => toast.info('地址管理建设中')} />
+          <MeEntry label="我的地址" icon={<IconAddress />} href="/client/me/addresses" />
           <MeEntry label="在线客服" icon={<IconService />} onClick={() => toast.info('在线客服建设中')} />
         </div>
 

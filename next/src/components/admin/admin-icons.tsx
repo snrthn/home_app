@@ -54,6 +54,13 @@ const paths: Record<string, JSX.Element> = {
     </>
   ),
   chart: <path d="M5 20V11M12 20V4M19 20v-6" />,
+  wallet: (
+    <>
+      <rect x="3" y="6" width="12" height="10" rx="2" />
+      <path d="M15 10h1.6a1.4 1.4 0 0 1 1.4 1.4v1.2A1.4 1.4 0 0 1 16.6 14H15" />
+      <circle cx="14.7" cy="12" r="0.9" fill="currentColor" stroke="none" />
+    </>
+  ),
   'chevron-right': <path d="M8 5l6 5-6 5" />,
   'chevron-left': <path d="M12 5l-6 5 6 5" />,
   dot: <circle cx="10" cy="10" r="2" />,

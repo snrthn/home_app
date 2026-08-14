@@ -150,6 +150,21 @@ export function getPublicServiceItems(): Promise<PublicServiceItem[]> {
   return api.get('/services').then((r) => r.data ?? []);
 }
 
+export interface ServiceItemDetail {
+  id: string;
+  name: string;
+  price: string | number;
+  unit?: string | null;
+  description?: string | null;
+  coverImage?: string | null;
+  estimatedDuration?: number | null;
+  category?: { id: string; name: string } | null;
+}
+
+export function getServiceItem(id: string): Promise<ServiceItemDetail> {
+  return api.get(`/services/${id}`).then((r) => r.data);
+}
+
 // ---------- 结算台账（管理端） ----------
 export interface Settlement {
   id: string;

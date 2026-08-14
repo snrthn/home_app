@@ -8,6 +8,7 @@ import { getApiErrorMsg } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import DataTable, { type Column } from '@/components/admin/DataTable';
 import { StatusBadge } from '@/components/admin/DataTable';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 const SETTLEMENT_STATUS: Record<string, { label: string; tone: 'green' | 'orange' | 'gray' | 'blue' }> = {
   offline_pending: { label: '待打款', tone: 'orange' },
@@ -18,6 +19,8 @@ export default function AdminSettlementsPage() {
   const toast = useToast();
   const qc = useQueryClient();
   const [syncing, setSyncing] = useState(false);
+  const [confirmSettle, setConfirmSettle] = useState<Settlement | null>(null);
+  const [acting, setActing] = useState(false);
 
   const { data: list = [], isLoading } = useQuery<Settlement[]>({
     queryKey: QK.settlements,
@@ -41,14 +44,19 @@ export default function AdminSettlementsPage() {
     }
   };
 
-  const onDone = async (s: Settlement) => {
-    if (!window.confirm(`确认已将订单 ${s.order?.orderNo ?? s.orderId} 的托管金打款给师傅？`)) return;
+  const onDoneClick = (s: Settlement) => setConfirmSettle(s);
+  const confirmSettleDone = async () => {
+    if (!confirmSettle) return;
+    setActing(true);
     try {
-      await markSettlementDone(s.id);
+      await markSettlementDone(confirmSettle.id);
       toast.success('已标记为已打款');
+      setConfirmSettle(null);
       refresh();
     } catch (e: any) {
       toast.error(getApiErrorMsg(e));
+    } finally {
+      setActing(false);
     }
   };
 
@@ -108,7 +116,7 @@ export default function AdminSettlementsPage() {
         width: '120px',
         render: (s) =>
           s.status === 'offline_pending' ? (
-            <button type="button" className="btn-link" onClick={() => onDone(s)}>
+            <button type="button" className="btn-link" onClick={() => onDoneClick(s)}>
               标记已打款
             </button>
           ) : (
@@ -134,6 +142,16 @@ export default function AdminSettlementsPage() {
       </p>
 
       <DataTable columns={columns} rows={list} rowKey={(s) => s.id} loading={isLoading} emptyText="暂无结算记录" />
+
+      <ConfirmDialog
+        open={!!confirmSettle}
+        title="标记已打款"
+        message={`确认已将订单 ${confirmSettle?.order?.orderNo ?? confirmSettle?.orderId ?? ''} 的托管金打款给师傅？此操作会记录打款时间，建议确认线下已转账后再标记。`}
+        confirmLabel="确认打款"
+        loading={acting}
+        onCancel={() => setConfirmSettle(null)}
+        onConfirm={confirmSettleDone}
+      />
     </>
   );
 }

@@ -1523,6 +1523,44 @@ body {
   background: transparent;
   cursor: pointer;
 }
+.rte-select {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  border-radius: 7px;
+  border: 1px solid #e2e8ec;
+  background: #fff;
+  overflow: hidden;
+}
+.rte-select select {
+  height: 100%;
+  border: none;
+  background: transparent;
+  padding: 0 6px;
+  font-size: 13px;
+  color: var(--color-text);
+  cursor: pointer;
+  outline: none;
+}
+
+/* 固定到页面底部的操作条（位于 56px 底部 TabBar 之上，safe-area 兼容） */
+.bottom-fixed-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  z-index: 30;
+  padding: 12px 16px;
+  background: var(--color-surface);
+  border-top: 1px solid #eef0f2;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.04);
+}
+.bottom-fixed-bar .btn-primary {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  display: block;
+}
 
 /* 表格 / 高亮：编辑器与只读视图统一呈现（只读视图统一经 .richtext 基类承载） */
 .rte-content .ProseMirror table,

@@ -17,6 +17,7 @@ import DataTable, { type Column } from '@/components/admin/DataTable';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { CategoryCascader } from '@/components/form/CategoryCascader';
 import { CoverImageField } from '@/components/form/CoverImageField';
+import RichTextEditor from '@/components/admin/RichTextEditor';
 import { useEscClose } from '@/lib/useEscClose';
 
 interface ItemDraft {
@@ -29,6 +30,14 @@ interface ItemDraft {
   description: string;
   sort: string;
   isActive: boolean;
+}
+
+// 富文本空内容（仅占位标签 / 纯空白）归一为 undefined，避免详情页渲染出空「服务介绍」区块
+function normRichText(html?: string): string | undefined {
+  if (!html) return undefined;
+  const text = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+  const isEmpty = text.length === 0 && !/<(img|table|video)[^>]*>/i.test(html);
+  return isEmpty ? undefined : html;
 }
 
 const EMPTY_DRAFT: ItemDraft = {
@@ -155,13 +164,15 @@ function ItemEditModal({
           </div>
 
           <div className="field">
-            <label className="field-label">描述（可选）</label>
-            <textarea
-              className="input"
-              style={{ minHeight: 56 }}
+            <label className="field-label">服务介绍（富文本，可选）</label>
+            <RichTextEditor
               value={draft.description}
-              onChange={(e) => set('description', e.target.value)}
+              onChange={(html) => set('description', html)}
+              placeholder="可写服务流程、包含项目、注意事项等，支持加粗、标题、列表、图片…"
             />
+            <p className="field-hint" style={{ marginTop: 6 }}>
+              支持图文混排；图片会上传并内联展示。列表页不展示正文，但客户端详情页会完整渲染。
+            </p>
           </div>
 
           <div className="field-row" style={{ display: 'flex', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
@@ -224,7 +235,7 @@ export default function ServiceItemsPage() {
     unit: d.unit.trim() || undefined,
     estimatedDuration: d.estimatedDuration ? Number(d.estimatedDuration) : undefined,
     coverImage: d.coverImage.trim() || undefined,
-    description: d.description.trim() || undefined,
+    description: normRichText(d.description),
     sort: Number(d.sort),
     isActive: d.isActive,
   });

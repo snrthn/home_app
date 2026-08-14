@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
@@ -15,8 +15,10 @@ import Table from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
+import { FontSize } from './font-size-extension';
 import { uploadAvatar, resolveAsset, getApiErrorMsg } from '@/lib/api';
 import { useToast } from '@/components/Toast';
+import { Modal } from '@/components/Modal';
 
 interface Props {
   value?: string;
@@ -58,8 +60,14 @@ const ALIGN_OPTIONS: { key: 'left' | 'center' | 'right' | 'justify'; label: stri
   { key: 'left', label: '⬅', title: '左对齐' },
   { key: 'center', label: '⬌', title: '居中对齐' },
   { key: 'right', label: '➡', title: '右对齐' },
-  { key: 'justify', label: '⬛', title: '两端对齐' },
+  { key: 'justify', label: '≡', title: '两端对齐' },
 ];
+
+// 规范化链接/图片地址：补全协议，保证点击可达
+function normalizeUrl(u: string): string {
+  if (/^https?:\/\//i.test(u) || u.startsWith('//') || u.startsWith('/') || u.startsWith('#')) return u;
+  return 'https://' + u;
+}
 
 export default function RichTextEditor({
   value = '',
@@ -85,6 +93,7 @@ export default function RichTextEditor({
       TableRow,
       TableHeader,
       TableCell,
+      FontSize,
       Image.configure({ inline: true, allowBase64: false }),
       Link.configure({ openOnClick: false, autolink: true }),
       Placeholder.configure({ placeholder }),
@@ -123,16 +132,53 @@ export default function RichTextEditor({
     }
   };
 
-  const setLink = () => {
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkValue, setLinkValue] = useState('');
+
+  const openLinkModal = () => {
     if (!editor) return;
     const prev = (editor.getAttributes('link').href as string) || '';
-    const url = window.prompt('链接地址（http/https）', prev || 'https://');
-    if (url === null) return;
-    if (url.trim() === '') {
+    setLinkValue(prev || 'https://');
+    setLinkOpen(true);
+  };
+  const applyLink = () => {
+    if (!editor) return;
+    const url = linkValue.trim();
+    if (url === '') {
       editor.chain().focus().extendMarkRange('link').unsetLink().run();
-      return;
+    } else {
+      const { from, to } = editor.state.selection;
+      if (from === to) {
+        // 未选中任何文本时，把链接地址本身作为可点击文本插入
+        editor
+          .chain()
+          .focus()
+          .insertContent(`<a href="${normalizeUrl(url)}">${url}</a>`)
+          .run();
+      } else {
+        editor
+          .chain()
+          .focus()
+          .extendMarkRange('link')
+          .setLink({ href: normalizeUrl(url) })
+          .run();
+      }
     }
-    editor.chain().focus().extendMarkRange('link').setLink({ href: url.trim() }).run();
+    setLinkOpen(false);
+  };
+
+  // ---- 图片（线上链接）----
+  const [imgUrlOpen, setImgUrlOpen] = useState(false);
+  const [imgUrlValue, setImgUrlValue] = useState('');
+  const openImgUrlModal = () => {
+    setImgUrlValue('');
+    setImgUrlOpen(true);
+  };
+  const applyImgUrl = () => {
+    if (!editor) return;
+    const u = imgUrlValue.trim();
+    if (u) editor.chain().focus().setImage({ src: normalizeUrl(u) }).run();
+    setImgUrlOpen(false);
   };
 
   return (
@@ -201,6 +247,37 @@ export default function RichTextEditor({
             🖍
           </ToolbarBtn>
           <span className="rte-sep" />
+          <label className="rte-select" title="字号">
+            <select
+              value=""
+              onChange={(e) => {
+                const v = e.target.value;
+                if (!v) (editor?.chain().focus() as any).unsetFontSize().run();
+                else (editor?.chain().focus() as any).setFontSize(v).run();
+              }}
+            >
+              <option value="">字号</option>
+              <option value="12px">12</option>
+              <option value="14px">14</option>
+              <option value="16px">16</option>
+              <option value="18px">18</option>
+              <option value="20px">20</option>
+              <option value="24px">24</option>
+              <option value="28px">28</option>
+              <option value="32px">32</option>
+            </select>
+          </label>
+          <label className="rte-color" title="背景色（高亮）">
+            <input
+              type="color"
+              onMouseDown={(e) => e.preventDefault()}
+              onChange={(e) => {
+                const c = e.target.value;
+                if (c) editor?.chain().focus().setHighlight({ color: c }).run();
+              }}
+            />
+          </label>
+          <span className="rte-sep" />
           <ToolbarBtn
             title="插入表格（3×3）"
             onClick={() =>
@@ -217,11 +294,14 @@ export default function RichTextEditor({
             删表
           </ToolbarBtn>
           <span className="rte-sep" />
-          <ToolbarBtn title="链接" active={editor.isActive('link')} onClick={setLink}>
+          <ToolbarBtn title="链接" active={editor.isActive('link')} onClick={openLinkModal}>
             链接
           </ToolbarBtn>
-          <ToolbarBtn title="插入图片（内联）" onClick={() => imgInputRef.current?.click()}>
+          <ToolbarBtn title="插入图片（本地上传）" onClick={() => imgInputRef.current?.click()}>
             图片
+          </ToolbarBtn>
+          <ToolbarBtn title="插入图片（线上链接）" onClick={openImgUrlModal}>
+            图片URL
           </ToolbarBtn>
           <ToolbarBtn title="上传文件并插入链接" onClick={() => fileInputRef.current?.click()}>
             文件
@@ -252,6 +332,54 @@ export default function RichTextEditor({
           e.target.value = '';
         }}
       />
+
+      <Modal open={linkOpen} onClose={() => setLinkOpen(false)} title="插入 / 编辑链接" width="md">
+        <div className="field">
+          <label className="field-label">链接地址（http/https）</label>
+          <input
+            className="input"
+            value={linkValue}
+            autoFocus
+            placeholder="https://"
+            onChange={(e) => setLinkValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') applyLink();
+            }}
+          />
+        </div>
+        <div className="modal-actions">
+          <button type="button" className="btn-secondary" onClick={() => setLinkOpen(false)}>
+            取消
+          </button>
+          <button type="button" className="btn-primary" onClick={applyLink}>
+            确定
+          </button>
+        </div>
+      </Modal>
+
+      <Modal open={imgUrlOpen} onClose={() => setImgUrlOpen(false)} title="插入图片（线上链接）" width="md">
+        <div className="field">
+          <label className="field-label">图片地址（http/https 可直接访问的图片 URL）</label>
+          <input
+            className="input"
+            value={imgUrlValue}
+            autoFocus
+            placeholder="https://example.com/photo.jpg"
+            onChange={(e) => setImgUrlValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') applyImgUrl();
+            }}
+          />
+        </div>
+        <div className="modal-actions">
+          <button type="button" className="btn-secondary" onClick={() => setImgUrlOpen(false)}>
+            取消
+          </button>
+          <button type="button" className="btn-primary" onClick={applyImgUrl}>
+            确定
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

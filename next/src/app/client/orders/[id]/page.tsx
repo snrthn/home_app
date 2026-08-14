@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { PortalNavSetter } from '@/components/PortalShell';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -7,6 +8,7 @@ import { getMyOrders, payByMock, confirmOrder, cancelMyOrder } from '@/lib/order
 import { QK } from '@/lib/query-keys';
 import { getApiErrorMsg } from '@/lib/api';
 import { useToast } from '@/components/Toast';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE, type OrderStatus } from '@/lib/order-status';
 import { StatusBadge } from '@/components/admin/DataTable';
 
@@ -25,6 +27,7 @@ export default function ClientOrderDetailPage() {
   const router = useRouter();
   const toast = useToast();
   const qc = useQueryClient();
+  const [cancelOpen, setCancelOpen] = useState(false);
 
   const { data: orders = [], isLoading } = useQuery({
     queryKey: QK.orderMine,
@@ -53,13 +56,15 @@ export default function ClientOrderDetailPage() {
       toast.error(getApiErrorMsg(e));
     }
   };
-  const onCancel = async () => {
+  const confirmCancel = async () => {
     try {
       await cancelMyOrder(id);
       toast.success('订单已取消');
+      setCancelOpen(false);
       refresh();
       router.replace('/client/orders');
     } catch (e: any) {
+      setCancelOpen(false);
       toast.error(getApiErrorMsg(e));
     }
   };
@@ -134,9 +139,13 @@ export default function ClientOrderDetailPage() {
               确认验收
             </button>
           )}
-          {CANCELABLE.includes(order.status) && (
-            <button type="button" className="btn-danger" onClick={onCancel}>
-              {order.status === 'pending_payment' ? '取消订单' : '申请取消（退款）'}
+          {order.status !== 'cancelled' && order.status !== 'refunded' && order.status !== 'refunding' && (
+            <button type="button" className="btn-danger" onClick={() => setCancelOpen(true)}>
+              {CANCELABLE.includes(order.status)
+                ? order.status === 'pending_payment'
+                  ? '取消订单'
+                  : '申请取消（退款）'
+                : '取消订单'}
             </button>
           )}
           {(order.status === 'refunding' || order.status === 'refunded' || order.status === 'cancelled') && (
@@ -146,6 +155,21 @@ export default function ClientOrderDetailPage() {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={cancelOpen}
+        title={CANCELABLE.includes(order.status) ? '取消订单确认' : '暂不可取消'}
+        message={
+          CANCELABLE.includes(order.status)
+            ? `订单「${order.orderNo}」当前为「${ORDER_STATUS_LABEL[order.status]}」，取消后${
+                order.status === 'pending_payment' ? '未支付、不产生退款' : '已支付的托管金将原路退回'
+              }。确定取消吗？`
+            : `订单当前为「${ORDER_STATUS_LABEL[order.status]}」，已完成验收且托管金已结算给师傅，平台不支持取消。如仍有异议：① 可在「我的-我的评价」追加评价；② 拨打客服热线 400-000-0000 协商售后；③ 客服工单系统建设中，后续可在「我的-帮助中心」提交工单。`
+        }
+        confirmLabel={CANCELABLE.includes(order.status) ? '确认取消' : '我知道了'}
+        onConfirm={CANCELABLE.includes(order.status) ? confirmCancel : () => setCancelOpen(false)}
+        onCancel={() => setCancelOpen(false)}
+      />
     </>
   );
 }

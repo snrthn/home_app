@@ -129,7 +129,7 @@ export default function MasterMe() {
 
         {/* 快速入口（保持不变） */}
         <div className="me-grid">
-          <MeEntry label="我的订单" icon={<IconOrder />} onClick={() => toast.info('订单功能建设中')} />
+          <MeEntry label="我的订单" icon={<IconOrder />} href="/master/orders/mine" />
           <MeEntry label="平台公告" icon={<IconNotice />} href="/master/notices" />
           <MeEntry label="接单设置" icon={<IconGear />} onClick={() => toast.info('接单设置建设中')} />
           <MeEntry label="收入提现" icon={<IconWallet />} onClick={() => toast.info('收入提现建设中')} />

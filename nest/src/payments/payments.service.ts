@@ -159,7 +159,10 @@ export class PaymentsService {
     if (!order) throw new NotFoundException('订单不存在');
     if (order.customerId !== customerId)
       throw new ForbiddenException('无权操作该订单');
-    if (!POST_PAY_STATES.includes(order.status as OrderStatus))
+    // 允许：支付后托管阶段(pending_accept..pending_confirm) 主动退款；
+    // 也允许 orders.cancel 已先行流转到 refunding 的场景（幂等退款）
+    const REFUNDABLE_STATES = [...POST_PAY_STATES, OrderStatus.Refunding];
+    if (!REFUNDABLE_STATES.includes(order.status as OrderStatus))
       throw new BadRequestException('该订单当前不可退款');
 
     const pay = await this.prisma.payment.findFirst({

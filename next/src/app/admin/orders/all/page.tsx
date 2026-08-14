@@ -11,6 +11,7 @@ import { useEscClose } from '@/lib/useEscClose';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE } from '@/lib/order-status';
 import DataTable, { type Column } from '@/components/admin/DataTable';
 import { StatusBadge } from '@/components/admin/DataTable';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 // 管理端可指派的状态（尚未分配给具体师傅）
 const ASSIGNABLE = new Set(['pending_payment', 'pending_accept']);
@@ -41,6 +42,7 @@ export default function AdminOrdersAllPage() {
   const [masters, setMasters] = useState<MasterUser[]>([]);
   const [selectedMasterId, setSelectedMasterId] = useState('');
   const [acting, setActing] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState<OrderLite | null>(null);
 
   const openAssign = async (o: OrderLite) => {
     setAssignTarget(o);
@@ -71,14 +73,19 @@ export default function AdminOrdersAllPage() {
   };
 
   // ---- 取消 ----
-  const onCancel = async (o: OrderLite) => {
-    if (!window.confirm(`确定取消订单 ${o.orderNo} 吗？`)) return;
+  const onCancelClick = (o: OrderLite) => setCancelTarget(o);
+  const confirmCancel = async () => {
+    if (!cancelTarget) return;
+    setActing(true);
     try {
-      await cancelOrderAdmin(o.id);
+      await cancelOrderAdmin(cancelTarget.id);
       toast.success('订单已取消');
+      setCancelTarget(null);
       refresh();
     } catch (e: any) {
       toast.error(getApiErrorMsg(e));
+    } finally {
+      setActing(false);
     }
   };
 
@@ -138,7 +145,7 @@ export default function AdminOrdersAllPage() {
               </button>
             )}
             {CANCELABLE.has(o.status) && (
-              <button type="button" className="btn-link btn-link-danger" onClick={() => onCancel(o)}>
+              <button type="button" className="btn-link btn-link-danger" onClick={() => onCancelClick(o)}>
                 取消
               </button>
             )}
@@ -207,6 +214,16 @@ export default function AdminOrdersAllPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!cancelTarget}
+        title="取消订单"
+        message={`确定取消订单 ${cancelTarget?.orderNo ?? ''} 吗？取消后订单将关闭${cancelTarget?.status && cancelTarget.status !== 'pending_payment' ? '，若已支付将发起退款' : '（未支付，无退款）'}。`}
+        confirmLabel="确认取消"
+        loading={acting}
+        onCancel={() => setCancelTarget(null)}
+        onConfirm={confirmCancel}
+      />
     </>
   );
 }

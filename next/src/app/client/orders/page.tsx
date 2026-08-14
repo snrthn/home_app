@@ -21,16 +21,13 @@ export default function ClientOrdersPage() {
       <div className="laoma-container">
         <div className="page-head" style={{ marginBottom: 12 }}>
           <h2 style={{ margin: 0, fontSize: 18 }}>我的订单</h2>
-          <Link href="/client/orders/new" className="btn-primary btn-md" style={{ marginLeft: 'auto' }}>
-            + 去下单
-          </Link>
         </div>
 
         {isLoading ? (
           <p className="field-hint">加载中…</p>
         ) : orders.length === 0 ? (
           <div className="card">
-            <p className="field-hint">还没有订单，去下一单吧。</p>
+            <p className="field-hint">还没有订单，去首页看看推荐服务吧。</p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
