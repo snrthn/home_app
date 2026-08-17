@@ -2,11 +2,13 @@
 
 import { PortalNavSetter } from '@/components/PortalShell';
 import Link from 'next/link';
+import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getOrderPool, grabOrder, type OrderLite } from '@/lib/orders-api';
 import { QK } from '@/lib/query-keys';
 import { getApiErrorMsg } from '@/lib/api';
 import { useToast } from '@/components/Toast';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useOrderSocket } from '@/lib/useOrderSocket';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE } from '@/lib/order-status';
 import { StatusBadge } from '@/components/admin/DataTable';
@@ -19,6 +21,12 @@ function addrLine(o: OrderLite) {
 export default function MasterPoolPage() {
   const toast = useToast();
   const qc = useQueryClient();
+  const [grabTargetId, setGrabTargetId] = useState<string | null>(null);
+
+  const openMap = (addr: string) => {
+    const url = `https://map.baidu.com/search/${encodeURIComponent(addr)}`;
+    window.open(url, '_blank');
+  };
   const { data: pool = [], isLoading, refetch } = useQuery({
     queryKey: QK.orderPool,
     queryFn: () => getOrderPool(),
@@ -70,8 +78,24 @@ export default function MasterPoolPage() {
                   <div style={{ fontWeight: 600 }}>{o.serviceItem?.name ?? '家政服务'}</div>
                   <span style={{ color: 'var(--color-primary-text)', fontWeight: 600 }}>¥{o.amount}</span>
                 </div>
-                <div className="field-hint" style={{ marginTop: 6 }}>
-                  📍 {addrLine(o)}
+                <div
+                  className="field-hint"
+                  style={{ marginTop: 6, color: 'var(--color-primary)', cursor: 'pointer' }}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => {
+                    const a = addrLine(o);
+                    if (a !== '-') openMap(a);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      const a = addrLine(o);
+                      if (a !== '-') openMap(a);
+                    }
+                  }}
+                >
+                  📍 {addrLine(o)} <span style={{ fontSize: 12 }}>›导航</span>
                 </div>
                 <div className="field-hint">
                   联系人：{o.address?.contactName} {o.address?.contactPhone}
@@ -86,7 +110,7 @@ export default function MasterPoolPage() {
                   type="button"
                   className="btn-primary"
                   style={{ marginTop: 10, width: '100%' }}
-                  onClick={() => onGrab(o.id)}
+                  onClick={() => setGrabTargetId(o.id)}
                 >
                   抢单
                 </button>
@@ -101,6 +125,18 @@ export default function MasterPoolPage() {
           </Link>
         </div>
       </div>
+    <ConfirmDialog
+      open={grabTargetId !== null}
+      title="确认接单"
+      message="确认抢接该订单吗？接单后请尽快联系客户、按预约时间上门服务。"
+      confirmLabel="确认接单"
+      onConfirm={() => {
+        const id = grabTargetId as string;
+        setGrabTargetId(null);
+        onGrab(id);
+      }}
+      onCancel={() => setGrabTargetId(null)}
+    />
     </>
   );
 }

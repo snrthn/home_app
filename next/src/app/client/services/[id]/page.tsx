@@ -20,7 +20,23 @@ export default function ServiceDetailPage() {
 
   return (
     <>
-      <PortalNavSetter title="服务详情" showBack backHref="/client" />
+      <PortalNavSetter
+        title="服务详情"
+        showBack
+        backHref="/client"
+        onBack={() => {
+          const sp = new URLSearchParams(window.location.search);
+          const oid = sp.get('oid');
+          if (sp.get('from') === 'order' && oid) {
+            if (window.history.length > 1) router.back();
+            else router.push(`/client/orders/${oid}`);
+          } else if (window.history.length > 1) {
+            router.back();
+          } else {
+            router.push('/client');
+          }
+        }}
+      />
       <div className="laoma-container">
         {isLoading ? (
           <p className="field-hint">加载中…</p>

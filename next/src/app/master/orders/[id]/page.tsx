@@ -2,6 +2,7 @@
 
 import { PortalNavSetter } from '@/components/PortalShell';
 import { useParams, useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getOrderPool,
@@ -12,8 +13,9 @@ import {
   type OrderLite,
 } from '@/lib/orders-api';
 import { QK } from '@/lib/query-keys';
-import { getApiErrorMsg } from '@/lib/api';
+import { getApiErrorMsg, resolveAsset } from '@/lib/api';
 import { useToast } from '@/components/Toast';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE } from '@/lib/order-status';
 import { StatusBadge } from '@/components/admin/DataTable';
 
@@ -30,6 +32,7 @@ export default function MasterOrderDetailPage() {
   const router = useRouter();
   const toast = useToast();
   const qc = useQueryClient();
+  const [grabOpen, setGrabOpen] = useState(false);
 
   const poolQ = useQuery({
     queryKey: QK.orderPool,
@@ -48,6 +51,11 @@ export default function MasterOrderDetailPage() {
   const refresh = () => {
     qc.invalidateQueries({ queryKey: QK.orderPool });
     qc.invalidateQueries({ queryKey: QK.orderMaster });
+  };
+
+  const openMap = (addr: string) => {
+    const url = `https://map.baidu.com/search/${encodeURIComponent(addr)}`;
+    window.open(url, '_blank');
   };
 
   const onGrab = async () => {
@@ -113,32 +121,99 @@ export default function MasterOrderDetailPage() {
     <>
       <PortalNavSetter title="订单详情" showBack backHref={backHref} />
       <div className="laoma-container">
+        {/* 服务详情 */}
         <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ margin: 0, fontSize: 18 }}>{order.serviceItem?.name ?? '家政服务'}</h2>
-            <StatusBadge tone={ORDER_STATUS_TONE[order.status]}>
-              {ORDER_STATUS_LABEL[order.status]}
-            </StatusBadge>
+          <div style={{ display: 'flex', gap: 12 }}>
+            {order.serviceItem?.coverImage ? (
+              <img
+                src={resolveAsset(order.serviceItem.coverImage)}
+                alt=""
+                style={{
+                  width: 84,
+                  height: 84,
+                  objectFit: 'cover',
+                  borderRadius: 'var(--radius)',
+                  flex: '0 0 auto',
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: 84,
+                  height: 84,
+                  borderRadius: 'var(--radius)',
+                  background: '#f2f4f6',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--color-muted)',
+                  fontSize: 12,
+                  flex: '0 0 auto',
+                }}
+              >
+                暂无图片
+              </div>
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                <h2 style={{ margin: 0, fontSize: 18 }}>{order.serviceItem?.name ?? '家政服务'}</h2>
+                <StatusBadge tone={ORDER_STATUS_TONE[order.status]}>
+                  {ORDER_STATUS_LABEL[order.status]}
+                </StatusBadge>
+              </div>
+              <p className="field-hint" style={{ marginTop: 4 }}>单号 {order.orderNo}</p>
+              <div className="field-inline-row" style={{ marginTop: 6 }}>
+                <span className="field-label">服务单价</span>
+                <span className="field-inline-value" style={{ color: 'var(--color-primary-text)', fontWeight: 600 }}>
+                  ¥{order.serviceItem?.price ?? order.amount}
+                  {order.serviceItem?.unit ? `/${order.serviceItem.unit}` : ''}
+                </span>
+              </div>
+            </div>
           </div>
-          <p className="field-hint" style={{ marginTop: 4 }}>单号 {order.orderNo}</p>
+        </div>
 
-          <div className="field-inline-row" style={{ marginTop: 12 }}>
-            <span className="field-label">金额</span>
-            <span
-              className="field-inline-value"
-              style={{ color: 'var(--color-primary-text)', fontWeight: 600 }}
-            >
+        {/* 订单信息 */}
+        <div className="card" style={{ marginTop: 14 }}>
+          <div className="field-inline-row">
+            <span className="field-label">订单金额</span>
+            <span className="field-inline-value" style={{ color: 'var(--color-primary-text)', fontWeight: 600 }}>
               ¥{order.amount}
             </span>
           </div>
           <div className="field-inline-row">
             <span className="field-label">服务地址</span>
-            <span className="field-inline-value">{addrLine}</span>
+            <span
+              className="field-inline-value"
+              role="button"
+              tabIndex={0}
+              onClick={() => addrLine !== '-' && openMap(addrLine)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  addrLine !== '-' && openMap(addrLine);
+                }
+              }}
+              style={{ color: 'var(--color-primary)', cursor: 'pointer' }}
+            >
+              {addrLine}
+              <span style={{ fontSize: 12, marginLeft: 4 }}>›导航</span>
+            </span>
           </div>
           <div className="field-inline-row">
             <span className="field-label">联系人</span>
+            <span className="field-inline-value">{addr?.contactName ?? '-'}</span>
+          </div>
+          <div className="field-inline-row">
+            <span className="field-label">联系电话</span>
             <span className="field-inline-value">
-              {addr ? `${addr.contactName} ${addr.contactPhone}` : '-'}
+              {addr?.contactPhone ? (
+                <a href={`tel:${addr.contactPhone}`} style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>
+                  {addr.contactPhone}（点击拨打）
+                </a>
+              ) : (
+                '-'
+              )}
             </span>
           </div>
           <div className="field-inline-row">
@@ -153,19 +228,11 @@ export default function MasterOrderDetailPage() {
               <span className="field-inline-value">{order.remark}</span>
             </div>
           )}
-          {order.master && (
-            <div className="field-inline-row">
-              <span className="field-label">接单师傅</span>
-              <span className="field-inline-value">
-                {order.master.realName ?? order.master.user?.profile?.nickname ?? '-'}
-              </span>
-            </div>
-          )}
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
           {isPoolOrder && (
-            <button type="button" className="btn-primary" onClick={onGrab}>
+            <button type="button" className="btn-primary" onClick={() => setGrabOpen(true)}>
               抢单
             </button>
           )}
@@ -194,6 +261,17 @@ export default function MasterOrderDetailPage() {
           )}
         </div>
       </div>
+    <ConfirmDialog
+      open={grabOpen}
+      title="确认接单"
+      message={`确认抢接订单「${order.orderNo}」吗？接单后请尽快联系客户、按预约时间上门服务。`}
+      confirmLabel="确认接单"
+      onConfirm={() => {
+        setGrabOpen(false);
+        onGrab();
+      }}
+      onCancel={() => setGrabOpen(false)}
+    />
     </>
   );
 }

@@ -76,15 +76,15 @@ export default function PageNav({
   };
 
   const backNode = showBack ? (
-    backHref ? (
-      <Link href={backHref} className="page-nav-back" aria-label="返回">
-        <ChevronLeft />
-      </Link>
-    ) : (
+    onBack ? (
       <button type="button" className="page-nav-back" onClick={onBack} aria-label="返回">
         <ChevronLeft />
       </button>
-    )
+    ) : backHref ? (
+      <Link href={backHref} className="page-nav-back" aria-label="返回">
+        <ChevronLeft />
+      </Link>
+    ) : null
   ) : null;
 
   return (

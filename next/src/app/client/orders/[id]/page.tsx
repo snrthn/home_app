@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getMyOrders, payByMock, confirmOrder, cancelMyOrder } from '@/lib/orders-api';
 import { QK } from '@/lib/query-keys';
-import { getApiErrorMsg } from '@/lib/api';
+import { getApiErrorMsg, resolveAsset } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE, type OrderStatus } from '@/lib/order-status';
@@ -81,17 +81,90 @@ export default function ClientOrderDetailPage() {
     <>
       <PortalNavSetter title="订单详情" showBack backHref="/client/orders" />
       <div className="laoma-container">
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h2 style={{ margin: 0, fontSize: 18 }}>{order.serviceItem?.name ?? '家政服务'}</h2>
-            <StatusBadge tone={ORDER_STATUS_TONE[order.status]}>
-              {ORDER_STATUS_LABEL[order.status]}
-            </StatusBadge>
+        {/* 服务详情（点击查看完整服务介绍） */}
+        <div
+          className="card"
+          role="button"
+          tabIndex={0}
+          onClick={() => order.serviceItem?.id && router.push(`/client/services/${order.serviceItem.id}`)}
+          style={{ cursor: 'pointer' }}
+        >
+          <div style={{ display: 'flex', gap: 12 }}>
+            {order.serviceItem?.coverImage ? (
+              <img
+                src={resolveAsset(order.serviceItem.coverImage)}
+                alt=""
+                style={{
+                  width: 84,
+                  height: 84,
+                  objectFit: 'cover',
+                  borderRadius: 'var(--radius)',
+                  flex: '0 0 auto',
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: 84,
+                  height: 84,
+                  borderRadius: 'var(--radius)',
+                  background: '#f2f4f6',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--color-muted)',
+                  fontSize: 12,
+                  flex: '0 0 auto',
+                }}
+              >
+                暂无图片
+              </div>
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                <h2 style={{ margin: 0, fontSize: 18 }}>{order.serviceItem?.name ?? '家政服务'}</h2>
+                <StatusBadge tone={ORDER_STATUS_TONE[order.status]}>
+                  {ORDER_STATUS_LABEL[order.status]}
+                </StatusBadge>
+              </div>
+              <p className="field-hint" style={{ marginTop: 4 }}>单号 {order.orderNo}</p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+                <div className="field-inline-row" style={{ margin: 0 }}>
+                  <span className="field-label">服务单价</span>
+                  <span className="field-inline-value" style={{ color: 'var(--color-primary-text)', fontWeight: 600 }}>
+                    ¥{order.serviceItem?.price ?? order.amount}
+                    {order.serviceItem?.unit ? `/${order.serviceItem.unit}` : ''}
+                  </span>
+                </div>
+                {order.serviceItem?.id && (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      router.push(`/client/services/${order.serviceItem!.id}?from=order&oid=${order.id}`);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        router.push(`/client/services/${order.serviceItem!.id}?from=order&oid=${order.id}`);
+                      }
+                    }}
+                    style={{ color: 'var(--color-primary)', fontSize: 13, cursor: 'pointer', flex: '0 0 auto', whiteSpace: 'nowrap', paddingLeft: 12 }}
+                  >
+                    查看服务详情 ›
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
-          <p className="field-hint" style={{ marginTop: 4 }}>单号 {order.orderNo}</p>
+        </div>
 
-          <div className="field-inline-row" style={{ marginTop: 12 }}>
-            <span className="field-label">金额</span>
+        {/* 订单信息 */}
+        <div className="card" style={{ marginTop: 14 }}>
+          <div className="field-inline-row">
+            <span className="field-label">订单金额</span>
             <span className="field-inline-value" style={{ color: 'var(--color-primary-text)', fontWeight: 600 }}>
               ¥{order.amount}
             </span>
@@ -102,9 +175,11 @@ export default function ClientOrderDetailPage() {
           </div>
           <div className="field-inline-row">
             <span className="field-label">联系人</span>
-            <span className="field-inline-value">
-              {addr ? `${addr.contactName} ${addr.contactPhone}` : '-'}
-            </span>
+            <span className="field-inline-value">{addr?.contactName ?? '-'}</span>
+          </div>
+          <div className="field-inline-row">
+            <span className="field-label">联系电话</span>
+            <span className="field-inline-value">{addr?.contactPhone ?? '-'}</span>
           </div>
           <div className="field-inline-row">
             <span className="field-label">预约时间</span>
@@ -118,15 +193,38 @@ export default function ClientOrderDetailPage() {
               <span className="field-inline-value">{order.remark}</span>
             </div>
           )}
-          {order.master && (
+        </div>
+
+        {order.master && (
+          <div className="card" style={{ marginTop: 14 }}>
+            <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>师傅信息</div>
             <div className="field-inline-row">
               <span className="field-label">接单师傅</span>
               <span className="field-inline-value">
                 {order.master.realName ?? order.master.user?.profile?.nickname ?? '-'}
               </span>
             </div>
-          )}
-        </div>
+            {order.master.user?.phone && (
+              <div className="field-inline-row">
+                <span className="field-label">师傅电话</span>
+                <span className="field-inline-value">
+                  <a href={`tel:${order.master.user.phone}`} style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>
+                    {order.master.user.phone}（点击拨打）
+                  </a>
+                </span>
+              </div>
+            )}
+            {(order.master.rating != null || order.master.orderCount != null) && (
+              <div className="field-inline-row">
+                <span className="field-label">师傅评分</span>
+                <span className="field-inline-value">
+                  {order.master.rating != null ? `★ ${order.master.rating} ` : ''}
+                  {order.master.orderCount != null ? `已完成 ${order.master.orderCount} 单` : ''}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
           {order.status === 'pending_payment' && (

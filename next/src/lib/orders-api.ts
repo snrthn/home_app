@@ -13,11 +13,20 @@ export interface OrderLite {
   appointmentSlot?: string | null;
   remark?: string | null;
   createdAt: string;
-  serviceItem?: { id: string; name: string; price: string } | null;
+  serviceItem?: {
+    id: string;
+    name: string;
+    price: string | number;
+    unit?: string | null;
+    description?: string | null;
+    coverImage?: string | null;
+  } | null;
   master?: {
     id: string;
     realName?: string;
-    user?: { profile?: { nickname?: string | null } } | null;
+    rating?: number | string | null;
+    orderCount?: number | null;
+    user?: { phone?: string | null; profile?: { nickname?: string | null } } | null;
   } | null;
   address?: {
     contactName: string;
