@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getAllOrders, assignOrder, cancelOrderAdmin, type OrderLite } from '@/lib/orders-api';
@@ -136,9 +137,12 @@ export default function AdminOrdersAllPage() {
       {
         key: 'op',
         title: '操作',
-        width: '150px',
+        width: '220px',
         render: (o) => (
           <div style={{ display: 'flex', gap: 10 }}>
+            <Link href={`/admin/orders/${o.id}`} className="btn-link">
+              查看
+            </Link>
             {ASSIGNABLE.has(o.status) && (
               <button type="button" className="btn-link" onClick={() => openAssign(o)}>
                 指派

@@ -121,7 +121,8 @@ export class OrdersService {
       include: {
         serviceItem: true,
         customer: { select: { phone: true, profile: { select: { nickname: true } } } },
-        master: { include: { user: { include: { profile: { select: { nickname: true } } } } } },
+        master: { include: { user: { select: { phone: true, profile: { select: { nickname: true } } } } } },
+        address: true,
       },
       orderBy: { createdAt: 'desc' },
     });

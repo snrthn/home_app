@@ -90,8 +90,16 @@ export default function MasterOrderDetailPage() {
   if (isLoading) {
     return (
       <>
-        <PortalNavSetter title="订单详情" showBack backHref="/master/orders/pool" />
-        <div className="laoma-container">
+        <PortalNavSetter
+          title="订单详情"
+          showBack
+          backHref="/master/orders/pool"
+          onBack={() => {
+            if (window.history.length > 1) router.back();
+            else router.push('/master/orders/pool');
+          }}
+        />
+        <div className="laoma-container order-mod">
           <p className="field-hint">加载中…</p>
         </div>
       </>
@@ -100,8 +108,16 @@ export default function MasterOrderDetailPage() {
   if (!order) {
     return (
       <>
-        <PortalNavSetter title="订单详情" showBack backHref="/master/orders/pool" />
-        <div className="laoma-container">
+        <PortalNavSetter
+          title="订单详情"
+          showBack
+          backHref="/master/orders/pool"
+          onBack={() => {
+            if (window.history.length > 1) router.back();
+            else router.push('/master/orders/pool');
+          }}
+        />
+        <div className="laoma-container order-mod">
           <div className="card">
             <p className="field-hint">未找到该订单，可能已被他人接走。</p>
           </div>
@@ -119,7 +135,15 @@ export default function MasterOrderDetailPage() {
 
   return (
     <>
-      <PortalNavSetter title="订单详情" showBack backHref={backHref} />
+      <PortalNavSetter
+        title="订单详情"
+        showBack
+        backHref={backHref}
+        onBack={() => {
+          if (window.history.length > 1) router.back();
+          else router.push(backHref);
+        }}
+      />
       <div className="laoma-container">
         {/* 服务详情 */}
         <div className="card">

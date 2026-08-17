@@ -54,6 +54,80 @@ body {
   }
 }
 
+/* ===== 订单模块 PC 宽屏适配 ===== */
+/* 移动端沿用 .laoma-container 的窄栏体验；PC 起逐步放宽，让宽屏浏览器
+   充分利用横向空间、两侧留白（契合整体 UI 基调），不再只剩中间一条。 */
+.order-mod {
+  margin: 0 auto;
+}
+@media (min-width: 768px) {
+  .order-mod {
+    max-width: 960px;
+    padding: 24px;
+  }
+}
+@media (min-width: 1024px) {
+  .order-mod {
+    max-width: 1080px;
+  }
+}
+@media (min-width: 1440px) {
+  .order-mod {
+    max-width: 1200px;
+  }
+}
+
+/* 订单列表：移动端单列卡片；平板起 2 列网格，宽屏 3 列，利用横向空间。 */
+.order-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+@media (min-width: 768px) {
+  .order-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+}
+@media (min-width: 1280px) {
+  .order-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* ===== 管理端详情页：不套用移动端窄栏，充分利用桌面横向空间 ===== */
+.admin-detail-page {
+  width: 100%;
+}
+.admin-detail-page .page-head {
+  margin-bottom: 16px;
+}
+.admin-detail-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+@media (min-width: 768px) {
+  .admin-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+  /* 基本信息字段较多，占满整行 */
+  .admin-detail-grid > .card:first-child {
+    grid-column: 1 / -1;
+  }
+}
+@media (min-width: 1280px) {
+  .admin-detail-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.admin-detail-grid > .card {
+  margin-top: 0 !important;
+}
+
 /* ===== 用户端 / 师傅端统一外壳（PortalShell） ===== */
 .portal-shell {
   display: flex;

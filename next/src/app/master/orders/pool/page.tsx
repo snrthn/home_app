@@ -2,6 +2,7 @@
 
 import { PortalNavSetter } from '@/components/PortalShell';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getOrderPool, grabOrder, type OrderLite } from '@/lib/orders-api';
@@ -19,6 +20,7 @@ function addrLine(o: OrderLite) {
 }
 
 export default function MasterPoolPage() {
+  const router = useRouter();
   const toast = useToast();
   const qc = useQueryClient();
   const [grabTargetId, setGrabTargetId] = useState<string | null>(null);
@@ -57,8 +59,16 @@ export default function MasterPoolPage() {
 
   return (
     <>
-      <PortalNavSetter title="接单池" showBack backHref="/master" />
-      <div className="laoma-container">
+      <PortalNavSetter
+        title="接单池"
+        showBack
+        backHref="/master"
+        onBack={() => {
+          if (window.history.length > 1) router.back();
+          else router.push('/master');
+        }}
+      />
+      <div className="laoma-container order-mod">
         <div className="page-head" style={{ marginBottom: 10 }}>
           <h2 style={{ margin: 0, fontSize: 18 }}>接单池</h2>
           <span className="page-sub">实时推送已开启</span>
@@ -68,10 +78,10 @@ export default function MasterPoolPage() {
           <p className="field-hint">加载中…</p>
         ) : pool.length === 0 ? (
           <div className="card">
-            <p className="field-hint">暂无待接订单，新订单会实时出现在这里。</p>
+            <p className="field-hint" style={{ marginTop: 0 }}>暂无待接订单，新订单会实时出现在这里。</p>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div className="order-grid">
             {pool.map((o) => (
               <div key={o.id} className="card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

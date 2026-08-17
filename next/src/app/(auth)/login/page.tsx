@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import api, { getApiErrorMsg } from '@/lib/api';
-import { setSession, roleFromToken } from '@/lib/auth';
+import { setSession, roleFromToken, setRefreshToken } from '@/lib/auth';
 import { useToast } from '@/components/Toast';
 import { getAgreementDefault } from '@/lib/admin-api';
 
@@ -208,13 +208,14 @@ export default function LoginPage() {
         body.password = pwdVal;
       }
       const res = await api.post('/auth/login', body);
-      const { accessToken } = res.data;
+      const { accessToken, refreshToken } = res.data;
       // 密码登录：手机号唯一标识用户，角色从 token 解出来决定跳转
       // 验证码登录同样以服务端签发的角色为准（与密码登录一致），
       // 避免“本地选了师傅、DB/服务端却是客户”导致写错槽位、跳错端、middleware 踢回。
       const r =
         mode === 'admin' ? 'admin' : roleFromToken(accessToken) ?? 'customer';
       setSession(accessToken, r);
+      if (refreshToken) setRefreshToken(r, refreshToken);
       toast.success('登录成功，跳转中…');
       router.push(
         r === 'admin' ? '/admin' : r === 'master' ? '/master' : '/client',

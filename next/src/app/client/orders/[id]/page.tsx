@@ -69,8 +69,24 @@ export default function ClientOrderDetailPage() {
     }
   };
 
-  if (isLoading) return <><PortalNavSetter title="订单详情" showBack backHref="/client/orders" /><div className="laoma-container"><p className="field-hint">加载中…</p></div></>;
-  if (!order) return <><PortalNavSetter title="订单详情" showBack backHref="/client/orders" /><div className="laoma-container"><div className="card"><p className="field-hint">未找到该订单。</p></div></div></>;
+  if (isLoading) return <><PortalNavSetter
+  title="订单详情"
+  showBack
+  backHref="/client/orders"
+  onBack={() => {
+    if (window.history.length > 1) router.back();
+    else router.push('/client/orders');
+  }}
+/><div className="laoma-container order-mod"><p className="field-hint">加载中…</p></div></>;
+  if (!order) return <><PortalNavSetter
+  title="订单详情"
+  showBack
+  backHref="/client/orders"
+  onBack={() => {
+    if (window.history.length > 1) router.back();
+    else router.push('/client/orders');
+  }}
+/><div className="laoma-container order-mod"><div className="card"><p className="field-hint">未找到该订单。</p></div></div></>;
 
   const addr = order.address;
   const addrLine = addr
@@ -79,8 +95,16 @@ export default function ClientOrderDetailPage() {
 
   return (
     <>
-      <PortalNavSetter title="订单详情" showBack backHref="/client/orders" />
-      <div className="laoma-container">
+      <PortalNavSetter
+  title="订单详情"
+  showBack
+  backHref="/client/orders"
+  onBack={() => {
+    if (window.history.length > 1) router.back();
+    else router.push('/client/orders');
+  }}
+/>
+      <div className="laoma-container order-mod">
         {/* 服务详情（点击查看完整服务介绍） */}
         <div
           className="card"

@@ -55,6 +55,10 @@ function userKey(role: AppRole): string {
   return `lm_user_${role}`;
 }
 
+function refreshKey(role: AppRole): string {
+  return `lm_refresh_${role}`;
+}
+
 const LAST_ROLE_KEY = 'lm_role_last';
 
 // 根据当前路径判断所属角色，决定该用哪个 token / 用户信息。
@@ -89,8 +93,35 @@ export function setSession(token: string, role: AppRole) {
 export function clearSession(role?: AppRole) {
   if (typeof window === 'undefined') return;
   const target = role ?? roleFromPath();
-  if (target) localStorage.removeItem(tokenKey(target));
+  if (target) {
+    localStorage.removeItem(tokenKey(target));
+    localStorage.removeItem(refreshKey(target));
+  }
   if (!role) localStorage.removeItem(LAST_ROLE_KEY);
+}
+
+// 登录成功时保存该角色的 refreshToken（只写自己的槽位，不碰其它角色）
+export function setRefreshToken(role: AppRole, rt: string) {
+  localStorage.setItem(refreshKey(role), rt);
+}
+
+// 取当前端对应的 refreshToken（按路径自动选角色）；非端内路径返回 null
+export function getRefreshToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  const role = roleFromPath();
+  return role ? localStorage.getItem(refreshKey(role)) : null;
+}
+
+// 清当前角色的 refreshToken；传入 role 可指定清哪个，否则按路径推断
+export function clearRefreshToken(role?: AppRole) {
+  if (typeof window === 'undefined') return;
+  const target = role ?? roleFromPath();
+  if (target) localStorage.removeItem(refreshKey(target));
+  if (!role) {
+    (['customer', 'master', 'admin'] as AppRole[]).forEach((r) =>
+      localStorage.removeItem(refreshKey(r)),
+    );
+  }
 }
 
 export function getRole(): string | null {

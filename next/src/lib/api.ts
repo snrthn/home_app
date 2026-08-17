@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getToken, clearSession, clearUserCache } from './auth';
+import { getToken, clearSession, clearUserCache, setSession, getRefreshToken, setRefreshToken, roleFromPath } from './auth';
 import { queryClient } from '@/app/providers';
 
 // 解析 API 基地址：
@@ -37,25 +37,68 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// 全局 401 处置：凭证失效时清掉本地登录态并跳登录页。
+// 单飞刷新：多个并发请求同时 401 时，只发起一次 refresh，其余复用其结果，避免刷新风暴。
+let refreshPromise: Promise<string> | null = null;
+
+async function refreshAccessToken(): Promise<string> {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
+    const rt = getRefreshToken();
+    if (!rt) throw new Error('no_refresh_token');
+    const resp = await api.post('/auth/refresh', { refreshToken: rt });
+    const { accessToken: newAt, refreshToken: newRt } = (resp.data ?? {}) as {
+      accessToken?: string;
+      refreshToken?: string;
+    };
+    if (!newAt) throw new Error('refresh_failed');
+    const role = roleFromPath();
+    if (role) {
+      setSession(newAt, role);
+      if (newRt) setRefreshToken(role, newRt);
+    }
+    return newAt;
+  })();
+  try {
+    return await refreshPromise;
+  } finally {
+    refreshPromise = null;
+  }
+}
+
+// 全局 401 处置：凭证失效时先尝试用 refreshToken 静默续期并重试原请求；
+// 续期失败（refreshToken 也过期）才清掉本地登录态并跳登录页。
 // - 排除 /auth/ 自身（登录/刷新/登出不能触发，否则互相套娃无限循环）
 // - 清 localStorage（token + 用户缓存）、尽力清后端 HttpOnly cookie（/auth/logout 幂等，
 //   token 失效也成功返回），再清 react-query 缓存，最后硬跳 /login 保证干净状态。
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     const status = error?.response?.status;
     const url: string = error?.config?.url || '';
-    if (status === 401 && !url.includes('/auth/')) {
-      clearSession();
-      clearUserCache();
-      logoutApi().catch(() => {});
-      queryClient.clear();
-      if (
-        typeof window !== 'undefined' &&
-        window.location.pathname !== '/login'
-      ) {
-        window.location.href = '/login';
+    const original = error.config as any;
+    if (
+      status === 401 &&
+      !url.includes('/auth/') &&
+      original &&
+      !original._retry
+    ) {
+      original._retry = true;
+      try {
+        const newToken = await refreshAccessToken();
+        original.headers = original.headers || {};
+        original.headers.Authorization = `Bearer ${newToken}`;
+        return api(original);
+      } catch {
+        clearSession();
+        clearUserCache();
+        logoutApi().catch(() => {});
+        queryClient.clear();
+        if (
+          typeof window !== 'undefined' &&
+          window.location.pathname !== '/login'
+        ) {
+          window.location.href = '/login';
+        }
       }
     }
     return Promise.reject(error);
