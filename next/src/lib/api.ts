@@ -140,13 +140,19 @@ export function resolveAsset(pathOrUrl?: string | null): string {
   return API_ORIGIN + pathOrUrl;
 }
 
-// 上传头像：multipart 表单，字段名 file，返回后端给的相对 URL（/uploads/xxx.jpg）
-export function uploadAvatar(file: File): Promise<string> {
+// 上传文件（头像 / Logo / 封面等通用）：multipart 表单，字段名 file，
+// 返回后端给的相对 URL（/uploads/xxx.jpg）。POST /api/upload 由 JWT 守卫。
+export function uploadFile(file: File): Promise<string> {
   const form = new FormData();
   form.append('file', file);
   return api
     .post('/upload', form)
     .then((r) => (r.data && r.data.url) || '');
+}
+
+// 上传头像：复用通用上传链路，返回后端给的相对 URL（/uploads/xxx.jpg）
+export function uploadAvatar(file: File): Promise<string> {
+  return uploadFile(file);
 }
 
 // 退出登录：调用后端受保护接口，成功后由调用方清本地会话
@@ -167,6 +173,16 @@ export function updateProfile(dto: Record<string, unknown>) {
 // PATCH /api/masters/me：师傅完善自身专属资料（实名/身份证/技能/服务区域）
 export function updateMasterMe(dto: Record<string, unknown>) {
   return api.patch('/masters/me', dto);
+}
+
+// GET /api/config/global：公开，无需登录。返回全局配置（系统名称/主题色/客服电话等）。
+export function getGlobalConfig() {
+  return api.get('/config/global').then((r) => r.data);
+}
+
+// PATCH /api/admin/config/global：仅管理员，更新全局配置
+export function updateGlobalConfig(dto: Record<string, unknown>) {
+  return api.patch('/admin/config/global', dto);
 }
 
 // POST /api/auth/password：设置或重置登录密码（需登录态）。

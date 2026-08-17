@@ -27,20 +27,14 @@ export default function MasterMinePage() {
           if (window.history.length > 1) router.back();
           else router.push('/master');
         }}
+        menu={[{ label: '接单池', href: '/master/orders/pool' }]}
       />
       <div className="laoma-container order-mod">
-        <div className="page-head" style={{ marginBottom: 10 }}>
-          <h2 style={{ margin: 0, fontSize: 18 }}>我的订单</h2>
-          <Link href="/master/orders/pool" className="nav-link" style={{ marginLeft: 'auto' }}>
-            接单池 →
-          </Link>
-        </div>
-
         {isLoading ? (
           <p className="field-hint">加载中…</p>
         ) : orders.length === 0 ? (
           <div className="card">
-            <p className="field-hint">还没有接单，去接单池看看吧。</p>
+            <p className="field-hint" style={{ textAlign: 'center' }}>还没有接单，去接单池看看吧。</p>
           </div>
         ) : (
           <div className="order-grid">

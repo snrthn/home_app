@@ -14,6 +14,7 @@ import { SettlementsModule } from './settlements/settlements.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { UploadModule } from './upload/upload.module';
 import { AgreementsModule } from './agreements/agreements.module';
+import { ConfigModule as AppConfigModule } from './config/config.module';
 import { NoticesModule } from './notices/notices.module';
 import { SiteContentModule } from './site-content/site-content.module';
 import { GatewayModule } from './gateway/gateway.module';
@@ -36,6 +37,7 @@ import { AuditModule } from './audit/audit.module';
     ReviewsModule,
     UploadModule,
     AgreementsModule,
+    AppConfigModule,
     NoticesModule,
     SiteContentModule,
     GatewayModule,

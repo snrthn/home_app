@@ -1,8 +1,9 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import type { AppRole } from '../lib/auth';
+import { useGlobalConfig } from '@/lib/global-config';
 import CurrentUserLoader from './CurrentUserLoader';
 import PortalTabBar from './PortalTabBar';
 import PageNav, { type PageNavMenuItem } from './PageNav';
@@ -69,7 +70,32 @@ export default function PortalShell({
   role: AppRole;
   children: ReactNode;
 }) {
-  const [config, setConfig] = useState<PortalNavConfig>(DEFAULT_NAV[role]);
+  const { siteName } = useGlobalConfig();
+  const fallback = siteName || '老马家电';
+  const defaultTitle = role === 'master' ? `${fallback} · 师傅端` : fallback;
+  // 记录上一轮默认品牌标题，用于判断当前标题是否仍未被页面显式覆盖
+  const lastDefaultRef = useRef(defaultTitle);
+  const [config, setConfig] = useState<PortalNavConfig>({
+    ...DEFAULT_NAV[role],
+    title: defaultTitle,
+  });
+
+  // 站点名称加载/变更后，若顶栏仍显示默认品牌标题则同步更新；
+  // 页面级显式标题（如「我的订单」）不会被覆盖。
+  useEffect(() => {
+    const newDefault = defaultTitle;
+    setConfig((c) =>
+      c.title === lastDefaultRef.current ? { ...c, title: newDefault } : c,
+    );
+    lastDefaultRef.current = newDefault;
+  }, [defaultTitle]);
+
+  // 同步浏览器标签页标题：默认显示品牌名；页面级标题加品牌前缀。
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const isBrand = config.title === defaultTitle;
+    document.title = isBrand ? config.title : `${fallback} · ${config.title}`;
+  }, [config.title, defaultTitle, fallback]);
 
   return (
     <PortalNavContext.Provider value={{ config, setConfig }}>

@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from '@/components/Toast';
+import { GlobalConfigProvider } from '@/lib/global-config';
 
 // 模块级单例：供 api.ts 的 401 拦截器在组件外调用（如 queryClient.clear()）。
 // 仅客户端使用，react-query 缓存为瞬态客户端状态，不存在 SSR 跨请求串数据问题。
@@ -27,7 +28,9 @@ export const queryClient = new QueryClient({
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
-      <ToastProvider>{children}</ToastProvider>
+      <GlobalConfigProvider>
+        <ToastProvider>{children}</ToastProvider>
+      </GlobalConfigProvider>
     </QueryClientProvider>
   );
 }

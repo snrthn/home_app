@@ -28,6 +28,8 @@ export default function ClientOrderDetailPage() {
   const toast = useToast();
   const qc = useQueryClient();
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [payOpen, setPayOpen] = useState(false);
+  const [paying, setPaying] = useState(false);
 
   const { data: orders = [], isLoading } = useQuery({
     queryKey: QK.orderMine,
@@ -38,13 +40,20 @@ export default function ClientOrderDetailPage() {
 
   const refresh = () => qc.invalidateQueries({ queryKey: QK.orderMine });
 
-  const onPay = async () => {
+  const onPay = () => setPayOpen(true);
+  const onPayConfirm = async () => {
+    setPaying(true);
     try {
+      // 模拟支付过程：保留短暂 loading，让用户感知「支付中…」而非一闪而过
+      await new Promise((r) => setTimeout(r, 800));
       await payByMock(id);
       toast.success('支付成功，等待师傅接单');
       refresh();
+      setPayOpen(false);
     } catch (e: any) {
       toast.error(getApiErrorMsg(e));
+    } finally {
+      setPaying(false);
     }
   };
   const onConfirm = async () => {
@@ -291,6 +300,18 @@ export default function ClientOrderDetailPage() {
         confirmLabel={CANCELABLE.includes(order.status) ? '确认取消' : '我知道了'}
         onConfirm={CANCELABLE.includes(order.status) ? confirmCancel : () => setCancelOpen(false)}
         onCancel={() => setCancelOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={payOpen}
+        title="确认支付"
+        message={`订单「${order.orderNo}」需支付 ¥${order.amount}。模拟支付通道将即时完成扣款并把资金托管至平台，等待师傅接单。确定支付吗？`}
+        confirmLabel={paying ? '支付中…' : '确认支付 ¥' + order.amount}
+        loading={paying}
+        onConfirm={onPayConfirm}
+        onCancel={() => {
+          if (!paying) setPayOpen(false);
+        }}
       />
     </>
   );

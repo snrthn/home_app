@@ -29,10 +29,6 @@ export default function ClientOrdersPage() {
         }}
       />
       <div className="laoma-container order-mod">
-        <div className="page-head" style={{ marginBottom: 12 }}>
-          <h2 style={{ margin: 0, fontSize: 18 }}>我的订单</h2>
-        </div>
-
         {isLoading ? (
           <p className="field-hint">加载中…</p>
         ) : orders.length === 0 ? (

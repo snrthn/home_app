@@ -41,6 +41,7 @@ export const ADMIN_MENU: AdminMenuItem[] = [
       // 页面实体在 /admin/me，路径不在 /admin/settings 下不影响菜单归属与高亮。
       // 个人中心属“自身空间”，无权限约束、始终可见。
       { key: 'me', label: '个人中心', path: '/admin/me' },
+      { key: 'global', label: '全局配置', path: '/admin/settings/global' },
       { key: 'payment', label: '支付配置', path: '/admin/settings/payment' },
       { key: 'roles', label: '角色权限', path: '/admin/settings/roles', perm: 'settings:role_manage' },
       { key: 'logs', label: '操作日志', path: '/admin/settings/logs', perm: 'logs:view' },

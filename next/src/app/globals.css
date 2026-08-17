@@ -523,6 +523,41 @@ body {
   border-color: var(--color-primary);
 }
 
+.admin-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--color-text);
+}
+.admin-brand-logo {
+  height: 26px;
+  width: 26px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+/* 可点击品牌：点击 Logo + 标题弹出「关于我们」 */
+.admin-brand-btn {
+  border: none;
+  background: transparent;
+  padding: 6px 8px;
+  margin: -6px -8px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: background 0.15s ease;
+}
+.admin-brand-btn:hover {
+  background: rgba(127, 176, 198, 0.12);
+}
+.admin-brand-btn:focus-visible {
+  outline: 2px solid var(--color-primary, #3e8fb0);
+  outline-offset: 1px;
+}
 .topbar-right {
   display: flex;
   align-items: center;
@@ -535,6 +570,101 @@ body {
 .user-badge {
   font-size: 13px;
   color: var(--color-text-soft);
+}
+
+/* ---- 运营端右上角用户头像菜单 ---- */
+.admin-user-menu {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.admin-user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  background: var(--color-primary-weak);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.admin-user-avatar:hover {
+  box-shadow: 0 0 0 3px rgba(62, 143, 176, 0.15);
+  border-color: var(--color-primary);
+}
+.admin-user-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.admin-user-initial {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-primary-text);
+  user-select: none;
+}
+.admin-user-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  min-width: 208px;
+  background: #fff;
+  border: 1px solid #eceef1;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
+  padding: 6px;
+  z-index: 120;
+}
+.admin-user-dropdown-head {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f0f2f4;
+  margin-bottom: 6px;
+}
+.admin-user-dropdown-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-user-dropdown-sub {
+  font-size: 12px;
+  color: var(--color-text-soft);
+  margin-top: 2px;
+}
+.admin-user-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  font-size: 14px;
+  color: var(--color-text);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.admin-user-item:hover {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+.admin-user-item-danger {
+  color: #e5484d;
+}
+.admin-user-item-danger:hover {
+  background: #fdecec;
+  color: #e5484d;
+}
+.admin-user-divider {
+  height: 1px;
+  background: #f0f2f4;
+  margin: 6px 4px;
 }
 
 /* ---- 表单组件令牌（保证各页面表单项风格统一）---- */
@@ -762,8 +892,15 @@ body {
 .form-card {
   margin-bottom: 16px;
 }
+.form-card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
 .form-card-title {
-  margin: 0 0 16px;
+  margin: 0;
   font-size: 16px;
   font-weight: 600;
   color: var(--color-text);

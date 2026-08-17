@@ -4,10 +4,11 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import api, { getApiErrorMsg } from '@/lib/api';
+import api, { getApiErrorMsg, resolveAsset } from '@/lib/api';
 import { setSession, roleFromToken, setRefreshToken } from '@/lib/auth';
 import { useToast } from '@/components/Toast';
 import { getAgreementDefault } from '@/lib/admin-api';
+import { useGlobalConfig } from '@/lib/global-config';
 
 type Mode = 'code' | 'password' | 'admin';
 
@@ -16,6 +17,11 @@ type Mode = 'code' | 'password' | 'admin';
 // context='page' → 用于手机端，独立圆角面板置于页面顶部（移出卡片）
 function BrandHeader({ context }: { context: 'card' | 'page' }) {
   const isPage = context === 'page';
+  const { siteName, logoUrl } = useGlobalConfig();
+  const name = siteName || '老马家电';
+  useEffect(() => {
+    if (typeof document !== 'undefined') document.title = name;
+  }, [name]);
   const toggleFullscreen = () => {
     if (typeof document === 'undefined') return;
     if (document.fullscreenElement) {
@@ -44,31 +50,39 @@ function BrandHeader({ context }: { context: 'card' | 'page' }) {
         }}
       />
       <div className="relative">
-        <div
-          className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full shadow-md"
-          style={{ background: 'var(--color-primary-weak)' }}
-          onDoubleClick={toggleFullscreen}
-          title="双击切换全屏"
-        >
-          <svg
-            className="h-9 w-9 text-white"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={1.8}
+        {logoUrl ? (
+          <img
+            src={resolveAsset(logoUrl)}
+            alt={name}
+            className="mx-auto mb-4 h-16 w-16 rounded-full object-cover shadow-md"
+          />
+        ) : (
+          <div
+            className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full shadow-md"
+            style={{ background: 'var(--color-primary-weak)' }}
+            onDoubleClick={toggleFullscreen}
+            title="双击切换全屏"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M13 10V3L4 14h7v7l9-11h-7z"
-            />
-          </svg>
-        </div>
+            <svg
+              className="h-9 w-9 text-white"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={1.8}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M13 10V3L4 14h7v7l9-11h-7z"
+              />
+            </svg>
+          </div>
+        )}
         <h1
           className="text-2xl font-bold tracking-tight"
           style={{ color: 'var(--color-primary-text)' }}
         >
-          老马家电
+          {name}
         </h1>
         <p className="mt-1 text-sm" style={{ color: '#7E93A0' }}>
           清洗 · 维修 · 上门服务

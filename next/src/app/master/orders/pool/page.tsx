@@ -1,7 +1,6 @@
 'use client';
 
 import { PortalNavSetter } from '@/components/PortalShell';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -67,18 +66,14 @@ export default function MasterPoolPage() {
           if (window.history.length > 1) router.back();
           else router.push('/master');
         }}
+        menu={[{ label: '我的订单', href: '/master/orders/mine' }]}
       />
       <div className="laoma-container order-mod">
-        <div className="page-head" style={{ marginBottom: 10 }}>
-          <h2 style={{ margin: 0, fontSize: 18 }}>接单池</h2>
-          <span className="page-sub">实时推送已开启</span>
-        </div>
-
         {isLoading ? (
           <p className="field-hint">加载中…</p>
         ) : pool.length === 0 ? (
           <div className="card">
-            <p className="field-hint" style={{ marginTop: 0 }}>暂无待接订单，新订单会实时出现在这里。</p>
+            <p className="field-hint" style={{ marginTop: 0, textAlign: 'center' }}>暂无待接订单，新订单会实时出现在这里。实时推送已开启。</p>
           </div>
         ) : (
           <div className="order-grid">
@@ -128,12 +123,6 @@ export default function MasterPoolPage() {
             ))}
           </div>
         )}
-
-        <div style={{ marginTop: 16, textAlign: 'center' }}>
-          <Link href="/master/orders/mine" className="nav-link">
-            查看我的订单 →
-          </Link>
-        </div>
       </div>
     <ConfirmDialog
       open={grabTargetId !== null}

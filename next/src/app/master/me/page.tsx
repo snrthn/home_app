@@ -6,7 +6,6 @@ import { resolveAsset } from '@/lib/api';
 import { QK } from '@/lib/query-keys';
 import { useCurrentUser, fetchProfile } from '@/lib/useCurrentUser';
 import { useLogout } from '@/lib/useLogout';
-import { useToast } from '@/components/Toast';
 import { PortalNavSetter } from '@/components/PortalShell';
 import Cell from '@/components/Cell';
 import MeEntry from '@/components/MeEntry';
@@ -76,7 +75,6 @@ function DefaultAvatar() {
 
 export default function MasterMe() {
   useCurrentUser('master');
-  const toast = useToast();
   const logout = useLogout();
 
   const { data, isLoading } = useQuery({
@@ -131,8 +129,8 @@ export default function MasterMe() {
         <div className="me-grid">
           <MeEntry label="我的订单" icon={<IconOrder />} href="/master/orders/mine" />
           <MeEntry label="平台公告" icon={<IconNotice />} href="/master/notices" />
-          <MeEntry label="接单设置" icon={<IconGear />} onClick={() => toast.info('接单设置建设中')} />
-          <MeEntry label="收入提现" icon={<IconWallet />} onClick={() => toast.info('收入提现建设中')} />
+          <MeEntry label="接单设置" icon={<IconGear />} href="/master/me/accept-settings" />
+          <MeEntry label="收入提现" icon={<IconWallet />} href="/master/me/income" />
         </div>
 
         {/* 功能入口 */}
@@ -141,6 +139,7 @@ export default function MasterMe() {
           <div className="card me-cells">
             <Cell label="修改资料" href="/master/me/edit" />
             <Cell label="修改密码" onClick={() => setShowPwd(true)} />
+            <Cell label="在线客服" href="/master/me/online-service" />
           </div>
         </div>
 
