@@ -34,6 +34,8 @@ export default function MasterOrderDetailPage() {
   const toast = useToast();
   const qc = useQueryClient();
   const [grabOpen, setGrabOpen] = useState(false);
+  const [startOpen, setStartOpen] = useState(false);
+  const [completeOpen, setCompleteOpen] = useState(false);
 
   const poolQ = useQuery({
     queryKey: QK.orderPool,
@@ -55,7 +57,7 @@ export default function MasterOrderDetailPage() {
   };
 
   const openMap = (addr: string) => {
-    const url = `https://map.baidu.com/search/${encodeURIComponent(addr)}`;
+    const url = `https://api.map.baidu.com/geocoder?address=${encodeURIComponent(addr)}&output=html&src=webapp.baidu.openAPIdemo`;
     window.open(url, '_blank');
   };
 
@@ -222,7 +224,6 @@ export default function MasterOrderDetailPage() {
               style={{ color: 'var(--color-primary)', cursor: 'pointer' }}
             >
               {addrLine}
-              <span style={{ fontSize: 12, marginLeft: 4 }}>›导航</span>
             </span>
           </div>
           <div className="field-inline-row">
@@ -234,7 +235,7 @@ export default function MasterOrderDetailPage() {
             <span className="field-inline-value">
               {addr?.contactPhone ? (
                 <a href={`tel:${addr.contactPhone}`} style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>
-                  {addr.contactPhone}（点击拨打）
+                  {addr.contactPhone}
                 </a>
               ) : (
                 '-'
@@ -253,6 +254,12 @@ export default function MasterOrderDetailPage() {
               <span className="field-inline-value">{order.remark}</span>
             </div>
           )}
+          {order.status === 'pending_confirm' && (
+            <div className="field-inline-row">
+              <span className="field-label">流转状态</span>
+              <span className="field-inline-value" style={{ color: 'var(--color-danger)' }}>服务已完成，等待客户验收</span>
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
@@ -261,28 +268,15 @@ export default function MasterOrderDetailPage() {
               抢单
             </button>
           )}
-          {order.master && order.status === 'accepted' && (
-            <button type="button" className="btn-primary" onClick={onStart}>
+          {order.status === 'accepted' && (
+            <button type="button" className="btn-primary" onClick={() => setStartOpen(true)}>
               开始服务（上门）
             </button>
           )}
           {order.status === 'servicing' && (
-            <button type="button" className="btn-primary" onClick={onComplete}>
+            <button type="button" className="btn-primary" onClick={() => setCompleteOpen(true)}>
               完成服务
             </button>
-          )}
-          {order.status === 'pending_confirm' && (
-            <p className="field-hint" style={{ textAlign: 'center' }}>
-              服务已完成，等待客户验收
-            </p>
-          )}
-          {(order.status === 'reviewed' ||
-            order.status === 'refunding' ||
-            order.status === 'refunded' ||
-            order.status === 'cancelled') && (
-            <p className="field-hint" style={{ textAlign: 'center' }}>
-              {ORDER_STATUS_LABEL[order.status]}
-            </p>
           )}
         </div>
       </div>
@@ -296,6 +290,28 @@ export default function MasterOrderDetailPage() {
         onGrab();
       }}
       onCancel={() => setGrabOpen(false)}
+    />
+    <ConfirmDialog
+      open={startOpen}
+      title="确认开始服务"
+      message={`确认订单「${order.orderNo}」已开始上门服务吗？确认后订单将进入「正在服务」状态。`}
+      confirmLabel="确认开始"
+      onConfirm={() => {
+        setStartOpen(false);
+        onStart();
+      }}
+      onCancel={() => setStartOpen(false)}
+    />
+    <ConfirmDialog
+      open={completeOpen}
+      title="确认完成服务"
+      message={`确认订单「${order.orderNo}」服务已完成吗？确认后订单将进入「待客户验收」状态，等待客户确认验收。`}
+      confirmLabel="确认完成"
+      onConfirm={() => {
+        setCompleteOpen(false);
+        onComplete();
+      }}
+      onCancel={() => setCompleteOpen(false)}
     />
     </>
   );

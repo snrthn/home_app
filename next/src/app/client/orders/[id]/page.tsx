@@ -31,6 +31,7 @@ export default function ClientOrderDetailPage() {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const [paying, setPaying] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const { data: orders = [], isLoading } = useQuery({
     queryKey: QK.orderMine,
@@ -227,6 +228,14 @@ export default function ClientOrderDetailPage() {
               <span className="field-inline-value">{order.remark}</span>
             </div>
           )}
+          {(order.status === 'refunding' || order.status === 'refunded' || order.status === 'cancelled') && (
+            <div className="field-inline-row">
+              <span className="field-label">流转状态</span>
+              <span className="field-inline-value" style={{ color: 'var(--color-danger)' }}>
+                {ORDER_STATUS_LABEL[order.status]}（资金状态以平台为准）
+              </span>
+            </div>
+          )}
         </div>
 
         {order.master && (
@@ -243,7 +252,7 @@ export default function ClientOrderDetailPage() {
                 <span className="field-label">师傅电话</span>
                 <span className="field-inline-value">
                   <a href={`tel:${order.master.user.phone}`} style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>
-                    {order.master.user.phone}（点击拨打）
+                    {order.master.user.phone}
                   </a>
                 </span>
               </div>
@@ -267,39 +276,28 @@ export default function ClientOrderDetailPage() {
             </button>
           )}
           {order.status === 'pending_confirm' && (
-            <button type="button" className="btn-primary" onClick={onConfirm}>
+            <button type="button" className="btn-primary" onClick={() => setConfirmOpen(true)}>
               确认验收
             </button>
           )}
-          {order.status !== 'cancelled' && order.status !== 'refunded' && order.status !== 'refunding' && (
+          {CANCELABLE.includes(order.status) && (
             <button type="button" className="btn-danger" onClick={() => setCancelOpen(true)}>
-              {CANCELABLE.includes(order.status)
-                ? order.status === 'pending_payment'
-                  ? '取消订单'
-                  : '申请取消（退款）'
-                : '取消订单'}
+              {order.status === 'pending_payment' ? '取消订单' : '申请取消（退款）'}
             </button>
-          )}
-          {(order.status === 'refunding' || order.status === 'refunded' || order.status === 'cancelled') && (
-            <p className="field-hint" style={{ textAlign: 'center' }}>
-              {ORDER_STATUS_LABEL[order.status]}（资金状态以平台为准）
-            </p>
           )}
         </div>
       </div>
 
       <ConfirmDialog
         open={cancelOpen}
-        title={CANCELABLE.includes(order.status) ? '取消订单确认' : '暂不可取消'}
+        title="取消订单确认"
         message={
-          CANCELABLE.includes(order.status)
-            ? `订单「${order.orderNo}」当前为「${ORDER_STATUS_LABEL[order.status]}」，取消后${
-                order.status === 'pending_payment' ? '未支付、不产生退款' : '已支付的托管金将原路退回'
-              }。确定取消吗？`
-            : `订单当前为「${ORDER_STATUS_LABEL[order.status]}」，已完成验收且托管金已结算给师傅，平台不支持取消。如仍有异议：① 可在「我的-我的评价」追加评价；② 拨打客服热线 400-000-0000 协商售后；③ 客服工单系统建设中，后续可在「我的-帮助中心」提交工单。`
+          order.status === 'pending_payment'
+            ? `订单「${order.orderNo}」尚未支付，取消后不产生退款。确定取消吗？`
+            : `订单「${order.orderNo}」当前为「${ORDER_STATUS_LABEL[order.status]}」，取消后已支付的托管金将原路退回，资金状态以平台为准。确定取消吗？`
         }
-        confirmLabel={CANCELABLE.includes(order.status) ? '确认取消' : '我知道了'}
-        onConfirm={CANCELABLE.includes(order.status) ? confirmCancel : () => setCancelOpen(false)}
+        confirmLabel="确认取消"
+        onConfirm={confirmCancel}
         onCancel={() => setCancelOpen(false)}
       />
 
@@ -313,6 +311,17 @@ export default function ClientOrderDetailPage() {
         onCancel={() => {
           if (!paying) setPayOpen(false);
         }}
+      />
+      <ConfirmDialog
+        open={confirmOpen}
+        title="确认验收"
+        message={`确认订单「${order.orderNo}」服务已完成并验收通过吗？确认后托管金将释放给师傅，订单完成。`}
+        confirmLabel="确认验收"
+        onConfirm={() => {
+          setConfirmOpen(false);
+          onConfirm();
+        }}
+        onCancel={() => setConfirmOpen(false)}
       />
     </>
   );
