@@ -73,6 +73,12 @@ export default function AdminOrderDetailPage() {
                 <span className="field-inline-value">{order.remark}</span>
               </div>
             )}
+            {order.cancelReason && (
+              <div className="field-inline-row">
+                <span className="field-label">取消原因</span>
+                <span className="field-inline-value">{order.cancelReason}</span>
+              </div>
+            )}
           </div>
 
           {/* 客户信息 */}

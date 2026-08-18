@@ -15,6 +15,7 @@ import { AlipayPaymentProvider } from './alipay.provider';
 import type { PaymentProvider, PaymentProviderName } from './provider';
 import { OrderStatus } from '@laoma/shared';
 import { OrdersGateway } from '../gateway/orders.gateway';
+import { SettlementsService } from '../settlements/settlements.service';
 
 const POST_PAY_STATES = [
   OrderStatus.PendingAccept,
@@ -31,6 +32,7 @@ export class PaymentsService {
   constructor(
     private prisma: PrismaService,
     private gateway: OrdersGateway,
+    private settlements: SettlementsService,
   ) {}
 
   /** 当前启用的支付通道：读 MerchantConfig，enabled 且 provider!=mock 时返回对应真实实现，否则 mock。 */
@@ -201,6 +203,15 @@ export class PaymentsService {
         note: `退款完成 ¥${refundAmount.toFixed(2)}${noteRatio} ` + refundRes.refundNo,
       },
     });
+
+    // 阶梯退款：师傅应得部分生成补偿结算单（pending，待管理端审核入账）
+    if (ratio < 1 && order.masterId) {
+      const compensation =
+        Math.round((Number(order.amount) - refundAmount) * 100) / 100;
+      if (compensation > 0) {
+        await this.settlements.createCompensation(orderId, compensation);
+      }
+    }
   }
 
   // ===== 旧二维码凭证支付（保留，与前置支付并存） =====

@@ -87,6 +87,7 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     icon: 'wallet',
     children: [
       { key: 'settlements', label: '结算台账', path: '/admin/settlements', perm: 'orders:read' },
+      { key: 'withdrawals', label: '提现管理', path: '/admin/withdrawals', perm: 'finance:manage' },
     ],
   },
   {

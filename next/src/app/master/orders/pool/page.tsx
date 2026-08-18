@@ -74,7 +74,7 @@ export default function MasterPoolPage() {
           <p className="field-hint">加载中…</p>
         ) : pool.length === 0 ? (
           <div className="card">
-            <EmptyState text="暂无待接订单，新订单会实时出现在这里。实时推送已开启。" />
+            <EmptyState text="暂无待接订单，新订单会实时出现在这里。" />
           </div>
         ) : (
           <div className="order-grid">

@@ -299,6 +299,12 @@ export default function ClientOrderDetailPage() {
               <span className="field-inline-value">{order.remark}</span>
             </div>
           )}
+          {order.cancelReason && (
+            <div className="field-inline-row">
+              <span className="field-label">取消原因</span>
+              <span className="field-inline-value">{order.cancelReason}</span>
+            </div>
+          )}
           {order.status === 'departing' && (
             <div className="field-inline-row">
               <span className="field-label">流转状态</span>
@@ -418,6 +424,17 @@ export default function ClientOrderDetailPage() {
               }}
             >
               去评价
+            </button>
+          )}
+          {order.status === 'evaluated' && order.serviceItem?.id && (
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() =>
+                router.push(`/client/orders/new?serviceId=${order.serviceItem!.id}`)
+              }
+            >
+              再来一单
             </button>
           )}
           {CANCELABLE.includes(order.status) && (

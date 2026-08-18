@@ -29,8 +29,26 @@ export enum PaymentStatus {
 }
 
 export enum SettlementStatus {
-  OfflinePending = 'offline_pending', // 待线下结算给师傅
-  OfflineDone = 'offline_done', // 已线下结算
+  Pending = 'pending', // 待入账（退款补偿单：管理端审核确认后入账）
+  Credited = 'credited', // 已入账（常规单验收即时入账；补偿单审核通过后入账）
+  Rejected = 'rejected', // 已驳回（补偿单被否决，不入账）
+}
+
+export enum SettlementType {
+  Normal = 'normal', // 常规结算单（订单验收后自动生成，即时入账）
+  Compensation = 'compensation', // 退款补偿单（阶梯退款师傅应得部分，管理端审核后入账）
+}
+
+export enum WithdrawalChannel {
+  Wechat = 'wechat', // 微信
+  Alipay = 'alipay', // 支付宝
+  Bank = 'bank', // 银行卡
+}
+
+export enum WithdrawalStatus {
+  Pending = 'pending', // 待审核（金额已冻结）
+  Paid = 'paid', // 已打款
+  Rejected = 'rejected', // 已驳回（解冻退回余额）
 }
 
 export enum MasterStatus {

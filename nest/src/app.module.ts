@@ -11,6 +11,7 @@ import { AddressesModule } from './addresses/addresses.module';
 import { OrdersModule } from './orders/orders.module';
 import { PaymentsModule } from './payments/payments.module';
 import { SettlementsModule } from './settlements/settlements.module';
+import { WithdrawalsModule } from './withdrawals/withdrawals.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { UploadModule } from './upload/upload.module';
 import { AgreementsModule } from './agreements/agreements.module';
@@ -34,6 +35,7 @@ import { AuditModule } from './audit/audit.module';
     OrdersModule,
     PaymentsModule,
     SettlementsModule,
+    WithdrawalsModule,
     ReviewsModule,
     UploadModule,
     AgreementsModule,

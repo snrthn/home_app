@@ -33,6 +33,12 @@ export const QK = {
   orderMaster: ['orders', 'master'] as const,
   orderAll: ['orders', 'all'] as const,
   settlements: ['admin', 'settlements'] as const,
+  // 师傅端收入 / 提现
+  masterIncomeSummary: ['master', 'income', 'summary'] as const,
+  masterIncomeDetails: ['master', 'income', 'details'] as const,
+  masterWithdrawals: ['master', 'withdrawals'] as const,
+  // 管理端提现审核
+  adminWithdrawals: ['admin', 'withdrawals'] as const,
   adminReviews: ['admin', 'reviews'] as const,
   myAddresses: ['client', 'addresses'] as const,
   publicServices: ['public', 'services'] as const,

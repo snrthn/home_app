@@ -149,6 +149,7 @@ export class OrdersService {
     to: OrderStatus,
     actorId?: string,
     note?: string,
+    extraData?: { cancelReason: string },
   ) {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order) throw new NotFoundException('订单不存在');
@@ -158,7 +159,7 @@ export class OrdersService {
       );
     const updated = await this.prisma.order.update({
       where: { id: orderId },
-      data: { status: to },
+      data: { status: to, ...(extraData ?? {}) },
     });
     await this.prisma.orderLog.create({
       data: {
@@ -317,10 +318,17 @@ export class OrdersService {
         OrderStatus.Refunding,
         userId,
         `取消（发起退款）｜原因：${r}`,
+        { cancelReason: r },
       );
       await this.payments.refund(order.customerId, orderId, ratio);
       return this.prisma.order.findUnique({ where: { id: orderId } });
     }
-    return this.transition(orderId, OrderStatus.Cancelled, userId, `取消｜原因：${r}`);
+    return this.transition(
+      orderId,
+      OrderStatus.Cancelled,
+      userId,
+      `取消｜原因：${r}`,
+      { cancelReason: r },
+    );
   }
 }

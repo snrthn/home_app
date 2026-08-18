@@ -2,24 +2,38 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getSettlements, syncSettlements, markSettlementDone, type Settlement } from '@/lib/orders-api';
+import {
+  getSettlements,
+  syncSettlements,
+  creditSettlement,
+  rejectSettlement,
+  type Settlement,
+} from '@/lib/orders-api';
 import { QK } from '@/lib/query-keys';
 import { getApiErrorMsg } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import DataTable, { type Column } from '@/components/admin/DataTable';
 import { StatusBadge } from '@/components/admin/DataTable';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { Modal } from '@/components/Modal';
+import { Textarea } from '@/components/form/Textarea';
 
-const SETTLEMENT_STATUS: Record<string, { label: string; tone: 'green' | 'orange' | 'gray' | 'blue' }> = {
-  offline_pending: { label: '待打款', tone: 'orange' },
-  offline_done: { label: '已打款', tone: 'green' },
+const SETTLEMENT_STATUS: Record<
+  string,
+  { label: string; tone: 'green' | 'orange' | 'gray' }
+> = {
+  pending: { label: '待审核', tone: 'orange' },
+  credited: { label: '已入账', tone: 'green' },
+  rejected: { label: '已驳回', tone: 'gray' },
 };
 
 export default function AdminSettlementsPage() {
   const toast = useToast();
   const qc = useQueryClient();
   const [syncing, setSyncing] = useState(false);
-  const [confirmSettle, setConfirmSettle] = useState<Settlement | null>(null);
+  const [confirmCredit, setConfirmCredit] = useState<Settlement | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<Settlement | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
   const [acting, setActing] = useState(false);
 
   const { data: list = [], isLoading } = useQuery<Settlement[]>({
@@ -44,14 +58,37 @@ export default function AdminSettlementsPage() {
     }
   };
 
-  const onDoneClick = (s: Settlement) => setConfirmSettle(s);
-  const confirmSettleDone = async () => {
-    if (!confirmSettle) return;
+  const confirmCreditDone = async () => {
+    if (!confirmCredit) return;
     setActing(true);
     try {
-      await markSettlementDone(confirmSettle.id);
-      toast.success('已标记为已打款');
-      setConfirmSettle(null);
+      await creditSettlement(confirmCredit.id);
+      toast.success('补偿单已确认入账');
+      setConfirmCredit(null);
+      refresh();
+    } catch (e: any) {
+      toast.error(getApiErrorMsg(e));
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const openReject = (s: Settlement) => {
+    setRejectTarget(s);
+    setRejectReason('');
+  };
+
+  const submitReject = async () => {
+    if (!rejectTarget) return;
+    if (!rejectReason.trim()) {
+      toast.error('请填写驳回原因');
+      return;
+    }
+    setActing(true);
+    try {
+      await rejectSettlement(rejectTarget.id, rejectReason.trim());
+      toast.success('补偿单已驳回');
+      setRejectTarget(null);
       refresh();
     } catch (e: any) {
       toast.error(getApiErrorMsg(e));
@@ -72,7 +109,15 @@ export default function AdminSettlementsPage() {
         key: 'master',
         title: '师傅',
         width: '120px',
-        render: (s) => s.master?.realName ?? s.master?.user?.profile?.nickname ?? '-',
+        render: (s) =>
+          s.master?.realName ?? s.master?.user?.profile?.nickname ?? '-',
+      },
+      {
+        key: 'type',
+        title: '类型',
+        width: '100px',
+        render: (s) =>
+          s.type === 'compensation' ? '退款补偿' : '常规结算',
       },
       {
         key: 'orderAmount',
@@ -84,13 +129,13 @@ export default function AdminSettlementsPage() {
       {
         key: 'platformFee',
         title: '平台费',
-        width: '100px',
+        width: '90px',
         align: 'right',
         render: (s) => `¥${s.platformFee}`,
       },
       {
         key: 'masterAmount',
-        title: '师傅实收',
+        title: '师傅入账',
         width: '110px',
         align: 'right',
         render: (s) => `¥${s.masterAmount}`,
@@ -100,25 +145,40 @@ export default function AdminSettlementsPage() {
         title: '状态',
         width: '100px',
         render: (s) => {
-          const m = SETTLEMENT_STATUS[s.status] ?? { label: s.status, tone: 'gray' as const };
+          const m =
+            SETTLEMENT_STATUS[s.status] ?? { label: s.status, tone: 'gray' as const };
           return <StatusBadge tone={m.tone}>{m.label}</StatusBadge>;
         },
       },
       {
         key: 'createdAt',
-        title: '创建时间',
+        title: '生成时间',
         width: '160px',
-        render: (s) => (s.createdAt ? s.createdAt.slice(0, 19).replace('T', ' ') : '-'),
-      },
+        render: (s) =>
+          s.createdAt ? s.createdAt.slice(0, 19).replace('T', ' ') : '-',
+        },
       {
         key: 'op',
         title: '操作',
-        width: '120px',
+        width: '130px',
         render: (s) =>
-          s.status === 'offline_pending' ? (
-            <button type="button" className="btn-link" onClick={() => onDoneClick(s)}>
-              标记已打款
-            </button>
+          s.status === 'pending' ? (
+            <span style={{ display: 'inline-flex', gap: 8 }}>
+              <button
+                type="button"
+                className="btn-link"
+                onClick={() => setConfirmCredit(s)}
+              >
+                确认入账
+              </button>
+              <button
+                type="button"
+                className="btn-link btn-link-danger"
+                onClick={() => openReject(s)}
+              >
+                驳回
+              </button>
+            </span>
           ) : (
             <span className="field-hint">—</span>
           ),
@@ -132,26 +192,74 @@ export default function AdminSettlementsPage() {
     <>
       <div className="page-head">
         <h2>结算台账</h2>
-        <button type="button" className="btn-primary" style={{ marginLeft: 'auto' }} onClick={onSync} disabled={syncing}>
-          {syncing ? '同步中…' : '同步台账'}
+        <button
+          type="button"
+          className="btn-primary"
+          style={{ marginLeft: 'auto' }}
+          onClick={onSync}
+          disabled={syncing}
+        >
+          {syncing ? '同步中…' : '补生成台账'}
         </button>
       </div>
 
       <p className="field-hint" style={{ marginTop: -4, marginBottom: 12 }}>
-        订单完成验收后，平台托管金释放并生成待打款台账；打款给师傅后点「标记已打款」。
+        常规结算单在订单验收后自动入账；阶梯退款的补偿单需审核「确认入账」后才会进入师傅余额。
       </p>
 
-      <DataTable columns={columns} rows={list} rowKey={(s) => s.id} loading={isLoading} emptyText="暂无结算记录" />
+      <DataTable
+        columns={columns}
+        rows={list}
+        rowKey={(s) => s.id}
+        loading={isLoading}
+        emptyText="暂无结算记录"
+      />
 
       <ConfirmDialog
-        open={!!confirmSettle}
-        title="标记已打款"
-        message={`确认已将订单 ${confirmSettle?.order?.orderNo ?? confirmSettle?.orderId ?? ''} 的托管金打款给师傅？此操作会记录打款时间，建议确认线下已转账后再标记。`}
-        confirmLabel="确认打款"
+        open={!!confirmCredit}
+        title="确认入账"
+        message={`确认将订单 ${confirmCredit?.order?.orderNo ?? ''} 的补偿款 ¥${
+          confirmCredit ? Number(confirmCredit.masterAmount).toFixed(2) : ''
+        } 入账给师傅？入账后进入师傅可提现余额。`}
+        confirmLabel="确认入账"
         loading={acting}
-        onCancel={() => setConfirmSettle(null)}
-        onConfirm={confirmSettleDone}
+        onCancel={() => setConfirmCredit(null)}
+        onConfirm={confirmCreditDone}
       />
+
+      <Modal
+        open={!!rejectTarget}
+        onClose={() => setRejectTarget(null)}
+        title="驳回补偿单"
+      >
+        <div className="field-label" style={{ marginBottom: 6 }}>驳回原因（必填）</div>
+        <Textarea
+          rows={3}
+          maxLength={200}
+          placeholder="请填写驳回原因，师傅端可见"
+          value={rejectReason}
+          onChange={(e: any) => setRejectReason(e.target.value)}
+        />
+        <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+          <button
+            type="button"
+            className="btn-secondary"
+            style={{ flex: 1 }}
+            onClick={() => setRejectTarget(null)}
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            className="btn-primary"
+            style={{ flex: 1 }}
+            disabled={acting}
+            onClick={submitReject}
+          >
+            {acting ? '提交中…' : '确认驳回'}
+          </button>
+        </div>
+      </Modal>
     </>
   );
 }

@@ -12,6 +12,8 @@ export interface OrderLite {
   appointmentDate?: string | null;
   appointmentSlot?: string | null;
   remark?: string | null;
+  // 取消原因（取消时必填落库），三端订单信息卡展示
+  cancelReason?: string | null;
   createdAt: string;
   serviceItem?: {
     id: string;
@@ -218,11 +220,11 @@ export function getServiceItem(id: string): Promise<ServiceItemDetail> {
   return api.get(`/services/${id}`).then((r) => r.data);
 }
 
-// ---------- 结算台账（管理端） ----------
+// ---------- 结算（管理端台账 + 师傅收入明细共用类型） ----------
 export interface Settlement {
   id: string;
   orderId: string;
-  order?: { orderNo?: string } | null;
+  order?: { orderNo?: string; serviceSnapshot?: { name?: string } | null } | null;
   master?: {
     id: string;
     realName?: string;
@@ -231,7 +233,9 @@ export interface Settlement {
   orderAmount: string | number;
   platformFee: string | number;
   masterAmount: string | number;
-  status: string;
+  /** normal=常规单（验收自动入账） compensation=退款补偿单（需管理端审核） */
+  type?: 'normal' | 'compensation';
+  status: 'pending' | 'credited' | 'rejected' | string;
   note?: string | null;
   createdAt: string;
   settledAt?: string | null;
@@ -242,6 +246,67 @@ export function getSettlements(): Promise<Settlement[]> {
 export function syncSettlements(): Promise<unknown> {
   return api.post('/settlements/sync').then((r) => r.data);
 }
-export function markSettlementDone(id: string, note?: string): Promise<Settlement> {
-  return api.post(`/settlements/${id}/done`, { note }).then((r) => r.data);
+/** 补偿单确认入账（pending → credited） */
+export function creditSettlement(id: string, note?: string): Promise<Settlement> {
+  return api.post(`/settlements/${id}/credit`, { note }).then((r) => r.data);
+}
+/** 补偿单驳回（pending → rejected，需填原因） */
+export function rejectSettlement(id: string, reason: string): Promise<Settlement> {
+  return api.post(`/settlements/${id}/reject`, { reason }).then((r) => r.data);
+}
+
+// ---------- 师傅收入（汇总 / 明细） ----------
+export interface IncomeSummary {
+  totalCredited: number; // 累计入账
+  monthCredited: number; // 本月入账
+  pendingCompensation: number; // 待审核补偿（不计入可提现）
+  withdrawing: number; // 提现中（已冻结）
+  totalWithdrawn: number; // 累计已提现
+  available: number; // 可提现余额
+}
+export function getMyIncomeSummary(): Promise<IncomeSummary> {
+  return api.get('/settlements/summary').then((r) => r.data);
+}
+export function getMyIncomeDetails(): Promise<Settlement[]> {
+  return api.get('/settlements/mine').then((r) => r.data ?? []);
+}
+
+// ---------- 提现 ----------
+export interface Withdrawal {
+  id: string;
+  masterId: string;
+  amount: string | number;
+  channel: 'wechat' | 'alipay' | 'bank' | string;
+  account: string;
+  status: 'pending' | 'paid' | 'rejected' | string;
+  reviewNote?: string | null;
+  paidAt?: string | null;
+  createdAt: string;
+  master?: {
+    id: string;
+    realName?: string;
+    user?: { profile?: { nickname?: string | null } } | null;
+  } | null;
+}
+export function createWithdrawal(dto: {
+  amount: number;
+  channel: 'wechat' | 'alipay' | 'bank';
+  account: string;
+}): Promise<Withdrawal> {
+  return api.post('/withdrawals', dto).then((r) => r.data);
+}
+export function getMyWithdrawals(): Promise<Withdrawal[]> {
+  return api.get('/withdrawals/mine').then((r) => r.data ?? []);
+}
+// 管理端
+export function getWithdrawals(status?: string): Promise<Withdrawal[]> {
+  return api
+    .get('/withdrawals', { params: status ? { status } : {} })
+    .then((r) => r.data ?? []);
+}
+export function payWithdrawal(id: string): Promise<Withdrawal> {
+  return api.post(`/withdrawals/${id}/pay`).then((r) => r.data);
+}
+export function rejectWithdrawal(id: string, reason: string): Promise<Withdrawal> {
+  return api.post(`/withdrawals/${id}/reject`, { reason }).then((r) => r.data);
 }

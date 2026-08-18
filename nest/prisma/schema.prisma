@@ -49,8 +49,14 @@ enum PaymentStatus {
 }
 
 enum SettlementStatus {
-  offline_pending
-  offline_done
+  pending    // 待入账（退款补偿单：需管理端审核确认后才入账）
+  credited   // 已入账（常规单：验收即时自动入账；补偿单：管理端确认后入账）
+  rejected   // 已驳回（补偿单被管理端否决，不入账）
+}
+
+enum SettlementType {
+  normal        // 常规结算单（订单验收后自动生成，即时入账）
+  compensation  // 退款补偿单（阶梯退款时师傅应得部分，管理端审核后入账）
 }
 
 enum MasterStatus {
@@ -165,11 +171,12 @@ model Master {
 
   deletedAt   DateTime?
 
-  orders      Order[]
-  payments    Payment[]
-  reviews     Review[]
-  settlements Settlement[]
-  quotations  Quotation[]
+  orders       Order[]
+  payments     Payment[]
+  reviews      Review[]
+  settlements  Settlement[]
+  withdrawals  Withdrawal[]
+  quotations   Quotation[]
 }
 
 model ServiceCategory {
@@ -280,6 +287,7 @@ model Order {
   status           OrderStatus @default(pending_accept)
   arriveCode       String?     // 到达验证码（客户生成，师傅输入校验后确认到达）
   remark           String?
+  cancelReason     String?     @db.VarChar(200)  // 取消原因（取消时必填，三端订单信息卡展示）
   customerPhotos   Json?
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
@@ -344,20 +352,56 @@ model Quotation {
 }
 
 model Settlement {
-  id           String          @id @default(cuid())
-  orderId      String          @unique
-  order        Order           @relation(fields: [orderId], references: [id])
+  id           String           @id @default(cuid())
+  orderId      String           @unique
+  order        Order            @relation(fields: [orderId], references: [id])
   masterId     String
-  master       Master          @relation(fields: [masterId], references: [id])
-  orderAmount  Decimal         @db.Decimal(10, 2)
-  platformFee  Decimal         @db.Decimal(10, 2) @default(0)
-  masterAmount Decimal         @db.Decimal(10, 2)
-  status       SettlementStatus @default(offline_pending)
-  settledAt    DateTime?
+  master       Master           @relation(fields: [masterId], references: [id])
+  orderAmount  Decimal          @db.Decimal(10, 2)
+  platformFee  Decimal          @db.Decimal(10, 2) @default(0)
+  masterAmount Decimal          @db.Decimal(10, 2)
+  type         SettlementType   @default(normal)
+  status       SettlementStatus @default(credited)
+  settledAt    DateTime?        // 入账时间（credited 时写入）
   note         String?
-  createdAt    DateTime        @default(now())
+  createdAt    DateTime         @default(now())
 
   deletedAt    DateTime?
+}
+
+// ---------------- 师傅提现（2026-08-18 新增） ----------------
+// 余额实时聚合（Σ credited settlements.masterAmount − Σ paid withdrawals − Σ pending withdrawals），
+// 不落冗余余额字段。申请即冻结（pending 计入已占用），管理端审核打款：通过→线下打款→标记 paid；驳回→解冻。
+enum WithdrawalChannel {
+  wechat
+  alipay
+  bank
+}
+
+enum WithdrawalStatus {
+  pending   // 待审核（金额已冻结，计入余额扣减）
+  paid      // 已打款（管理端线下打款完成后标记）
+  rejected  // 已驳回（解冻退回余额）
+}
+
+model Withdrawal {
+  id         String            @id @default(cuid())
+  masterId   String
+  master     Master            @relation(fields: [masterId], references: [id])
+  amount     Decimal           @db.Decimal(10, 2)
+  channel    WithdrawalChannel
+  account    String            @db.Text // 收款账号快照（微信号/支付宝账号/银行卡号，展示时脱敏）
+  status     WithdrawalStatus  @default(pending)
+  reviewNote String?           @db.VarChar(200) // 审核备注（驳回时必填原因）
+  reviewedBy String? // 审核操作人 userId
+  paidAt     DateTime? // 打款完成时间
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  deletedAt    DateTime?
+
+  @@index([masterId, status])
+  @@index([status, createdAt])
 }
 
 model Review {
