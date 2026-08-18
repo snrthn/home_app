@@ -529,7 +529,7 @@ export default function ServiceCategoriesPage() {
         </div>
       </div>
 
-      <div className="card" style={{ padding: 18 }}>
+      <div className="card card--bare">
         <p className="field-hint" style={{ marginTop: -4, marginBottom: 14 }}>
           服务类目为树形结构（最多三级）：一级为业务域（如「家电清洗」「家电维修」），其下可挂二级、三级。
           默认仅展开一级类目，点击行首箭头可折叠/展开子节点。

@@ -11,6 +11,7 @@ import { useToast } from '@/components/Toast';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE, type OrderStatus } from '@/lib/order-status';
 import { StatusBadge } from '@/components/admin/DataTable';
+import EmptyState from '@/components/EmptyState';
 
 // 可取消的状态：支付前取消无退款；支付后取消走退款
 const CANCELABLE: OrderStatus[] = [
@@ -95,7 +96,7 @@ export default function ClientOrderDetailPage() {
     if (window.history.length > 1) router.back();
     else router.push('/client/orders');
   }}
-/><div className="laoma-container order-mod"><div className="card"><p className="field-hint">未找到该订单。</p></div></div></>;
+/><div className="laoma-container order-mod"><div className="card"><EmptyState text="未找到该订单。" /></div></div></>;
 
   const addr = order.address;
   const addrLine = addr

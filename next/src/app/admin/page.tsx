@@ -4,7 +4,7 @@ import Link from 'next/link';
 export default function AdminHome() {
   const stats = [
     { label: '今日订单', value: '—' },
-    { label: '待接单', value: '—' },
+    { label: '待接订单', value: '—' },
     { label: '在线师傅', value: '—' },
     { label: '本月营收', value: '—' },
   ];

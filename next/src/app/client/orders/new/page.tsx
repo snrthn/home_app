@@ -12,6 +12,7 @@ import {
 import { QK } from '@/lib/query-keys';
 import { getApiErrorMsg } from '@/lib/api';
 import { useToast } from '@/components/Toast';
+import EmptyState from '@/components/EmptyState';
 import { Modal } from '@/components/Modal';
 
 // 预约时段预设（服务商常用上门时段）
@@ -164,7 +165,7 @@ function NewOrderForm() {
                     <span className="cell-value">¥{it.price}</span>
                   </button>
                 ))}
-                {items.length === 0 && <p className="field-hint">暂无可下单的服务项目</p>}
+                {items.length === 0 && <div className="card"><EmptyState text="暂无可下单的服务项目" /></div>}
               </div>
             )}
             {!presetMode && selectedItem && (
@@ -262,7 +263,7 @@ function NewOrderForm() {
         {addrLoading ? (
           <p className="field-hint">加载中…</p>
         ) : addresses.length === 0 ? (
-          <p className="field-hint">还没有保存的地址，点击下方「新建地址」去添加。</p>
+          <EmptyState text="还没有保存的地址，点击下方「新建地址」去添加。" />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {addresses.map((a) => (

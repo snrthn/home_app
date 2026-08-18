@@ -18,6 +18,7 @@ import { useToast } from '@/components/Toast';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE } from '@/lib/order-status';
 import { StatusBadge } from '@/components/admin/DataTable';
+import EmptyState from '@/components/EmptyState';
 
 // 合并接单池与我的订单：被我抢到的订单会同时出现在两处，按 id 去重（以我的那份为准，含 master 字段）
 function combine(pool: OrderLite[] = [], mine: OrderLite[] = []): OrderLite[] {
@@ -119,7 +120,7 @@ export default function MasterOrderDetailPage() {
         />
         <div className="laoma-container order-mod">
           <div className="card">
-            <p className="field-hint">未找到该订单，可能已被他人接走。</p>
+            <EmptyState text="未找到该订单，可能已被他人接走。" />
           </div>
         </div>
       </>

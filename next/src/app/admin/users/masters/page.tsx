@@ -194,7 +194,7 @@ export default function MasterListPage() {
       <div className="page-head">
         <h2>师傅管理</h2>
       </div>
-      <div className="card">
+      <div className="card card--bare">
         <div className="toolbar">
           <input
             className="input toolbar-search"

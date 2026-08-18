@@ -22,6 +22,12 @@
   --color-success: #16a34a;  /* 成功 */
   --color-warning: #f59e0b;  /* 警告 / 前置校验 */
   --color-info: #374151;     /* 中性信息 */
+  /* 列表 / 表格行统一令牌（规矩 9）：所有列表行底色与 hover 必须走这里，
+     禁止各模块 / 各列表单独写死行背景或划过色。表格行、H5 订单卡片、about 列表项共用。 */
+  --row-bg: transparent;       /* 表格行默认无填充（靠分隔线区分） */
+  --row-head-bg: #f6f9fb;     /* 表头底 */
+  --row-hover: #f3f7f9;       /* 行划过统一底色（冷调浅灰，贴合品牌冷色系） */
+  --row-border: #eef0f2;      /* 行分隔线 */
 }
 
 * {
@@ -94,6 +100,15 @@ body {
   .order-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+}
+
+/* 订单列表卡片（H5 端）：行划过底色走全局 --row-hover，与 admin 表格行一致；
+   仅作用于 .order-grid 内的卡片，不影响详情 / 表单卡片。 */
+.order-grid > .card {
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+.order-grid > .card:hover {
+  background: var(--row-hover);
 }
 
 /* ===== 管理端详情页：不套用移动端窄栏，充分利用桌面横向空间 ===== */
@@ -1393,9 +1408,24 @@ body {
   margin-left: auto;
 }
 
+/* 列表表格容器：卡片外观统一焊死在此处，所有管理端列表表格共用，
+   页面不得再各自包 .card（旧页面挂 .card--bare 去重，见下）。 */
 .data-table-wrap {
   position: relative;
   overflow-x: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border, #eceef0);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+/* 历史页面曾用 <div className="card"> 包 DataTable，现容器已内建卡片外观，
+   此处仅用于去重（消除双层边框/内边距），勿改回 className="card"。 */
+.card--bare {
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  border-radius: 0;
 }
 .data-table {
   width: 100%;
@@ -1407,19 +1437,19 @@ body {
   text-align: left;
   font-weight: 600;
   color: var(--color-text-soft);
-  background: #fafbfc;
+  background: var(--row-head-bg);
   padding: 12px 14px;
-  border-bottom: 1px solid #eef0f2;
+  border-bottom: 1px solid var(--row-border);
   white-space: nowrap;
 }
 .data-table td {
   padding: 12px 14px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--row-border);
   color: var(--color-text);
   vertical-align: middle;
 }
 .data-table tbody tr:hover {
-  background: #fafbfc;
+  background: var(--row-hover);
 }
 .data-empty,
 .data-loading {
@@ -1427,6 +1457,21 @@ body {
   text-align: center;
   color: var(--color-text-soft);
   font-size: 14px;
+}
+
+/* 空数据占位卡片内容（规矩 8）：一律无上间距 + 文本居中。
+   由各页用 <EmptyState> 输出，外层套 .card（或置于业务 card 内），
+   杜绝手写 field-hint/裸 <p> 带来的 margin-top 与左对齐。
+   本类只负责"内容居中无 margin + 垂直留白"，卡片外观由外层 .card 提供。 */
+.empty-state {
+  margin: 0;
+  text-align: center;
+  color: var(--color-text-soft);
+  font-size: 14px;
+  padding: 16px 0;
+}
+.empty-state p {
+  margin: 0;
 }
 
 /* 表格单元格文本截断（长文本列使用，避免破坏列宽协调） */
@@ -1577,7 +1622,7 @@ body {
   gap: 4px;
   padding: 8px 10px;
   border-bottom: 1px solid #eef0f2;
-  background: #fafbfc;
+  background: var(--row-head-bg);
 }
 .rte-btn {
   min-width: 34px;
@@ -1840,6 +1885,7 @@ body {
 }
 .about-list-item:hover {
   border-color: var(--color-primary);
+  background: var(--row-hover);
   box-shadow: 0 2px 10px rgba(62, 143, 176, 0.08);
 }
 .about-list-item:focus-visible {

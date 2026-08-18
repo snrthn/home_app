@@ -5,6 +5,7 @@ import { getSiteContent } from '@/lib/admin-api';
 import type { AboutRole } from '@/lib/about-content';
 import { QK } from '@/lib/query-keys';
 import SanitizedHtml from '@/components/admin/SanitizedHtml';
+import EmptyState from '@/components/EmptyState';
 
 const ABOUT_KEY: Record<AboutRole, string> = {
   customer: 'about_customer',
@@ -30,7 +31,7 @@ export default function AboutContent({ role }: { role: AboutRole }) {
   if (!data || !data.contentHtml || !data.contentHtml.trim()) {
     return (
       <div className="card about-empty">
-        <p>暂无内容</p>
+        <EmptyState text="暂无内容" />
       </div>
     );
   }

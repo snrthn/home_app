@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { PortalNavSetter } from '@/components/PortalShell';
 import { useToast } from '@/components/Toast';
+import EmptyState from '@/components/EmptyState';
 
 export default function MasterIncomePage() {
   const router = useRouter();
@@ -56,9 +57,7 @@ export default function MasterIncomePage() {
         {/* 提现记录 */}
         <div className="card" style={{ marginTop: 14 }}>
           <div style={{ fontWeight: 600, marginBottom: 8 }}>提现记录</div>
-          <div className="field-hint" style={{ marginTop: 0 }}>
-            暂无提现记录
-          </div>
+          <EmptyState text="暂无提现记录" />
         </div>
       </div>
     </>

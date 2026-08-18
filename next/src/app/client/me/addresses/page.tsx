@@ -20,6 +20,7 @@ import {
 } from '@/lib/orders-api';
 import { QK } from '@/lib/query-keys';
 import { getApiErrorMsg } from '@/lib/api';
+import EmptyState from '@/components/EmptyState';
 
 const EMPTY_REGION: RegionValue = {
   province: null,
@@ -209,7 +210,7 @@ export default function AddressBookPage() {
           <p className="field-hint">加载中…</p>
         ) : list.length === 0 ? (
           <div className="card">
-            <p className="field-hint">还没有保存的地址，点击下方「新增地址」开始添加。</p>
+            <EmptyState text="还没有保存的地址，点击下方「新增地址」开始添加。" />
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

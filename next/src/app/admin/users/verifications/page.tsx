@@ -93,7 +93,7 @@ export default function VerificationPage() {
         <h2>认证审核</h2>
         <span className="page-sub">待审核师傅 {rows.length} 人</span>
       </div>
-      <div className="card">
+      <div className="card card--bare">
         <DataTable
           columns={columns}
           rows={rows}

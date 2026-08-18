@@ -347,7 +347,7 @@ export default function ServiceItemsPage() {
         </button>
       </div>
 
-      <div className="card" style={{ padding: 18 }}>
+      <div className="card card--bare">
         <p className="field-hint" style={{ marginTop: -4, marginBottom: 14 }}>
           服务项目挂在具体类目（业务域 → 子类目 → 具体服务）下，是客户下单时真正选择的对象。服务本身是「模板」，不绑定区域；下单时的可用性由「平台开通区域 ∩ 师傅接单范围 ∩ 客户下单地址」在运行时动态判定。价格在下单时快照进订单（serviceSnapshot），后续改价不影响历史订单；服务类型（工种）由所属业务域自动派生，用于派单与统计。
         </p>

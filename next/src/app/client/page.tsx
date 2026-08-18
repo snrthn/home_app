@@ -6,6 +6,7 @@ import { PortalNavSetter } from '@/components/PortalShell';
 import { getPublicServiceItems, type PublicServiceItem } from '@/lib/orders-api';
 import { QK } from '@/lib/query-keys';
 import { resolveAsset } from '@/lib/api';
+import EmptyState from '@/components/EmptyState';
 
 function ServiceCover({ item }: { item: PublicServiceItem }) {
   return (
@@ -71,7 +72,7 @@ export default function ClientHome() {
           <p className="field-hint">加载中…</p>
         ) : items.length === 0 ? (
           <div className="card">
-            <p className="field-hint">暂无可预约的服务项目。</p>
+            <EmptyState text="暂无可预约的服务项目。" />
           </div>
         ) : (
           <div

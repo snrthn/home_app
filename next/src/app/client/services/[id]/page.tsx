@@ -6,6 +6,7 @@ import { PortalNavSetter } from '@/components/PortalShell';
 import { getServiceItem } from '@/lib/orders-api';
 import { resolveAsset } from '@/lib/api';
 import SanitizedHtml from '@/components/admin/SanitizedHtml';
+import EmptyState from '@/components/EmptyState';
 
 export default function ServiceDetailPage() {
   const { id } = useParams();
@@ -42,7 +43,7 @@ export default function ServiceDetailPage() {
           <p className="field-hint">加载中…</p>
         ) : !item ? (
           <div className="card">
-            <p className="field-hint">未找到该服务，可能已下架。</p>
+            <EmptyState text="未找到该服务，可能已下架。" />
           </div>
         ) : (
           <>

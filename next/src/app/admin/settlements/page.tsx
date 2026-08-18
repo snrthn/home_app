@@ -130,8 +130,8 @@ export default function AdminSettlementsPage() {
 
   return (
     <>
-      <div className="page-head" style={{ marginBottom: 12 }}>
-        <h2 style={{ margin: 0, fontSize: 18 }}>结算台账</h2>
+      <div className="page-head">
+        <h2>结算台账</h2>
         <button type="button" className="btn-primary" style={{ marginLeft: 'auto' }} onClick={onSync} disabled={syncing}>
           {syncing ? '同步中…' : '同步台账'}
         </button>

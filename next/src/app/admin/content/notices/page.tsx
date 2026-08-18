@@ -373,7 +373,7 @@ export default function NoticesPage() {
             </div>
 
             {items.length === 0 && (
-              <div className="data-empty" style={{ background: '#fafbfc' }}>
+              <div className="data-empty" style={{ background: 'var(--row-head-bg)' }}>
                 该端暂无公告
               </div>
             )}

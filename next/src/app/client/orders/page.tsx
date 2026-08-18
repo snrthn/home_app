@@ -8,6 +8,7 @@ import { getMyOrders } from '@/lib/orders-api';
 import { QK } from '@/lib/query-keys';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE } from '@/lib/order-status';
 import { StatusBadge } from '@/components/admin/DataTable';
+import EmptyState from '@/components/EmptyState';
 
 export default function ClientOrdersPage() {
   const router = useRouter();
@@ -33,7 +34,7 @@ export default function ClientOrdersPage() {
           <p className="field-hint">加载中…</p>
         ) : orders.length === 0 ? (
           <div className="card">
-            <p className="field-hint">还没有订单，去首页看看推荐服务吧。</p>
+            <EmptyState text="还没有订单，去首页看看推荐服务吧。" />
           </div>
         ) : (
           <div className="order-grid">

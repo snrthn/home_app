@@ -12,6 +12,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { useOrderSocket } from '@/lib/useOrderSocket';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE } from '@/lib/order-status';
 import { StatusBadge } from '@/components/admin/DataTable';
+import EmptyState from '@/components/EmptyState';
 
 function addrLine(o: OrderLite) {
   const a = o.address;
@@ -73,7 +74,7 @@ export default function MasterPoolPage() {
           <p className="field-hint">加载中…</p>
         ) : pool.length === 0 ? (
           <div className="card">
-            <p className="field-hint" style={{ marginTop: 0, textAlign: 'center' }}>暂无待接订单，新订单会实时出现在这里。实时推送已开启。</p>
+            <EmptyState text="暂无待接订单，新订单会实时出现在这里。实时推送已开启。" />
           </div>
         ) : (
           <div className="order-grid">

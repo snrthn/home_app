@@ -20,6 +20,7 @@ import {
 import { QK } from '@/lib/query-keys';
 import DataTable, { type Column } from '@/components/admin/DataTable';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import EmptyState from '@/components/EmptyState';
 
 const disabledStyle = { opacity: 0.4, pointerEvents: 'none' } as const;
 
@@ -146,9 +147,7 @@ export default function RoleManagePage() {
         <div style={{ display: 'grid', gap: 16 }}>
           {groups.length === 0 && (
             <div className="card">
-              <p style={{ margin: 0, color: 'var(--color-text-soft)' }}>
-                暂无权限数据。
-              </p>
+              <EmptyState text="暂无权限数据。" />
             </div>
           )}
           {groups.map(([group, perms]) => (
@@ -281,7 +280,7 @@ export default function RoleManagePage() {
       <div className="page-head">
         <h2>角色权限</h2>
       </div>
-      <div className="card">
+      <div className="card card--bare">
         <div className="toolbar">
           <span style={{ color: 'var(--color-text-soft)' }}>
             管理后台账号的内部岗位角色与权限分配

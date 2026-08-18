@@ -433,7 +433,7 @@ export default function AgreementsPage() {
             </div>
 
             {items.length === 0 && (
-              <div className="data-empty" style={{ background: '#fafbfc' }}>
+              <div className="data-empty" style={{ background: 'var(--row-head-bg)' }}>
                 该端暂无协议类型
               </div>
             )}

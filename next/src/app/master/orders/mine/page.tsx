@@ -8,6 +8,7 @@ import { getMasterOrders } from '@/lib/orders-api';
 import { QK } from '@/lib/query-keys';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE } from '@/lib/order-status';
 import { StatusBadge } from '@/components/admin/DataTable';
+import EmptyState from '@/components/EmptyState';
 
 export default function MasterMinePage() {
   const router = useRouter();
@@ -34,7 +35,7 @@ export default function MasterMinePage() {
           <p className="field-hint">加载中…</p>
         ) : orders.length === 0 ? (
           <div className="card">
-            <p className="field-hint" style={{ textAlign: 'center' }}>还没有接单，去接单池看看吧。</p>
+            <EmptyState text="还没有接单，去接单池看看吧。" />
           </div>
         ) : (
           <div className="order-grid">

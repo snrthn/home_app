@@ -7,6 +7,7 @@ import { getAllOrders, type OrderLite } from '@/lib/orders-api';
 import { QK } from '@/lib/query-keys';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE } from '@/lib/order-status';
 import { StatusBadge } from '@/components/admin/DataTable';
+import EmptyState from '@/components/EmptyState';
 
 export default function AdminOrderDetailPage() {
   const { id } = useParams();
@@ -37,7 +38,7 @@ export default function AdminOrderDetailPage() {
         <p className="field-hint">加载中…</p>
       ) : !order ? (
         <div className="card">
-          <p className="field-hint">未找到该订单。</p>
+          <EmptyState text="未找到该订单。" />
         </div>
       ) : (
         <div className="admin-detail-grid">

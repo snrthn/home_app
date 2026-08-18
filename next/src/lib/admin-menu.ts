@@ -75,8 +75,8 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     icon: 'doc',
     children: [
       { key: 'all', label: '全部订单', path: '/admin/orders/all', perm: 'orders:read' },
-      { key: 'pending', label: '待接单', path: '/admin/orders/pending', perm: 'orders:read' },
-      { key: 'active', label: '进行中', path: '/admin/orders/active', perm: 'orders:read' },
+      { key: 'pending', label: '待接订单', path: '/admin/orders/pending', perm: 'orders:read' },
+      { key: 'active', label: '正在服务', path: '/admin/orders/active', perm: 'orders:read' },
       { key: 'refund', label: '退款/售后', path: '/admin/orders/refund', perm: 'orders:refund' },
     ],
   },
