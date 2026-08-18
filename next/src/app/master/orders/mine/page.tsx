@@ -3,7 +3,7 @@
 import { PortalNavSetter } from '@/components/PortalShell';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getMasterOrders } from '@/lib/orders-api';
 import { QK } from '@/lib/query-keys';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE } from '@/lib/order-status';
@@ -12,6 +12,7 @@ import EmptyState from '@/components/EmptyState';
 
 export default function MasterMinePage() {
   const router = useRouter();
+  const qc = useQueryClient();
   const { data: orders = [], isLoading } = useQuery({
     queryKey: QK.orderMaster,
     queryFn: () => getMasterOrders(),
@@ -28,7 +29,10 @@ export default function MasterMinePage() {
           if (window.history.length > 1) router.back();
           else router.push('/master');
         }}
-        menu={[{ label: '接单池', href: '/master/orders/pool' }]}
+        menu={[
+          { label: '接单池', href: '/master/orders/pool' },
+          { label: '刷新数据', dividerBefore: true, onClick: () => qc.invalidateQueries({ queryKey: QK.orderMaster }) },
+        ]}
       />
       <div className="laoma-container order-mod">
         {isLoading ? (

@@ -35,7 +35,8 @@ export interface NotifyResult {
 
 export interface RefundInput {
   tradeNo: string;
-  amount: number;
+  amount: number; // 本次退款金额（元），部分退款时小于订单原额
+  originalAmount?: number; // 订单原额（元）：微信退款需同时上报 refund/total，部分退款时必传
   reason?: string;
 }
 

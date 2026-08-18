@@ -50,34 +50,39 @@ function BrandHeader({ context }: { context: 'card' | 'page' }) {
         }}
       />
       <div className="relative">
-        {logoUrl ? (
-          <img
-            src={resolveAsset(logoUrl)}
-            alt={name}
-            className="mx-auto mb-4 h-16 w-16 rounded-full object-cover shadow-md"
-          />
-        ) : (
-          <div
-            className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full shadow-md"
-            style={{ background: 'var(--color-primary-weak)' }}
-            onDoubleClick={toggleFullscreen}
-            title="双击切换全屏"
-          >
-            <svg
-              className="h-9 w-9 text-white"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.8}
+        {/* 双击全屏：挂在 Logo 容器上，无论用配置 Logo 还是兜底图标都生效 */}
+        <div
+          className="mx-auto mb-4 h-16 w-16"
+          onDoubleClick={toggleFullscreen}
+          title="双击切换全屏"
+        >
+          {logoUrl ? (
+            <img
+              src={resolveAsset(logoUrl)}
+              alt={name}
+              className="h-16 w-16 rounded-full object-cover shadow-md"
+            />
+          ) : (
+            <div
+              className="flex h-16 w-16 items-center justify-center rounded-full shadow-md"
+              style={{ background: 'var(--color-primary-weak)' }}
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M13 10V3L4 14h7v7l9-11h-7z"
-              />
-            </svg>
-          </div>
-        )}
+              <svg
+                className="h-9 w-9 text-white"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1.8}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M13 10V3L4 14h7v7l9-11h-7z"
+                />
+              </svg>
+            </div>
+          )}
+        </div>
         <h1
           className="text-2xl font-bold tracking-tight"
           style={{ color: 'var(--color-primary-text)' }}

@@ -37,6 +37,13 @@ export interface OrderLite {
     detail: string;
   } | null;
   customer?: { phone?: string; profile?: { nickname?: string | null } } | null;
+  // 一单一评：列表/详情带出的本单评价（非空 = 已评价），供「去评价」按钮显隐与评价卡片渲染
+  review?: {
+    rating: number;
+    comment?: string | null;
+    anonymous?: boolean;
+    createdAt?: string;
+  } | null;
 }
 
 export interface ChargeResult {
@@ -60,8 +67,36 @@ export function getMyOrders(): Promise<OrderLite[]> {
 export function confirmOrder(id: string): Promise<OrderLite> {
   return api.post(`/orders/${id}/confirm`).then((r) => r.data);
 }
-export function cancelMyOrder(id: string): Promise<OrderLite> {
-  return api.post(`/orders/${id}/cancel`).then((r) => r.data);
+export function cancelMyOrder(id: string, reason: string): Promise<OrderLite> {
+  return api.post(`/orders/${id}/cancel`, { reason }).then((r) => r.data);
+}
+
+// ---------- 评价（客户对已完成订单） ----------
+export function createReview(dto: {
+  orderId: string;
+  rating: number;
+  comment?: string;
+  anonymous?: boolean;
+}): Promise<unknown> {
+  return api.post('/reviews', dto).then((r) => r.data);
+}
+
+// 管理端评价列表（GET /reviews，Admin 角色）
+export interface ReviewItem {
+  id: string;
+  rating: number;
+  comment?: string | null;
+  anonymous: boolean;
+  createdAt: string;
+  master?: {
+    realName?: string | null;
+    user?: { profile?: { nickname?: string | null } } | null;
+  } | null;
+  customer?: { profile?: { nickname?: string | null } } | null;
+  order?: { orderNo: string } | null;
+}
+export function getReviews(): Promise<ReviewItem[]> {
+  return api.get('/reviews').then((r) => r.data ?? []);
 }
 
 // ---------- 师傅端 ----------
@@ -78,6 +113,15 @@ export function getMasterOrders(city?: string): Promise<OrderLite[]> {
 export function grabOrder(id: string): Promise<OrderLite> {
   return api.post(`/orders/${id}/grab`).then((r) => r.data);
 }
+export function departOrder(id: string): Promise<OrderLite> {
+  return api.post(`/orders/${id}/depart`).then((r) => r.data);
+}
+export function arriveOrder(id: string, code: string): Promise<OrderLite> {
+  return api.post(`/orders/${id}/arrive`, { code }).then((r) => r.data);
+}
+export function generateArriveCode(id: string): Promise<{ code: string }> {
+  return api.post(`/orders/${id}/generate-arrive-code`).then((r) => r.data);
+}
 export function startOrder(id: string): Promise<OrderLite> {
   return api.post(`/orders/${id}/start`).then((r) => r.data);
 }
@@ -92,8 +136,8 @@ export function getAllOrders(): Promise<OrderLite[]> {
 export function assignOrder(id: string, masterId: string): Promise<OrderLite> {
   return api.post(`/orders/${id}/assign`, { masterId }).then((r) => r.data);
 }
-export function cancelOrderAdmin(id: string): Promise<OrderLite> {
-  return api.post(`/orders/${id}/cancel`).then((r) => r.data);
+export function cancelOrderAdmin(id: string, reason: string): Promise<OrderLite> {
+  return api.post(`/orders/${id}/cancel`, { reason }).then((r) => r.data);
 }
 
 // ---------- 支付（平台托管 + 模拟回调） ----------

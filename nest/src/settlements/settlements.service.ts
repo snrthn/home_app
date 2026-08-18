@@ -18,7 +18,7 @@ export class SettlementsService {
   // 对已验收（托管金释放）且未生成台账的生成记录（幂等）。平台不参与分账，全额给师傅。
   async syncForPaidOrders() {
     const paidOrders = await this.prisma.order.findMany({
-      where: { status: 'reviewed' },
+      where: { status: { in: ['reviewed', 'evaluated'] } },
     });
     const created = [];
     for (const o of paidOrders) {

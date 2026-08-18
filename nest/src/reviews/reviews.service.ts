@@ -27,8 +27,8 @@ export class ReviewsService {
     if (order.customerId !== customerId)
       throw new ForbiddenException('无权评价');
     // 支付前置模型：验收(confirm)是资金释放唯一终态入口（PendingConfirm→Reviewed + 释放托管金）。
-    // 评价模块依附于「已确认验收」的订单，自身不再修改订单状态，避免与 orders.confirm 形成双入口
-    // （双入口会导致一方置 Reviewed 但未走 confirm，托管金永不释放）。
+    // 评价仅在 Reviewed 之上追加纯展示流转（Reviewed→Evaluated 已评价标记），不碰资金，
+    // 不会形成双入口（托管金释放在 confirm 内完成，与本流转无关）。
     if (order.status !== OrderStatus.Reviewed)
       throw new BadRequestException('请先在订单中确认验收，再评价');
     const existed = await this.prisma.review.findUnique({
@@ -44,6 +44,21 @@ export class ReviewsService {
         rating: dto.rating,
         comment: dto.comment,
         anonymous: dto.anonymous ?? false,
+      },
+    });
+
+    // 评价完成 → 订单置「已评价」（evaluated），便于列表过滤与展示区分
+    await this.prisma.order.update({
+      where: { id: dto.orderId },
+      data: { status: OrderStatus.Evaluated },
+    });
+    await this.prisma.orderLog.create({
+      data: {
+        orderId: dto.orderId,
+        action: 'review',
+        fromStatus: OrderStatus.Reviewed,
+        toStatus: OrderStatus.Evaluated,
+        note: `客户评价 ${dto.rating} 星${dto.anonymous ? '（匿名）' : ''}`,
       },
     });
 
@@ -69,7 +84,11 @@ export class ReviewsService {
 
   async listAll() {
     return this.prisma.review.findMany({
-      include: { master: { include: { user: { include: { profile: { select: { nickname: true } } } } } } },
+      include: {
+        master: { include: { user: { include: { profile: { select: { nickname: true } } } } } },
+        customer: { select: { profile: { select: { nickname: true } } } },
+        order: { select: { orderNo: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }

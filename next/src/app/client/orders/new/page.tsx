@@ -159,6 +159,8 @@ function NewOrderForm() {
                           ? '1px solid var(--color-primary)'
                           : '1px solid #eef0f2',
                       borderRadius: 'var(--radius)',
+                      padding: '13px 12px',
+                      textAlign: 'left',
                     }}
                   >
                     <span className="cell-label">{it.name}</span>
@@ -281,6 +283,8 @@ function NewOrderForm() {
                       ? '1px solid var(--color-primary)'
                       : '1px solid #eef0f2',
                   borderRadius: 'var(--radius)',
+                  padding: '13px 12px',
+                  textAlign: 'left',
                 }}
               >
                 <span className="cell-label">

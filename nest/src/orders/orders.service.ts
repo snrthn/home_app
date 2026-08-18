@@ -26,6 +26,8 @@ function genOrderNo() {
 const POST_PAY_STATES = [
   OrderStatus.PendingAccept,
   OrderStatus.Accepted,
+  OrderStatus.Departing,
+  OrderStatus.Arrived,
   OrderStatus.Servicing,
   OrderStatus.PendingConfirm,
 ];
@@ -91,14 +93,24 @@ export class OrdersService {
           },
         },
         address: true,
+        // 一单一评（orderId unique）：带上评价供前端判断是否已评价、渲染评价卡片
+        review: {
+          select: { rating: true, comment: true, anonymous: true, createdAt: true },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
   }
 
   async pool(city?: string) {
+    // masterId:null 与抢单乐观锁条件对齐：抢单先占 masterId 再流转，
+    // 中途异常会留下 PendingAccept+已占 的孤儿单，池子里不该再展示
     return this.prisma.order.findMany({
-      where: { status: OrderStatus.PendingAccept, ...(city ? { city } : {}) },
+      where: {
+        status: OrderStatus.PendingAccept,
+        masterId: null,
+        ...(city ? { city } : {}),
+      },
       include: { serviceItem: true, address: true },
     });
   }
@@ -111,6 +123,10 @@ export class OrdersService {
         serviceItem: true,
         address: true,
         customer: { select: { phone: true, profile: { select: { nickname: true } } } },
+        // 师傅视角的订单评价（客户对本单的评分/评论；select 不含 customerId，匿名与否由前端按 anonymous 标记处理）
+        review: {
+          select: { rating: true, comment: true, anonymous: true, createdAt: true },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -184,6 +200,58 @@ export class OrdersService {
     );
   }
 
+  /** 师傅出发上门：已接单 → 出发上门中 */
+  async depart(orderId: string, userId: string) {
+    const mid = await this.masterIdOf(userId);
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (order?.masterId !== mid)
+      throw new ForbiddenException('只能操作自己接的单');
+    return this.transition(orderId, OrderStatus.Departing, userId, '师傅出发上门');
+  }
+
+  /** 客户生成到达验证码：师傅出发后，客户生成 6 位码供师傅到现场输入 */
+  async generateArriveCode(orderId: string, userId: string) {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new NotFoundException('订单不存在');
+    if (order.customerId !== userId)
+      throw new ForbiddenException('无权操作该订单');
+    if (order.status !== OrderStatus.Departing)
+      throw new BadRequestException('师傅出发后才能生成到达验证码');
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    await this.prisma.order.update({
+      where: { id: orderId },
+      data: { arriveCode: code },
+    });
+    return { code };
+  }
+
+  /** 师傅确认到达：输入客户出示的验证码，校验通过后 departing → arrived */
+  async arrive(orderId: string, userId: string, code: string) {
+    const mid = await this.masterIdOf(userId);
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new NotFoundException('订单不存在');
+    if (order.masterId !== mid)
+      throw new ForbiddenException('只能操作自己接的单');
+    if (order.status !== OrderStatus.Departing)
+      throw new BadRequestException('当前状态不可确认到达');
+    if (!order.arriveCode)
+      throw new BadRequestException('客户尚未生成到达验证码，请提醒客户生成');
+    if (order.arriveCode !== code.trim())
+      throw new BadRequestException('验证码不正确');
+    const updated = await this.transition(
+      orderId,
+      OrderStatus.Arrived,
+      userId,
+      '师傅确认到达（验证码校验通过）',
+    );
+    // 验证通过后清除验证码（一次性消费）
+    await this.prisma.order.update({
+      where: { id: orderId },
+      data: { arriveCode: null },
+    });
+    return updated;
+  }
+
   async startService(orderId: string, userId: string) {
     const mid = await this.masterIdOf(userId);
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
@@ -221,8 +289,19 @@ export class OrdersService {
     return updated;
   }
 
-  /** 取消：支付前取消无退款；支付后取消走退款（refunding → refunded） */
-  async cancel(orderId: string, userId: string, isAdmin = false) {
+  /** 取消：支付前取消无退款；支付后取消走退款（refunding → refunded）。
+   *  阶梯退款：师傅已出发(departing)取消退 80%；已到达(arrived)取消退 50%；其余支付后阶段全额退。
+   */
+  private refundRatioOf(status: OrderStatus): number {
+    if (status === OrderStatus.Departing) return 0.8;
+    if (status === OrderStatus.Arrived) return 0.5;
+    return 1;
+  }
+
+  /** 取消：需填写取消原因（必填，写入 orderLog）；支付前取消无退款；支付后取消走阶梯退款 */
+  async cancel(orderId: string, userId: string, isAdmin = false, reason = '') {
+    const r = (reason ?? '').trim();
+    if (!r) throw new BadRequestException('请填写取消原因');
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order) throw new NotFoundException('订单不存在');
     const isCustomer = order.customerId === userId;
@@ -232,10 +311,16 @@ export class OrdersService {
       throw new ForbiddenException('无权取消该订单');
 
     if (POST_PAY_STATES.includes(order.status as OrderStatus)) {
-      await this.transition(orderId, OrderStatus.Refunding, userId, '取消（发起退款）');
-      await this.payments.refund(order.customerId, orderId);
+      const ratio = this.refundRatioOf(order.status as OrderStatus);
+      await this.transition(
+        orderId,
+        OrderStatus.Refunding,
+        userId,
+        `取消（发起退款）｜原因：${r}`,
+      );
+      await this.payments.refund(order.customerId, orderId, ratio);
       return this.prisma.order.findUnique({ where: { id: orderId } });
     }
-    return this.transition(orderId, OrderStatus.Cancelled, userId, '取消');
+    return this.transition(orderId, OrderStatus.Cancelled, userId, `取消｜原因：${r}`);
   }
 }

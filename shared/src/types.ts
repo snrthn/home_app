@@ -10,9 +10,12 @@ export enum OrderStatus {
   PendingPayment = 'pending_payment', // 待支付（下单后初始态，平台托管前）
   PendingAccept = 'pending_accept', // 待接单（已支付，资金进入平台托管）
   Accepted = 'accepted', // 已接单
+  Departing = 'departing', // 出发上门中（师傅已出发，前往客户地址）
+  Arrived = 'arrived', // 已到达（师傅到达现场，客户验证码确认）
   Servicing = 'servicing', // 服务中
   PendingConfirm = 'pending_confirm', // 待验收（师傅完成，待客户确认）
-  Reviewed = 'reviewed', // 已评价（终态，托管金已释放给师傅）
+  Reviewed = 'reviewed', // 已完成（客户已验收、托管金已释放，待客户评价）
+  Evaluated = 'evaluated', // 已评价（客户评价后的终态，纯展示标记，不涉及资金）
   Refunding = 'refunding', // 退款中（支付后取消触发）
   Refunded = 'refunded', // 已退款（终态）
   Cancelled = 'cancelled', // 已取消（仅支付前取消，无退款）
@@ -45,17 +48,21 @@ export interface JwtPayload {
 // 订单状态流转白名单（状态机校验用）
 // 支付前置 + 平台担保托管模型：
 //  创建 → 待支付(pending_payment) → 支付成功(平台托管) → 待接单(pending_accept)
-//  → 接单(accepted) → 服务中(servicing) → 待验收(pending_confirm)
-//  → 客户确认(reviewed，托管金释放给师傅)
+//  → 接单(accepted) → 出发上门(departing) → 已到达(arrived) → 服务中(servicing)
+//  → 待验收(pending_confirm) → 客户确认(reviewed，托管金释放给师傅)
 //  支付后任意阶段取消 → 退款中(refunding) → 已退款(refunded)
 //  仅「待支付」阶段取消 = 无退款(cancelled)
 export const ORDER_STATUS_FLOW: Record<OrderStatus, OrderStatus[]> = {
   [OrderStatus.PendingPayment]: [OrderStatus.PendingAccept, OrderStatus.Cancelled],
   [OrderStatus.PendingAccept]: [OrderStatus.Accepted, OrderStatus.Refunding],
-  [OrderStatus.Accepted]: [OrderStatus.Servicing, OrderStatus.Refunding],
+  [OrderStatus.Accepted]: [OrderStatus.Departing, OrderStatus.Refunding],
+  [OrderStatus.Departing]: [OrderStatus.Arrived, OrderStatus.Refunding],
+  [OrderStatus.Arrived]: [OrderStatus.Servicing, OrderStatus.Refunding],
   [OrderStatus.Servicing]: [OrderStatus.PendingConfirm, OrderStatus.Refunding],
   [OrderStatus.PendingConfirm]: [OrderStatus.Reviewed, OrderStatus.Refunding],
-  [OrderStatus.Reviewed]: [],
+  // 评价流转：Reviewed(已完成/待评价) → Evaluated(已评价)。资金释放仍只走 confirm 单一入口。
+  [OrderStatus.Reviewed]: [OrderStatus.Evaluated],
+  [OrderStatus.Evaluated]: [],
   [OrderStatus.Refunding]: [OrderStatus.Refunded],
   [OrderStatus.Refunded]: [],
   [OrderStatus.Cancelled]: [],

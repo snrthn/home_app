@@ -4,20 +4,24 @@ import { useState } from 'react';
 import { PortalNavSetter } from '@/components/PortalShell';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getMyOrders, payByMock, confirmOrder, cancelMyOrder } from '@/lib/orders-api';
+import { getMyOrders, payByMock, confirmOrder, cancelMyOrder, generateArriveCode, createReview } from '@/lib/orders-api';
 import { QK } from '@/lib/query-keys';
 import { getApiErrorMsg, resolveAsset } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { Modal } from '@/components/Modal';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE, type OrderStatus } from '@/lib/order-status';
 import { StatusBadge } from '@/components/admin/DataTable';
 import EmptyState from '@/components/EmptyState';
+import { useOrderSocket } from '@/lib/useOrderSocket';
 
 // 可取消的状态：支付前取消无退款；支付后取消走退款
 const CANCELABLE: OrderStatus[] = [
   'pending_payment',
   'pending_accept',
   'accepted',
+  'departing',
+  'arrived',
   'servicing',
   'pending_confirm',
 ];
@@ -29,9 +33,19 @@ export default function ClientOrderDetailPage() {
   const toast = useToast();
   const qc = useQueryClient();
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelling, setCancelling] = useState(false);
   const [payOpen, setPayOpen] = useState(false);
   const [paying, setPaying] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [arriveCode, setArriveCode] = useState<string | null>(null);
+  const [generatingCode, setGeneratingCode] = useState(false);
+  const [codeOpen, setCodeOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [reviewAnonymous, setReviewAnonymous] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
 
   const { data: orders = [], isLoading } = useQuery({
     queryKey: QK.orderMine,
@@ -41,6 +55,14 @@ export default function ClientOrderDetailPage() {
   const order = orders.find((o) => o.id === id);
 
   const refresh = () => qc.invalidateQueries({ queryKey: QK.orderMine });
+  const refreshMenu = [{ label: '刷新数据', onClick: refresh }];
+
+  // 实时推送：师傅端流转（接单/出发/到达/开始/完成）或退款完成时，本单自动刷新
+  useOrderSocket({
+    onOrderUpdate: (o: any) => {
+      if (o?.id === id) refresh();
+    },
+  });
 
   const onPay = () => setPayOpen(true);
   const onPayConfirm = async () => {
@@ -67,9 +89,27 @@ export default function ClientOrderDetailPage() {
       toast.error(getApiErrorMsg(e));
     }
   };
-  const confirmCancel = async () => {
+  const onGenerateArriveCode = async () => {
+    setGeneratingCode(true);
     try {
-      await cancelMyOrder(id);
+      const res = await generateArriveCode(id);
+      setArriveCode(res.code);
+      setCodeOpen(true);
+    } catch (e: any) {
+      toast.error(getApiErrorMsg(e));
+    } finally {
+      setGeneratingCode(false);
+    }
+  };
+  const confirmCancel = async () => {
+    const reason = cancelReason.trim();
+    if (!reason) {
+      toast.error('请填写取消原因');
+      return;
+    }
+    setCancelling(true);
+    try {
+      await cancelMyOrder(id, reason);
       toast.success('订单已取消');
       setCancelOpen(false);
       refresh();
@@ -77,6 +117,34 @@ export default function ClientOrderDetailPage() {
     } catch (e: any) {
       setCancelOpen(false);
       toast.error(getApiErrorMsg(e));
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  // 阶梯退款文案：与后端 orders.cancel 的 refundRatioOf 保持一致
+  const refundRatioText = (status: OrderStatus): string => {
+    if (status === 'departing') return '因师傅已出发，已支付金额的 80% 将原路退回';
+    if (status === 'arrived') return '因师傅已到达现场，已支付金额的 50% 将原路退回';
+    return '已支付的托管金将全额原路退回';
+  };
+
+  const onSubmitReview = async () => {
+    setReviewing(true);
+    try {
+      await createReview({
+        orderId: id,
+        rating: reviewRating,
+        comment: reviewComment.trim() || undefined,
+        anonymous: reviewAnonymous || undefined,
+      });
+      toast.success('评价成功，感谢您的反馈');
+      setReviewOpen(false);
+      refresh();
+    } catch (e: any) {
+      toast.error(getApiErrorMsg(e));
+    } finally {
+      setReviewing(false);
     }
   };
 
@@ -84,6 +152,7 @@ export default function ClientOrderDetailPage() {
   title="订单详情"
   showBack
   backHref="/client/orders"
+  menu={refreshMenu}
   onBack={() => {
     if (window.history.length > 1) router.back();
     else router.push('/client/orders');
@@ -93,6 +162,7 @@ export default function ClientOrderDetailPage() {
   title="订单详情"
   showBack
   backHref="/client/orders"
+  menu={refreshMenu}
   onBack={() => {
     if (window.history.length > 1) router.back();
     else router.push('/client/orders');
@@ -110,6 +180,7 @@ export default function ClientOrderDetailPage() {
   title="订单详情"
   showBack
   backHref="/client/orders"
+  menu={refreshMenu}
   onBack={() => {
     if (window.history.length > 1) router.back();
     else router.push('/client/orders');
@@ -228,6 +299,18 @@ export default function ClientOrderDetailPage() {
               <span className="field-inline-value">{order.remark}</span>
             </div>
           )}
+          {order.status === 'departing' && (
+            <div className="field-inline-row">
+              <span className="field-label">流转状态</span>
+              <span className="field-inline-value" style={{ color: 'var(--color-danger)' }}>师傅已出发，正在前往您的地址</span>
+            </div>
+          )}
+          {order.status === 'arrived' && (
+            <div className="field-inline-row">
+              <span className="field-label">流转状态</span>
+              <span className="field-inline-value" style={{ color: 'var(--color-danger)' }}>师傅已到达现场，正在准备服务</span>
+            </div>
+          )}
           {(order.status === 'refunding' || order.status === 'refunded' || order.status === 'cancelled') && (
             <div className="field-inline-row">
               <span className="field-label">流转状态</span>
@@ -269,10 +352,53 @@ export default function ClientOrderDetailPage() {
           </div>
         )}
 
+        {order.review && (
+          <div className="card" style={{ marginTop: 14 }}>
+            <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>我的评价</div>
+            <div className="field-inline-row">
+              <span className="field-label">评分</span>
+              <span className="field-inline-value" style={{ color: '#f5a623', letterSpacing: 2 }}>
+                {'★'.repeat(order.review.rating)}
+                <span style={{ color: 'var(--color-muted)' }}>{'★'.repeat(5 - order.review.rating)}</span>
+              </span>
+            </div>
+            {order.review.comment && (
+              <div className="field-inline-row">
+                <span className="field-label">评价内容</span>
+                <span className="field-inline-value">{order.review.comment}</span>
+              </div>
+            )}
+            {order.review.anonymous && (
+              <div className="field-inline-row">
+                <span className="field-label">评价方式</span>
+                <span className="field-inline-value">匿名评价</span>
+              </div>
+            )}
+            {order.review.createdAt && (
+              <div className="field-inline-row">
+                <span className="field-label">评价时间</span>
+                <span className="field-inline-value">
+                  {new Date(order.review.createdAt).toLocaleString('zh-CN', { hour12: false })}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
           {order.status === 'pending_payment' && (
             <button type="button" className="btn-primary" onClick={onPay}>
               去支付（模拟）
+            </button>
+          )}
+          {order.status === 'departing' && (
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => (arriveCode ? setCodeOpen(true) : onGenerateArriveCode())}
+              disabled={generatingCode}
+            >
+              {generatingCode ? '生成中…' : arriveCode ? '查看到达验证码' : '生成到达验证码'}
             </button>
           )}
           {order.status === 'pending_confirm' && (
@@ -280,26 +406,79 @@ export default function ClientOrderDetailPage() {
               确认验收
             </button>
           )}
+          {(order.status === 'reviewed' || order.status === 'evaluated') && !order.review && (
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => {
+                setReviewRating(5);
+                setReviewComment('');
+                setReviewAnonymous(false);
+                setReviewOpen(true);
+              }}
+            >
+              去评价
+            </button>
+          )}
           {CANCELABLE.includes(order.status) && (
-            <button type="button" className="btn-danger" onClick={() => setCancelOpen(true)}>
+            <button
+              type="button"
+              className="btn-danger"
+              onClick={() => {
+                setCancelReason('');
+                setCancelOpen(true);
+              }}
+            >
               {order.status === 'pending_payment' ? '取消订单' : '申请取消（退款）'}
             </button>
           )}
         </div>
       </div>
 
-      <ConfirmDialog
+      <Modal
         open={cancelOpen}
-        title="取消订单确认"
-        message={
-          order.status === 'pending_payment'
-            ? `订单「${order.orderNo}」尚未支付，取消后不产生退款。确定取消吗？`
-            : `订单「${order.orderNo}」当前为「${ORDER_STATUS_LABEL[order.status]}」，取消后已支付的托管金将原路退回，资金状态以平台为准。确定取消吗？`
+        onClose={() => {
+          if (!cancelling) setCancelOpen(false);
+        }}
+        title="取消订单"
+        footer={
+          <>
+            <button type="button" className="btn-secondary" onClick={() => setCancelOpen(false)} disabled={cancelling}>
+              再想想
+            </button>
+            <button
+              type="button"
+              className="btn-danger"
+              onClick={confirmCancel}
+              disabled={cancelling || !cancelReason.trim()}
+            >
+              {cancelling ? '取消中…' : '确认取消'}
+            </button>
+          </>
         }
-        confirmLabel="确认取消"
-        onConfirm={confirmCancel}
-        onCancel={() => setCancelOpen(false)}
-      />
+      >
+        <p style={{ marginTop: 0 }}>
+          {order.status === 'pending_payment'
+            ? `订单「${order.orderNo}」尚未支付，取消后不产生退款。`
+            : `订单「${order.orderNo}」当前为「${ORDER_STATUS_LABEL[order.status]}」，${refundRatioText(order.status)}，资金状态以平台为准。`}
+        </p>
+        <label className="field-label" htmlFor="cancel-reason">
+          取消原因 <span style={{ color: 'var(--color-danger)' }}>*</span>
+        </label>
+        <textarea
+          id="cancel-reason"
+          className="input"
+          value={cancelReason}
+          maxLength={200}
+          placeholder="请填写取消原因，如：临时不需要了 / 时间冲突 / 与师傅沟通后取消…"
+          onChange={(e) => setCancelReason(e.target.value)}
+          disabled={cancelling}
+          style={{ width: '100%', minHeight: 80, resize: 'vertical' }}
+        />
+        <p className="field-hint" style={{ margin: '6px 0 0' }}>
+          取消原因将记录在订单日志中，便于后续追溯（必填，200 字以内）
+        </p>
+      </Modal>
 
       <ConfirmDialog
         open={payOpen}
@@ -312,6 +491,30 @@ export default function ClientOrderDetailPage() {
           if (!paying) setPayOpen(false);
         }}
       />
+      <Modal
+        open={codeOpen}
+        onClose={() => setCodeOpen(false)}
+        title="到达验证码"
+        footer={
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={() => {
+              setCodeOpen(false);
+              refresh();
+            }}
+          >
+            确定
+          </button>
+        }
+      >
+        <p style={{ marginTop: 0 }}>师傅到达现场后，请当面出示以下验证码供师傅核验：</p>
+        <div className="arrive-code-display">{arriveCode}</div>
+        <p className="field-hint" style={{ textAlign: 'center' }}>
+          请勿通过聊天或电话提前告知，防止未到场先核验
+        </p>
+      </Modal>
+
       <ConfirmDialog
         open={confirmOpen}
         title="确认验收"
@@ -323,6 +526,74 @@ export default function ClientOrderDetailPage() {
         }}
         onCancel={() => setConfirmOpen(false)}
       />
+
+      <Modal
+        open={reviewOpen}
+        onClose={() => {
+          if (!reviewing) setReviewOpen(false);
+        }}
+        title="评价本次服务"
+        footer={
+          <>
+            <button type="button" className="btn-secondary" onClick={() => setReviewOpen(false)} disabled={reviewing}>
+              取消
+            </button>
+            <button type="button" className="btn-primary" onClick={onSubmitReview} disabled={reviewing || reviewRating < 1}>
+              {reviewing ? '提交中…' : '提交评价'}
+            </button>
+          </>
+        }
+      >
+        <p style={{ marginTop: 0 }}>
+          订单「{order.orderNo}」已完成，{order.master ? `师傅「${order.master.realName ?? order.master.user?.profile?.nickname ?? '-'}」` : ''}
+          服务还满意吗？打个分吧～
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, margin: '16px 0' }}>
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              type="button"
+              aria-label={`${n} 星`}
+              onClick={() => setReviewRating(n)}
+              style={{
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                fontSize: 30,
+                lineHeight: 1,
+                color: n <= reviewRating ? '#f5a623' : 'var(--color-muted)',
+              }}
+              disabled={reviewing}
+            >
+              ★
+            </button>
+          ))}
+        </div>
+        <label className="field-label" htmlFor="review-comment">服务评价（选填）</label>
+        <textarea
+          id="review-comment"
+          className="input"
+          rows={3}
+          maxLength={200}
+          placeholder="说说师傅的服务态度、专业程度吧～"
+          value={reviewComment}
+          onChange={(e) => setReviewComment(e.target.value)}
+          disabled={reviewing}
+          style={{ resize: 'vertical' }}
+        />
+        <label
+          style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, cursor: 'pointer', fontSize: 13 }}
+        >
+          <input
+            type="checkbox"
+            checked={reviewAnonymous}
+            onChange={(e) => setReviewAnonymous(e.target.checked)}
+            disabled={reviewing}
+          />
+          匿名评价
+        </label>
+      </Modal>
     </>
   );
 }

@@ -153,8 +153,10 @@ export class PaymentsService {
     this.gateway?.broadcastNewOrder(updated);
   }
 
-  /** 退款：支付后取消时调用，退款完成后置「已退款」 */
-  async refund(customerId: string, orderId: string) {
+  /** 退款：支付后取消时调用，退款完成后置「已退款」。
+   *  ratio 为退款比例（0~1）：departing 取消退 80%、arrived 取消退 50%、其余 1（全额）。
+   */
+  async refund(customerId: string, orderId: string, ratio = 1) {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order) throw new NotFoundException('订单不存在');
     if (order.customerId !== customerId)
@@ -165,13 +167,17 @@ export class PaymentsService {
     if (!REFUNDABLE_STATES.includes(order.status as OrderStatus))
       throw new BadRequestException('该订单当前不可退款');
 
+    // 阶梯退款金额：按比例实退，四舍五入到分
+    const refundAmount = Math.round(Number(order.amount) * ratio * 100) / 100;
+
     const pay = await this.prisma.payment.findFirst({
       where: { orderId, status: 'paid' },
     });
     const provider = await this.getProvider();
     const refundRes = await provider.refund({
       tradeNo: pay?.id ?? orderId,
-      amount: Number(order.amount),
+      amount: refundAmount,
+      originalAmount: Number(order.amount),
       reason: '订单取消退款',
     });
 
@@ -179,17 +185,20 @@ export class PaymentsService {
       where: { orderId },
       data: { status: 'refunded' },
     });
-    await this.prisma.order.update({
+    const refundedOrder = await this.prisma.order.update({
       where: { id: orderId },
       data: { status: OrderStatus.Refunded },
     });
+    // 退款完成不走 orders.transition，需手动广播，双端详情页才能实时看到「已退款」
+    this.gateway?.broadcastOrderUpdate(refundedOrder);
+    const noteRatio = ratio < 1 ? `（实退 ${Math.round(ratio * 100)}%）` : '';
     await this.prisma.orderLog.create({
       data: {
         orderId,
         action: 'refund',
         fromStatus: order.status as OrderStatus,
         toStatus: OrderStatus.Refunded,
-        note: '退款完成 ' + refundRes.refundNo,
+        note: `退款完成 ¥${refundAmount.toFixed(2)}${noteRatio} ` + refundRes.refundNo,
       },
     });
   }

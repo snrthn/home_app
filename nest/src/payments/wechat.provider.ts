@@ -123,12 +123,14 @@ export class WechatPaymentProvider implements PaymentProvider {
   async refund(input: RefundInput): Promise<RefundResult> {
     const path = '/v3/refund/domestic/refunds';
     const outRefundNo = 'ref_' + input.tradeNo + '_' + Date.now();
-    const total = Math.round(input.amount * 100);
+    // 微信要求 refund(退款额) ≤ total(订单原额)：部分退款时二者不同，全额退款相等
+    const total = Math.round((input.originalAmount ?? input.amount) * 100);
+    const refund = Math.round(input.amount * 100);
     const bodyObj = {
       out_trade_no: input.tradeNo,
       out_refund_no: outRefundNo,
       reason: input.reason ?? '订单取消退款',
-      amount: { refund: total, total, currency: 'CNY' },
+      amount: { refund, total, currency: 'CNY' },
     };
     const body = JSON.stringify(bodyObj);
     const res = await fetch(WX_API + path, {

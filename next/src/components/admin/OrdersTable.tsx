@@ -12,7 +12,7 @@ import { useEscClose } from '@/lib/useEscClose';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE, type OrderStatus } from '@/lib/order-status';
 import DataTable, { type Column } from '@/components/admin/DataTable';
 import { StatusBadge } from '@/components/admin/DataTable';
-import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { Modal } from '@/components/Modal';
 
 // 管理端可指派的状态（尚未分配给具体师傅）
 const ASSIGNABLE = new Set<OrderStatus>(['pending_payment', 'pending_accept']);
@@ -21,6 +21,8 @@ const CANCELABLE = new Set<OrderStatus>([
   'pending_payment',
   'pending_accept',
   'accepted',
+  'departing',
+  'arrived',
   'servicing',
   'pending_confirm',
 ]);
@@ -57,6 +59,7 @@ export default function OrdersTable({
   const [selectedMasterId, setSelectedMasterId] = useState('');
   const [acting, setActing] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<OrderLite | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
 
   const openAssign = async (o: OrderLite) => {
     setAssignTarget(o);
@@ -87,12 +90,20 @@ export default function OrdersTable({
   };
 
   // ---- 取消 ----
-  const onCancelClick = (o: OrderLite) => setCancelTarget(o);
+  const onCancelClick = (o: OrderLite) => {
+    setCancelTarget(o);
+    setCancelReason('');
+  };
   const confirmCancel = async () => {
     if (!cancelTarget) return;
+    const reason = cancelReason.trim();
+    if (!reason) {
+      toast.error('请填写取消原因');
+      return;
+    }
     setActing(true);
     try {
-      await cancelOrderAdmin(cancelTarget.id);
+      await cancelOrderAdmin(cancelTarget.id, reason);
       toast.success('订单已取消');
       setCancelTarget(null);
       refresh();
@@ -166,9 +177,6 @@ export default function OrdersTable({
                 取消
               </button>
             )}
-            {!ASSIGNABLE.has(o.status) && !CANCELABLE.has(o.status) && (
-              <span className="field-hint">—</span>
-            )}
           </div>
         ),
       },
@@ -232,15 +240,58 @@ export default function OrdersTable({
         </div>
       )}
 
-      <ConfirmDialog
+      <Modal
         open={!!cancelTarget}
+        onClose={() => {
+          if (!acting) setCancelTarget(null);
+        }}
         title="取消订单"
-        message={`确定取消订单 ${cancelTarget?.orderNo ?? ''} 吗？取消后订单将关闭${cancelTarget?.status && cancelTarget.status !== 'pending_payment' ? '，若已支付将发起退款' : '（未支付，无退款）'}。`}
-        confirmLabel="确认取消"
-        loading={acting}
-        onCancel={() => setCancelTarget(null)}
-        onConfirm={confirmCancel}
-      />
+        footer={
+          <>
+            <button type="button" className="btn-secondary" onClick={() => setCancelTarget(null)} disabled={acting}>
+              再想想
+            </button>
+            <button
+              type="button"
+              className="btn-danger"
+              onClick={confirmCancel}
+              disabled={acting || !cancelReason.trim()}
+            >
+              {acting ? '取消中…' : '确认取消'}
+            </button>
+          </>
+        }
+      >
+        <p style={{ marginTop: 0 }}>
+          确定取消订单 {cancelTarget?.orderNo ?? ''} 吗？取消后订单将关闭
+          {cancelTarget?.status && cancelTarget.status !== 'pending_payment'
+            ? `，${
+                cancelTarget.status === 'departing'
+                  ? '师傅已出发，将退款 80%'
+                  : cancelTarget.status === 'arrived'
+                    ? '师傅已到达，将退款 50%'
+                    : '若已支付将全额退款'
+              }`
+            : '（未支付，无退款）'}
+          。
+        </p>
+        <label className="field-label" htmlFor="admin-cancel-reason">
+          取消原因 <span style={{ color: 'var(--color-danger)' }}>*</span>
+        </label>
+        <textarea
+          id="admin-cancel-reason"
+          className="input"
+          value={cancelReason}
+          maxLength={200}
+          placeholder="请填写取消原因，如：客户申请取消 / 师傅无法履约 / 风险订单管控…"
+          onChange={(e) => setCancelReason(e.target.value)}
+          disabled={acting}
+          style={{ width: '100%', minHeight: 80, resize: 'vertical' }}
+        />
+        <p className="field-hint" style={{ margin: '6px 0 0' }}>
+          取消原因将记录在订单日志中，便于后续追溯（必填，200 字以内）
+        </p>
+      </Modal>
     </>
   );
 }

@@ -5,9 +5,12 @@ export type OrderStatus =
   | 'pending_payment' // 待支付（下单后初始态，资金尚未进入平台托管）
   | 'pending_accept' // 待接单（已支付，资金在平台托管，等待师傅抢单）
   | 'accepted' // 已接单
+  | 'departing' // 出发上门中（师傅已出发，前往客户地址）
+  | 'arrived' // 已到达（师傅到达现场，待客户验证码确认）
   | 'servicing' // 服务中
   | 'pending_confirm' // 待验收
   | 'reviewed' // 已完成（客户验收，托管金已释放给师傅）
+  | 'evaluated' // 已评价（客户完成评价，终态）
   | 'refunding' // 退款中
   | 'refunded' // 已退款（终态）
   | 'cancelled'; // 已取消（仅支付前取消，无退款，终态）
@@ -16,9 +19,12 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   pending_payment: '待支付',
   pending_accept: '待接单',
   accepted: '已接单',
+  departing: '出发上门中',
+  arrived: '已到达',
   servicing: '服务中',
   pending_confirm: '待验收',
   reviewed: '已完成',
+  evaluated: '已评价',
   refunding: '退款中',
   refunded: '已退款',
   cancelled: '已取消',
@@ -32,9 +38,12 @@ export const ORDER_STATUS_TONE: Record<
   pending_payment: 'orange',
   pending_accept: 'blue',
   accepted: 'blue',
+  departing: 'blue',
+  arrived: 'blue',
   servicing: 'blue',
   pending_confirm: 'orange',
   reviewed: 'green',
+  evaluated: 'green',
   refunding: 'red',
   refunded: 'gray',
   cancelled: 'gray',

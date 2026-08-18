@@ -33,6 +33,7 @@ export const QK = {
   orderMaster: ['orders', 'master'] as const,
   orderAll: ['orders', 'all'] as const,
   settlements: ['admin', 'settlements'] as const,
+  adminReviews: ['admin', 'reviews'] as const,
   myAddresses: ['client', 'addresses'] as const,
   publicServices: ['public', 'services'] as const,
   // 全局配置（系统设置 - 全局配置）

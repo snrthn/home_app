@@ -29,9 +29,12 @@ enum OrderStatus {
   pending_payment
   pending_accept
   accepted
+  departing
+  arrived
   servicing
   pending_confirm
   reviewed
+  evaluated
   refunding
   refunded
   cancelled
@@ -275,6 +278,7 @@ model Order {
   appointmentDate  DateTime?
   appointmentSlot  String?
   status           OrderStatus @default(pending_accept)
+  arriveCode       String?     // 到达验证码（客户生成，师傅输入校验后确认到达）
   remark           String?
   customerPhotos   Json?
   createdAt        DateTime    @default(now())

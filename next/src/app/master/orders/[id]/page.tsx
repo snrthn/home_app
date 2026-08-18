@@ -2,12 +2,14 @@
 
 import { PortalNavSetter } from '@/components/PortalShell';
 import { useParams, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getOrderPool,
   getMasterOrders,
   grabOrder,
+  departOrder,
+  arriveOrder,
   startOrder,
   completeOrder,
   type OrderLite,
@@ -19,6 +21,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE } from '@/lib/order-status';
 import { StatusBadge } from '@/components/admin/DataTable';
 import EmptyState from '@/components/EmptyState';
+import { useOrderSocket } from '@/lib/useOrderSocket';
 
 // 合并接单池与我的订单：被我抢到的订单会同时出现在两处，按 id 去重（以我的那份为准，含 master 字段）
 function combine(pool: OrderLite[] = [], mine: OrderLite[] = []): OrderLite[] {
@@ -34,6 +37,11 @@ export default function MasterOrderDetailPage() {
   const toast = useToast();
   const qc = useQueryClient();
   const [grabOpen, setGrabOpen] = useState(false);
+  const [departOpen, setDepartOpen] = useState(false);
+  const [arriveOpen, setArriveOpen] = useState(false);
+  const [arriveDigits, setArriveDigits] = useState<string[]>(Array(6).fill(''));
+  const codeRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [arriving, setArriving] = useState(false);
   const [startOpen, setStartOpen] = useState(false);
   const [completeOpen, setCompleteOpen] = useState(false);
 
@@ -55,6 +63,14 @@ export default function MasterOrderDetailPage() {
     qc.invalidateQueries({ queryKey: QK.orderPool });
     qc.invalidateQueries({ queryKey: QK.orderMaster });
   };
+  const refreshMenu = [{ label: '刷新数据', onClick: refresh }];
+
+  // 实时推送：客户支付/取消/验收/评价等流转时，本单自动刷新
+  useOrderSocket({
+    onOrderUpdate: (o: any) => {
+      if (o?.id === id) refresh();
+    },
+  });
 
   const openMap = (addr: string) => {
     const url = `https://api.map.baidu.com/geocoder?address=${encodeURIComponent(addr)}&output=html&src=webapp.baidu.openAPIdemo`;
@@ -66,15 +82,63 @@ export default function MasterOrderDetailPage() {
       await grabOrder(id);
       toast.success('抢单成功，请尽快联系客户');
       refresh();
+      router.push('/master/orders/mine');
     } catch (e: any) {
       toast.error(getApiErrorMsg(e));
       refresh(); // 手慢了或被接走，刷新状态
     }
   };
+  const onDepart = async () => {
+    try {
+      await departOrder(id);
+      toast.success('已确认出发，请尽快到达客户地址');
+      refresh();
+    } catch (e: any) {
+      toast.error(getApiErrorMsg(e));
+    }
+  };
+  const arriveCodeStr = arriveDigits.join('');
+  const onArrive = async () => {
+    if (arriveCodeStr.length !== 6) return;
+    setArriving(true);
+    try {
+      await arriveOrder(id, arriveCodeStr);
+      toast.success('已确认到达，可开始服务');
+      setArriveOpen(false);
+      setArriveDigits(Array(6).fill(''));
+      refresh();
+    } catch (e: any) {
+      toast.error(getApiErrorMsg(e));
+    } finally {
+      setArriving(false);
+    }
+  };
+  // 6 框输入：输入数字自动跳下一格（支持一次粘贴多位），退格在空格时回退上一格
+  const onDigitChange = (idx: number, raw: string) => {
+    const digits = raw.replace(/\D/g, '');
+    if (!digits) {
+      setArriveDigits((prev) => prev.map((d, i) => (i === idx ? '' : d)));
+      return;
+    }
+    setArriveDigits((prev) => {
+      const next = [...prev];
+      for (let k = 0; k < digits.length && idx + k < 6; k += 1) next[idx + k] = digits[k];
+      return next;
+    });
+    codeRefs.current[Math.min(idx + digits.length, 5)]?.focus();
+  };
+  const onDigitKeyDown = (idx: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !arriveDigits[idx] && idx > 0) {
+      e.preventDefault();
+      setArriveDigits((prev) => prev.map((d, i) => (i === idx - 1 ? '' : d)));
+      codeRefs.current[idx - 1]?.focus();
+    }
+    if (e.key === 'Enter' && arriveCodeStr.length === 6) onArrive();
+  };
   const onStart = async () => {
     try {
       await startOrder(id);
-      toast.success('已上门，开始服务');
+      toast.success('已开始服务');
       refresh();
     } catch (e: any) {
       toast.error(getApiErrorMsg(e));
@@ -97,6 +161,7 @@ export default function MasterOrderDetailPage() {
           title="订单详情"
           showBack
           backHref="/master/orders/pool"
+          menu={refreshMenu}
           onBack={() => {
             if (window.history.length > 1) router.back();
             else router.push('/master/orders/pool');
@@ -115,6 +180,7 @@ export default function MasterOrderDetailPage() {
           title="订单详情"
           showBack
           backHref="/master/orders/pool"
+          menu={refreshMenu}
           onBack={() => {
             if (window.history.length > 1) router.back();
             else router.push('/master/orders/pool');
@@ -142,6 +208,7 @@ export default function MasterOrderDetailPage() {
         title="订单详情"
         showBack
         backHref={backHref}
+        menu={refreshMenu}
         onBack={() => {
           if (window.history.length > 1) router.back();
           else router.push(backHref);
@@ -254,6 +321,18 @@ export default function MasterOrderDetailPage() {
               <span className="field-inline-value">{order.remark}</span>
             </div>
           )}
+          {order.status === 'departing' && (
+            <div className="field-inline-row">
+              <span className="field-label">流转状态</span>
+              <span className="field-inline-value" style={{ color: 'var(--color-danger)' }}>师傅已出发，正在前往客户地址</span>
+            </div>
+          )}
+          {order.status === 'arrived' && (
+            <div className="field-inline-row">
+              <span className="field-label">流转状态</span>
+              <span className="field-inline-value" style={{ color: 'var(--color-danger)' }}>已到达现场，等待开始服务</span>
+            </div>
+          )}
           {order.status === 'pending_confirm' && (
             <div className="field-inline-row">
               <span className="field-label">流转状态</span>
@@ -262,6 +341,39 @@ export default function MasterOrderDetailPage() {
           )}
         </div>
 
+        {order.review && (
+          <div className="card" style={{ marginTop: 14 }}>
+            <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>客户评价</div>
+            <div className="field-inline-row">
+              <span className="field-label">评分</span>
+              <span className="field-inline-value" style={{ color: '#f5a623', letterSpacing: 2 }}>
+                {'★'.repeat(order.review.rating)}
+                <span style={{ color: 'var(--color-muted)' }}>{'★'.repeat(5 - order.review.rating)}</span>
+              </span>
+            </div>
+            {order.review.comment && (
+              <div className="field-inline-row">
+                <span className="field-label">评价内容</span>
+                <span className="field-inline-value">{order.review.comment}</span>
+              </div>
+            )}
+            {order.review.anonymous && (
+              <div className="field-inline-row">
+                <span className="field-label">评价方式</span>
+                <span className="field-inline-value">客户选择了匿名评价</span>
+              </div>
+            )}
+            {order.review.createdAt && (
+              <div className="field-inline-row">
+                <span className="field-label">评价时间</span>
+                <span className="field-inline-value">
+                  {new Date(order.review.createdAt).toLocaleString('zh-CN', { hour12: false })}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
           {isPoolOrder && (
             <button type="button" className="btn-primary" onClick={() => setGrabOpen(true)}>
@@ -269,8 +381,25 @@ export default function MasterOrderDetailPage() {
             </button>
           )}
           {order.status === 'accepted' && (
+            <button type="button" className="btn-primary" onClick={() => setDepartOpen(true)}>
+              出发上门
+            </button>
+          )}
+          {order.status === 'departing' && (
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => {
+                setArriveDigits(Array(6).fill(''));
+                setArriveOpen(true);
+              }}
+            >
+              确认到达
+            </button>
+          )}
+          {order.status === 'arrived' && (
             <button type="button" className="btn-primary" onClick={() => setStartOpen(true)}>
-              开始服务（上门）
+              开始服务
             </button>
           )}
           {order.status === 'servicing' && (
@@ -292,9 +421,67 @@ export default function MasterOrderDetailPage() {
       onCancel={() => setGrabOpen(false)}
     />
     <ConfirmDialog
+      open={departOpen}
+      title="确认出发上门"
+      message={`确认订单「${order.orderNo}」已出发前往客户地址吗？确认后订单状态将变为「出发上门中」，客户可生成到达验证码。`}
+      confirmLabel="确认出发"
+      onConfirm={() => {
+        setDepartOpen(false);
+        onDepart();
+      }}
+      onCancel={() => setDepartOpen(false)}
+    />
+    {arriveOpen && (
+      <div className="modal-overlay" role="dialog" aria-modal="true">
+        <div className="modal-panel modal-md">
+          <div className="modal-header">
+            <span>确认到达 — 输入验证码</span>
+            <button type="button" className="modal-close" onClick={() => { if (!arriving) setArriveOpen(false); }} aria-label="关闭">×</button>
+          </div>
+          <div className="modal-body">
+            <p style={{ marginTop: 0 }}>请输入客户当面出示的 6 位到达验证码：</p>
+            <div className="code-inputs" style={{ margin: '18px 0 14px' }}>
+              {arriveDigits.map((d, i) => (
+                <input
+                  key={i}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  value={d}
+                  onChange={(e) => onDigitChange(i, e.target.value)}
+                  onKeyDown={(e) => onDigitKeyDown(i, e)}
+                  ref={(el) => { codeRefs.current[i] = el; }}
+                  autoFocus={i === 0}
+                  aria-label={`验证码第 ${i + 1} 位`}
+                  disabled={arriving}
+                />
+              ))}
+            </div>
+            <p className="field-hint" style={{ margin: '6px 0 0', textAlign: 'center' }}>
+              验证码由客户在订单详情页生成，请让客户当面出示（不要通过聊天发送）。
+            </p>
+          </div>
+          <div className="modal-actions">
+            <button type="button" className="btn-secondary" onClick={() => setArriveOpen(false)} disabled={arriving}>
+              取消
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={onArrive}
+              disabled={arriving || arriveCodeStr.length !== 6}
+            >
+              {arriving ? '验证中…' : '确认到达'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    <ConfirmDialog
       open={startOpen}
       title="确认开始服务"
-      message={`确认订单「${order.orderNo}」已开始上门服务吗？确认后订单将进入「正在服务」状态。`}
+      message={`确认订单「${order.orderNo}」已到达现场并开始服务吗？确认后订单将进入「服务中」状态。`}
       confirmLabel="确认开始"
       onConfirm={() => {
         setStartOpen(false);

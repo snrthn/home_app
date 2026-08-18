@@ -16,7 +16,7 @@ import { Roles } from '../common/roles.decorator';
 import { RequirePerm } from '../common/perm.decorator';
 import { Audit } from '../common/audit.decorator';
 import { Role } from '@laoma/shared';
-import { CreateOrderDto, AssignDto } from './orders.dto';
+import { CreateOrderDto, AssignDto, ArriveDto, CancelOrderDto } from './orders.dto';
 
 @Controller('orders')
 export class OrdersController {
@@ -79,6 +79,31 @@ export class OrdersController {
 
   @UseGuards(JwtAuthGuard)
   @Roles(Role.Master)
+  @Post(':id/depart')
+  depart(@Param('id') id: string, @Req() req: any) {
+    return this.orders.depart(id, req.user.sub);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Roles(Role.Customer)
+  @Post(':id/generate-arrive-code')
+  generateArriveCode(@Param('id') id: string, @Req() req: any) {
+    return this.orders.generateArriveCode(id, req.user.sub);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Roles(Role.Master)
+  @Post(':id/arrive')
+  arrive(
+    @Param('id') id: string,
+    @Body() dto: ArriveDto,
+    @Req() req: any,
+  ) {
+    return this.orders.arrive(id, req.user.sub, dto.code);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Roles(Role.Master)
   @Post(':id/start')
   start(@Param('id') id: string, @Req() req: any) {
     return this.orders.startService(id, req.user.sub);
@@ -101,7 +126,16 @@ export class OrdersController {
 
   @UseGuards(JwtAuthGuard)
   @Post(':id/cancel')
-  cancel(@Param('id') id: string, @Req() req: any) {
-    return this.orders.cancel(id, req.user.sub, req.user.role === 'admin');
+  cancel(
+    @Param('id') id: string,
+    @Req() req: any,
+    @Body() dto: CancelOrderDto,
+  ) {
+    return this.orders.cancel(
+      id,
+      req.user.sub,
+      req.user.role === 'admin',
+      dto.reason,
+    );
   }
 }
