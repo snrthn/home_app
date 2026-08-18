@@ -6,10 +6,14 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrderStatus } from '@laoma/shared';
+import { OrdersGateway } from '../gateway/orders.gateway';
 
 @Injectable()
 export class ReviewsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private gateway: OrdersGateway,
+  ) {}
 
   async create(
     customerId: string,
@@ -48,10 +52,12 @@ export class ReviewsService {
     });
 
     // 评价完成 → 订单置「已评价」（evaluated），便于列表过滤与展示区分
-    await this.prisma.order.update({
+    const evaluatedOrder = await this.prisma.order.update({
       where: { id: dto.orderId },
       data: { status: OrderStatus.Evaluated },
     });
+    // 评价流转不走 orders.transition，需手动广播，师傅端详情页才能实时看到「已评价」
+    this.gateway?.broadcastOrderUpdate(evaluatedOrder);
     await this.prisma.orderLog.create({
       data: {
         orderId: dto.orderId,

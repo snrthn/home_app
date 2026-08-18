@@ -26,7 +26,7 @@ export default function MasterPoolPage() {
   const [grabTargetId, setGrabTargetId] = useState<string | null>(null);
 
   const openMap = (addr: string) => {
-    const url = `https://map.baidu.com/search/${encodeURIComponent(addr)}`;
+    const url = `https://api.map.baidu.com/geocoder?address=${encodeURIComponent(addr)}&output=html&src=webapp.baidu.openAPIdemo`;
     window.open(url, '_blank');
   };
   const { data: pool = [], isLoading, refetch } = useQuery({
@@ -101,7 +101,7 @@ export default function MasterPoolPage() {
                     }
                   }}
                 >
-                  📍 {addrLine(o)} <span style={{ fontSize: 12 }}>›导航</span>
+                  📍 {addrLine(o)}
                 </div>
                 <div className="field-hint">
                   联系人：{o.address?.contactName} {o.address?.contactPhone}
