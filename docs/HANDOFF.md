@@ -83,6 +83,7 @@ PowerShell Stop-Process -Id <PID> -Force
 - **pnpm 双副本**：`nest/node_modules/@prisma/client` 是符号链接指向 store 旧副本（无新模型），临时脚本须直连 `nest/node_modules/.prisma/client`
 - **R-新5**：改 schema/后端逻辑 → 用户必须重启 3721
 - **R-新8**：枚举/表改动 → 必 `prisma db push` 同步 MySQL，否则 Data truncated(1265) → 500
+- **Address 表行格式 Compact**：行宽限 8126 字节，加列时若用默认 `VARCHAR(191)` 易超限；行政区划 code 最多 6 位，用 `@db.VarChar(12)` 足矣（2026-08-19 加 3 个 code 列踩坑）
 
 ### 2.4 Role 枚举值是小写
 
@@ -168,10 +169,11 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 | commission | `nest/src/commission/` | 三级降级解析(service→category→global)；区间断点 resolveTierRatio |
 | reviews | `nest/src/reviews/` | 一单一评(orderId unique)；评价成功自动 Reviewed→Evaluated+重算师傅评分 |
 | rbac | `nest/src/rbac/` | StaffRole + Permission + PermissionGuard(@RequirePerm) |
-| gateway | `nest/src/gateway/` | socket.io /ws；transition() 每次广播 order-update |
+| gateway | `nest/src/gateway/` | socket.io /ws；**按订阅改造**：JWT 握手鉴权 + 房间定向 `order:<id>`/`pool` + `broadcastPoolUpdate` 补推（详见第 9 节） |
 | users | `nest/src/users/` | 三角色(admin/master/customer) CRUD |
 | services | `nest/src/services/` | 类目树(parentId) + 服务项(price/unit) + 区域(deletedAt×isActive) |
-| masters | `nest/src/masters/` | 接单范围 serviceAreas(Json)；技能 skills(Json) |
+| masters | `nest/src/masters/` | 接单范围 serviceAreas(Json) + 技能 skills(Json)；`updateMe` 白名单校验（详见第 10 节） |
+| common | `nest/src/common/` | `region-match.ts`：`regionMatches`(code-only) + `serviceAreasToRules` 转换器（详见第 10 节） |
 | audit | `nest/src/audit/` | @Audit 装饰器写操作日志 |
 
 ### 7.2 前端关键文件（next/src/）
@@ -211,7 +213,73 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 
 ---
 
-## 9. 当前完成状态（截至 2026-08-19）
+## 9. WS 推送按订阅改造（2026-08-19 落地）
+
+> 方案文档：`docs/WS_SUBSCRIPTION_PLAN.md`（已标注「已实施并验证」）
+
+- **鉴权**：`orders.gateway.ts` `afterInit` 加握手中间件，连接必须带合法 JWT（复用 `JwtService` + `JWT_ACCESS_SECRET` + `isBlacklisted`），无 token/过期/拉黑一律 `next(new Error('unauthorized'))`
+- **房间定向**：`server.emit`（全端群发）改为 `to('pool')`（接单池，仅师傅）/ `to('order:<id>')`（订单详情订阅者）；`join-pool` 后端校验 `role==='master'`
+- **池子补推**：`transition()` 中 `order.status===PendingAccept && to!==PendingAccept` 时调 `broadcastPoolUpdate`，解决接单后别人池子不刷新
+- **前端**：`useOrderSocket` 连接带 `auth.token`，三个消费页分别传 `{orderId}` / `{pool:true}`
+- **验证**：鉴权（无 token/假 token 被拒）+ 房间隔离（master 收 new-order、customer 收 order:A、customer join-pool 被拦）两类 PASS
+- **坑**：`jsonwebtoken` 在 pnpm 隔离下不可直接 import，改用 `JwtService` + `GatewayModule` 的 `JwtModule.registerAsync`
+
+---
+
+## 10. 服务区域地域匹配体系（2026-08-19 ~ 08-20 落地）
+
+### 15.1 三个「区域」概念
+| 概念 | 存储 | 性质 |
+|---|---|---|
+| `ServiceArea` 表 | DB 独立表 | 平台开通字典（admin 勾选树） |
+| `Master.serviceAreas` | Master JSON 字段 | 师傅接单范围（多值数组） |
+| `Master` 所在地 6 段 | Master 字段 | 师傅常驻地址（单值） |
+| `Notice.targetRegions` | Notice JSON 字段 | 公告投放范围 |
+
+### 15.2 公共匹配规则（`common/region-match.ts`）
+- `regionMatches(targetRegions, region)`：code-only 匹配（**撤掉名称兜底**，避免「市辖区」跨城市同名误匹配）；province 必中、city/district 缺级通配、任一规则全级命中即 true；空规则集返回 true（严格语义由调用方处理）
+- `serviceAreasToRules(areas)`：把 ServiceArea 表记录按 level 映射成规则集（level=1 通配全省 / level=2 通配全市 / level=3 精确到区）；调用方先过滤 `isActive=true && deletedAt=null`
+- `masterCoversOrder(master, addr)`（`orders.service.ts` 私有方法）：师傅「所在地 ∪ 接单范围」并集判定，pool/grab 共用
+
+### 15.3 已接线的业务场景
+| 场景 | 实现 | 状态 |
+|---|---|---|
+| 下单 `create()` 校验地址在开通区域 | 查已开通区域 → `regionMatches(rules, addr)` false 则 throw「该区域暂未开通服务」 | ✅ P0 |
+| 接单池 `pool()` 按「所在地 ∪ 接单范围」过滤 | `masterCoversOrder(master, addr)` | ✅ |
+| 抢单 `grab()` 二次校验师傅覆盖订单 | `masterCoversOrder` false 则 throw「您不在该订单的服务区域」 | ✅ P1 |
+| 师傅配置 `updateMe()` 白名单约束 | 所在地 + 接单范围每条都校验落在已开通区域内 | ✅ P1 |
+| 公告可见性 `getPublicList()` | 按 targetRegions 过滤（所在地 ∪ serviceAreas） | ✅（早就接） |
+| Address 表 code 字段 | provinceCode/cityCode/districtCode @db.VarChar(12) | ✅ |
+| 所在地入口统一到 accept-settings | edit 页移除所在地 Field，accept-settings 加 RegionCascader 单值 | ✅ |
+
+### 15.4 未接线（剩余 Gap）
+| 优先级 | 场景 | 说明 |
+|---|---|---|
+| P2 | WS `broadcastNewOrder` 按区域过滤 | 当前推给 pool 房间全部师傅（含地址），需握手缓存 regions + 广播遍历过滤 |
+| P3 | admin 师傅管理加 serviceAreas 审计列 | 纯展示 |
+| P3 | `assign()` 管理员指派区域校验 | 虎哥 2026-08-20 决策暂不加 |
+
+### 15.5 关键设计决策
+- **并集语义（∪）**：师傅接单池可见性 = 所在地 ∪ 接单范围（与公告过滤语义一致）；两者皆空才看不到任何单
+- **code-only 匹配**：撤掉名称兜底（虎哥决策：风险大于成本——同名不同域如「市辖区」跨城市误匹配）
+- **严格不可见**：师傅未配任何区域 → 接单池返回 `[]`（不是全平台可见）
+- **数据统一**：所有地址入口用同一个 `@/data/region` + `RegionCascader`，6 段严格保存，code 永远有值
+
+---
+
+## 11. 退款明细三端展示修复（2026-08-19 落地）
+
+- **根因**：退款额 `refundAmount` 算出后未落库，三端共用补偿结算单的 `masterAmount`（师傅补偿额）当「退款补偿」展示 → 用户端看到 32 元（实应 128 元）
+- **修复**：后端 `byOrder()` 反推 `refundAmount = orderAmount − platformFee − masterAmount` 返回；前端三端区分展示
+  - 用户端：退款金额（品牌蓝，全额退款也显示）
+  - 师傅端：退款补偿（品牌蓝）+ 本单收入（绿色，互斥展示）+ 退款审核人/时间拆行
+  - 管理端：退款明细（三方份额：用户退款/平台留成/师傅补偿，平台留成 ¥0 也体现）
+- **全额退款兜底**：`refundRatio=1 → masterCompensation=0 → 不生成补偿单`，前端渲染条件改为 `compensation || order.status==='refunded'`，金额取 `Number(compensation?.refundAmount ?? order.amount)`
+- **实时刷新**：`master/[id]` 的 `refresh()` 补 `invalidate(['settlementsByOrder', id])`，取消后退款补偿金额实时更新
+
+---
+
+## 12. 当前完成状态（截至 2026-08-20）
 
 ### 已完成 ✅
 
@@ -226,12 +294,19 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 - [x] 评价模块（5 星 + 200 字 + 匿名，一单一评）
 - [x] 收入/提现模块（余额实时聚合 + 管理端审核）
 - [x] 分账规则引擎全链路（CommissionRule + 快照 + 三方分账 + 管理端配置页）
-- [x] WS 实时推送（OrdersGateway，transition 每次广播）
+- [x] WS 实时推送按订阅改造（JWT 握手鉴权 + 房间定向 `order:<id>`/`pool` + `broadcastPoolUpdate` 补推；鉴权与房间隔离两类验证 PASS，详见第 9 节）
+- [x] 退款明细三端展示修复（用户端退款金额/师傅端退款补偿+本单收入/管理端退款明细三方份额；全额退款兜底；语义化配色区分；审核人/时间拆行）
+- [x] 接单池卡片补「下单时间」
+- [x] 退款补偿金额实时刷新（master/[id] refresh() 补 invalidate settlementsByOrder）
+- [x] Address 表补 code 字段（provinceCode/cityCode/districtCode @db.VarChar(12)）+ 全链路 code-first 匹配
+- [x] 服务区域地域匹配体系 P0+P1（详见第 10 节）：下单校验开通区域、抢单二次校验、师傅配置白名单约束
+- [x] 师傅端地域影响改为「所在地 ∪ 接单范围」并集语义 + 所在地入口统一到 accept-settings
+- [x] regionMatches 撤掉名称兜底（code-only，避免「市辖区」跨城市同名误匹配）
 - [x] 时间显示全量统一为 formatDateTime
 - [x] 登录页双击全屏修复
 - [x] 订单号一键复制（CopyButton 组件）
 - [x] 状态切换一律二次确认（ConfirmDialog）
-- [x] 取消白名单 + 流转状态红字区块
+- [x] 取消白名单 + 流转状态红字区块（含未支付取消文案区分）
 - [x] UI 11 条规矩全量落地
 
 ### 待办 / 已知缺口
@@ -240,17 +315,17 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 |---|---|---|
 | P1 | 浏览器跑通 mock 全流程 | 用户重启 3721 后 Playwright 打 3824 验证 departing/arrived → evaluated + WS |
 | P1 | 订单内 IM 聊天 | 独立工程；会话锚点用 `Conversation.orderId`（非手机号 Hash）；验证码切勿走 IM 发送 |
-| P1 | WS 广播安全 | 当前无鉴权无 room 定向（全端广播所有订单），上线前必改按用户订阅 |
+| P2 | WS 新单广播按区域过滤 | 当前 `broadcastNewOrder` 推给 pool 房间全部师傅（含地址），需握手缓存 regions + 广播遍历过滤 |
 | P2 | 客户未生成码兜底 | N 分钟后照片 + GPS 凭证到达 |
 | P2 | Refunding→Refunded 不写 orderLog | refund 直接 order.update，不走 transition |
-| P2 | 地域接 ServiceArea | 当前任意城市可下单 |
-| P2 | 师傅端无取消入口 | 如需再加 |
+| P2 | admin 师傅管理加 serviceAreas 审计列 | 纯展示，让运营能审计师傅接单范围 |
 | P3 | 真实支付联调 | 需商户凭证 + 公网回调地址 |
 | P3 | 阶梯退款真实渠道验证 | wechat provider refund/total 已分字段 |
+| P3 | assign() 管理员指派区域校验 | 暂不加（虎哥 2026-08-20 决策），如需可加「强制指派」开关 |
 
 ---
 
-## 10. 协作方式（跨项目通用，用户级记忆摘要）
+## 13. 协作方式（跨项目通用，用户级记忆摘要）
 
 - 用户（虎哥）会**自己动手并行操作**——不能假设系统状态只由 AI 改变
 - 用户会**回头核查数据并直接质疑**——要可核查的证据链，不是漂亮话
@@ -260,7 +335,7 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 
 ---
 
-## 11. 工程结构速览
+## 14. 工程结构速览
 
 ```
 D:\FrontEnd\home_app\
@@ -280,7 +355,7 @@ D:\FrontEnd\home_app\
 │   │   ├── masters/           # 师傅管理
 │   │   ├── audit/             # 操作日志
 │   │   ├── prisma/            # PrismaService
-│   │   ├── common/            # 公共装饰器/守卫
+│   │   ├── common/            # 公共装饰器/守卫 + region-match.ts（地域匹配规则集）
 │   │   └── config/            # merchant.json(AES加密)
 │   ├── prisma/
 │   │   └── schema.prisma      # 数据模型(唯一真相源)
@@ -312,7 +387,7 @@ D:\FrontEnd\home_app\
 
 ---
 
-## 12. MySQL 运行方式
+## 15. MySQL 运行方式
 
 本机 MySQL 未注册为服务，用项目内数据目录直接拉进程：
 
@@ -327,7 +402,7 @@ cd "C:/Program Files/MySQL/MySQL Server 8.0/bin"
 
 ---
 
-## 13. 常用命令
+## 16. 常用命令
 
 ```bash
 # 构建顺序（先 shared 再 backend）

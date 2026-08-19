@@ -18,7 +18,7 @@ home_app 当前卡在「后端 API → 前端页面」断层：后端订单 SOP 
 
 关联文档：
 - 权限/角色设计：`docs/rbac-design.md`
-- 地域闸门（服务区域）：当前为「配置孤岛」，全量接线计划在 SOP 闭环跑通后做（见第 4.3 节 P2）
+- 地域闸门（服务区域）：P0+P1 已接线（下单校验开通区域、抢单二次校验、师傅配置白名单约束，2026-08-20）；剩余 P2 WS 广播按区域过滤 + P3 admin 审计列（见 HANDOFF.md 第 15 节）
 
 ---
 
@@ -104,7 +104,7 @@ Cancelled(已取消,终态,无退款)        Refunding(退款中)          Accep
 1. **支付前置（核心变更）**：`create` 落 `status=PendingPayment`；订单**必须支付成功（平台托管）才进入 `PendingAccept` 抢单池**。未支付订单永不出现在接单池。
 2. **平台担保托管**：`applyPaid()`（`payments.service.ts:120-143`）把订单 `PendingPayment→PendingAccept`、支付单置 `paid`，资金视为进入平台托管；直到客户 `confirm` 验收才经 `settlements.releaseToMaster` 生成结算台账（全额给师傅，平台不参与分账）。
 3. **价格快照隔离**：`create` 时 `serviceSnapshot: item as any` 把服务项整行快照进订单（R-新4），后续改价不影响历史订单。
-4. **地域跟随订单**：`city = addr.city`（取自用户收货地址），服务项本身不绑区域；地域闸门（ServiceArea）未接入。
+4. **地域跟随订单**：`city = addr.city`（取自用户收货地址），服务项本身不绑区域；地域闸门（ServiceArea）已接入 `create()` 校验（P0，2026-08-20，详见 HANDOFF.md 第 15 节）。
 5. **抢单 / 派单双模式并存**：师傅 `grab` 或管理员 `assign`，都到 `Accepted`。
 6. **PaymentProvider 接缝（可插拔支付通道）**：`payments/provider.ts` 定义 `PaymentProvider` 接口（createCharge / verifyNotify / refund）；order 侧只依赖接口，后期微信/支付宝只需新增实现类 + admin 配置切换，业务零改动。`getProvider()` 现恒返回 `MockPaymentProvider`（`payments.service.ts:31-34`，预留 TODO 按 `MerchantConfig` 切换）。
 7. **Mock 走「异步回调」范式**：`MockPaymentProvider.createCharge` 返回 `payParams:{type:'mock',token:tradeNo}`；前端点「模拟支付」后调 `POST /payments/mock/notify` 携带 `token`，经 `verifyNotify` 校验后 `applyPaid`。**该回调路径与真实通道 notify 完全一致**，保证后期换真通道仅配置切换、代码零改动。
@@ -145,7 +145,7 @@ Cancelled(已取消,终态,无退款)        Refunding(退款中)          Accep
 | ~~**P1**~~ ✅ | `grab` 并发无防 | `orders.service.ts:155` | 同单被多师傅同时抢 | **已修（2026-08-13）**：`grab` 改用 `updateMany({where:{id,status:PendingAccept,masterId:null},data:{masterId:mid}})`，count=0 即「已被接走」原子抢占 |
 | ~~**P1**~~ ✅ | 真实支付 Provider + 按配置切换 | `payments/wechat.provider.ts` `alipay.provider.ts` `getProvider` | 原恒返回 mock，真实通道未实现/未接线 | **已修（2026-08-13）**：新增 `WechatPaymentProvider`/`AlipayPaymentProvider`（原生 crypto，V3 签名 / 回调解密 / 退款）；`getProvider()` 读 `MerchantConfig`，`enabled && provider!=='mock'` 时返回对应实现；`controller` 新增公开 `POST /notify/wechat`、`/notify/alipay` 走统一 `handleNotify→applyPaid`（待真实凭证 + 公网回调联调） |
 | **P2** | `Refunding→Refunded` 绕过 transition | `payments.service.ts:168-171` | refund 直接 `order.update({status:Refunded})`，不写 orderLog、不走统一入口 | 改走 `OrdersService.transition` 或补 orderLog |
-| **P2** | 地域未接 `ServiceArea` | `orders.service.ts:71 city=addr.city` | 任意城市可下单，未受「开通城市」约束（配置孤岛，按计划后置） | SOP 闭环后接入 `isRegionOpen` 事实源 |
+| ~~**P2**~~ ✅ | 地域接 `ServiceArea`（P0+P1） | `orders.service.ts create()/grab()` + `masters.service.ts updateMe()` | **已修（2026-08-20）**：下单校验开通区域、抢单二次校验师傅覆盖、师傅配置白名单约束；剩余 P2 WS 广播按区域过滤 + P3 admin 审计列（见 HANDOFF.md 第 15 节） |
 | **P2** | 旧二维码凭证支付与前置支付并存 | `payments.controller.ts:66-89` | 两套支付入口并存，语义需收敛（凭证支付属线下/对公场景，可保留但需在文档/UI 区分） | 明确两通道适用场景，避免用户混淆 |
 
 ---
@@ -161,8 +161,8 @@ Cancelled(已取消,终态,无退款)        Refunding(退款中)          Accep
   - [ ] master 接单池页（`GET /pool`，**WS 客户端必须用 `socket.io-client` 匹配后端 socket.io 网关 `/ws`，不可用原生 WebSocket**）+ grab + 订单详情（start / complete）
   - [ ] admin 订单台账页（`GET /all` + assign / cancel）+ 结算台账页（读 `settlements`）
   - [x] 支付配置页（骨架已建 + 后端真通道接缝已接线；待真实商户凭证 + 公网回调地址（`WX_MCH_SERIAL`/`WX_NOTIFY_URL`/`ALIPAY_NOTIFY_URL`）联调）
-- [ ] **三端 WS 客户端**：监听 `new-order` / `order-update`，接单池/订单详情实时刷新。
-- [ ] **P2** 收尾：`Refunding→Refunded` 补 orderLog、地域闸门（SOP 闭环跑通后）、旧凭证支付语义收敛。
+- [x] **三端 WS 客户端**：按订阅改造已落地（JWT 鉴权 + 房间定向 `order:<id>`/`pool`，2026-08-19；详见 HANDOFF.md 第 14 节）
+- [ ] **P2** 收尾：`Refunding→Refunded` 补 orderLog、地域闸门剩余项（WS 广播按区域过滤 + admin 审计列）、旧凭证支付语义收敛。
 
 ---
 

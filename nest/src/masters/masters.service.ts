@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateMasterMeDto } from './masters.dto';
+import { regionMatches, serviceAreasToRules } from '../common/region-match';
 import * as bcrypt from 'bcryptjs';
 
 @Injectable()
@@ -90,6 +91,48 @@ export class MastersService {
       data[f] = v;
     }
     if (Object.keys(data).length === 0) return master;
+
+    // 白名单校验：师傅提交的「所在地」和「接单范围」每一条都必须落在平台已开通的服务区域内。
+    // code-only 匹配（撤掉名称兜底），缺 code 或未开通即拒。
+    const areas = await this.prisma.serviceArea.findMany({
+      where: { isActive: true, deletedAt: null },
+      select: { level: true, provinceCode: true, cityCode: true, districtCode: true },
+    });
+    const rules = serviceAreasToRules(areas);
+    if (rules.length === 0) {
+      throw new BadRequestException('平台尚未开通任何服务区域，无法配置');
+    }
+    // 所在地（单值）
+    if (data.provinceCode !== undefined) {
+      const home = {
+        provinceCode: data.provinceCode as string | null,
+        cityCode: data.cityCode as string | null,
+        districtCode: data.districtCode as string | null,
+      };
+      if (home.provinceCode && !regionMatches(rules, home)) {
+        throw new BadRequestException('所在地不在平台已开通的服务区域内');
+      }
+    }
+    // 接单范围（多值数组，每条都要命中已开通区域）
+    if (data.serviceAreas !== undefined) {
+      const submitted = data.serviceAreas as any[];
+      if (Array.isArray(submitted)) {
+        for (const r of submitted) {
+          if (
+            !regionMatches(rules, {
+              provinceCode: r?.provinceCode,
+              cityCode: r?.cityCode,
+              districtCode: r?.districtCode,
+            })
+          ) {
+            throw new BadRequestException(
+              `接单范围「${[r?.province, r?.city, r?.district].filter(Boolean).join(' / ') || '某区域'}」不在平台已开通的服务区域内`,
+            );
+          }
+        }
+      }
+    }
+
     return this.prisma.master.update({ where: { id: master.id }, data });
   }
 }

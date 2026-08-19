@@ -14,11 +14,9 @@ import {
   TextInput,
   Textarea,
   RadioGroup,
-  RegionCascader,
   SubmitButton,
   FormCard,
   AvatarField,
-  type RegionValue,
 } from '@/components/form';
 
 const BIO_MAX = 500;
@@ -47,7 +45,6 @@ export default function MasterMeEdit() {
   // 师傅专属资料（Master）
   const [realName, setRealName] = useState('');
   const [idCard, setIdCard] = useState('');
-  const [region, setRegion] = useState<RegionValue>({});
   const [bio, setBio] = useState('');
 
   useEffect(() => {
@@ -62,14 +59,6 @@ export default function MasterMeEdit() {
     setMasterStatus(m.status ?? '');
     setRealName(m.realName ?? '');
     setIdCard(m.idCard ?? '');
-    setRegion({
-      province: m.province ?? null,
-      provinceCode: m.provinceCode ?? null,
-      city: m.city ?? null,
-      cityCode: m.cityCode ?? null,
-      district: m.district ?? null,
-      districtCode: m.districtCode ?? null,
-    });
   }, [data]);
 
   const save = async (e: React.FormEvent) => {
@@ -87,12 +76,6 @@ export default function MasterMeEdit() {
         updateMasterMe({
           realName,
           idCard,
-          province: region.province ?? undefined,
-          provinceCode: region.provinceCode ?? undefined,
-          city: region.city ?? undefined,
-          cityCode: region.cityCode ?? undefined,
-          district: region.district ?? undefined,
-          districtCode: region.districtCode ?? undefined,
         }),
       ]);
       setUser('master', profileRes.data);
@@ -150,9 +133,6 @@ export default function MasterMeEdit() {
             </Field>
             <Field label="身份证号" hint="选填，用于实名认证">
               <TextInput value={idCard} onChange={(e) => setIdCard(e.target.value)} placeholder="选填" />
-            </Field>
-            <Field label="所在地区" required>
-              <RegionCascader value={region} onChange={setRegion} />
             </Field>
             <Field
               label="个人描述"

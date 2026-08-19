@@ -8,7 +8,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { regionMatches } from '../common/region-match';
+import { regionMatches, serviceAreasToRules } from '../common/region-match';
 import { OrderStatus } from '@laoma/shared';
 import { canTransition } from './order-status';
 import { OrdersGateway } from '../gateway/orders.gateway';
@@ -68,6 +68,24 @@ export class OrdersService {
     });
     if (!addr) throw new NotFoundException('地址不存在');
 
+    // 地域闸门（P0）：下单地址必须在平台已开通的服务区域内，堵「未开通城市下单成死单」。
+    // 命中规则集任一即可见（省→通配全省、市→通配全市、区→精确到区）。
+    const areas = await this.prisma.serviceArea.findMany({
+      where: { isActive: true, deletedAt: null },
+      select: { level: true, provinceCode: true, cityCode: true, districtCode: true },
+    });
+    const rules = serviceAreasToRules(areas);
+    if (
+      rules.length === 0 ||
+      !regionMatches(rules, {
+        provinceCode: addr.provinceCode,
+        cityCode: addr.cityCode,
+        districtCode: addr.districtCode,
+      })
+    ) {
+      throw new BadRequestException('该区域暂未开通服务');
+    }
+
     // 分账规则快照（R-新4 同款思路）：下单时按 服务项→类目树→全局 解析并固化，
     // 之后退款/结算只读快照，后期调整类目佣金不会污染历史订单。
     const commissionSnapshot = await this.commission.resolve(dto.serviceItemId);
@@ -113,6 +131,46 @@ export class OrdersService {
     });
   }
 
+  // 师傅「所在地 ∪ 接单范围」是否覆盖订单地址（接单池过滤/抢单校验 共用）。
+  // 严格模式：两者皆空 → 不覆盖（pool 返回 []、grab throw）。
+  // code-only 匹配（撤掉名称兜底，避免「市辖区」跨城市误命中）。
+  private masterCoversOrder(
+    master:
+      | {
+          serviceAreas?: any;
+          provinceCode?: string | null;
+          cityCode?: string | null;
+          districtCode?: string | null;
+        }
+      | null,
+    addr:
+      | {
+          provinceCode?: string | null;
+          cityCode?: string | null;
+          districtCode?: string | null;
+        }
+      | null
+      | undefined,
+  ): boolean {
+    const areas = (master?.serviceAreas as any[]) ?? [];
+    const home = master?.provinceCode
+      ? [
+          {
+            provinceCode: master.provinceCode,
+            cityCode: master.cityCode,
+            districtCode: master.districtCode,
+          },
+        ]
+      : [];
+    const rules = [...areas, ...home];
+    if (rules.length === 0) return false;
+    return regionMatches(rules, {
+      provinceCode: addr?.provinceCode,
+      cityCode: addr?.cityCode,
+      districtCode: addr?.districtCode,
+    });
+  }
+
   async pool(masterId?: string) {
     // masterId:null 与抢单乐观锁条件对齐：抢单先占 masterId 再流转，
     // 中途异常会留下 PendingAccept+已占 的孤儿单，池子里不该再展示
@@ -122,24 +180,13 @@ export class OrdersService {
     });
     // 未带师傅上下文（理论上 Guard 已保证，这里兜底宽松）：返回全部
     if (!masterId) return orders;
-    // 地域匹配核心：按师傅服务区域(serviceAreas) 过滤。
-    // 严格不可见：未配置服务区域的师傅看不到任何单。
+    // 地域匹配：所在地 ∪ 接单范围 并集判定（与公告过滤语义一致）。
+    // 两者皆空才视为「未配置」严格不可见。
     const master = await this.prisma.master.findUnique({
       where: { userId: masterId },
-      select: { serviceAreas: true },
+      select: { serviceAreas: true, provinceCode: true, cityCode: true, districtCode: true },
     });
-    const areas = (master?.serviceAreas as any[]) ?? null;
-    if (!areas || areas.length === 0) return [];
-    return orders.filter((o) =>
-      regionMatches(areas, {
-        province: o.address?.province,
-        provinceCode: o.address?.provinceCode,
-        city: o.address?.city,
-        cityCode: o.address?.cityCode,
-        district: o.address?.district,
-        districtCode: o.address?.districtCode,
-      }),
-    );
+    return orders.filter((o) => this.masterCoversOrder(master, o.address));
   }
 
   async listForMaster(userId: string, city?: string) {
@@ -215,6 +262,19 @@ export class OrdersService {
 
   async grab(orderId: string, userId: string) {
     const mid = await this.masterIdOf(userId);
+    // 区域二次校验：师傅必须覆盖订单地址才能抢单（与接单池过滤同口径）。
+    // 防止池子外直接调 API 越界抢单。
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: { address: { select: { provinceCode: true, cityCode: true, districtCode: true } } },
+    });
+    const master = await this.prisma.master.findUnique({
+      where: { userId },
+      select: { serviceAreas: true, provinceCode: true, cityCode: true, districtCode: true },
+    });
+    if (!this.masterCoversOrder(master, order?.address)) {
+      throw new BadRequestException('您不在该订单的服务区域');
+    }
     // 乐观锁：仅当订单处于「待接单」且尚无师傅接走(masterId=null)时原子抢占，
     // 避免并发被多师傅同时抢走（第二个抢单者 count=0 即失败）。
     const locked = await this.prisma.order.updateMany({

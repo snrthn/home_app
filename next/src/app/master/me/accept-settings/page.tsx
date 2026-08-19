@@ -12,6 +12,7 @@ import { useToast } from '@/components/Toast';
 import {
   PickerTrigger,
   RegionPickerModal,
+  RegionCascader,
   CategoryPickerModal,
   formatRegionScope,
   FormCard,
@@ -50,6 +51,7 @@ export default function AcceptSettingsPage() {
   const master = profile?.master ?? {};
 
   const [skills, setSkills] = useState<string[]>([]);
+  const [region, setRegion] = useState<RegionValue>({});
   const [serviceAreas, setServiceAreas] = useState<RegionValue[]>([]);
   const [skillsOpen, setSkillsOpen] = useState(false);
   const [areasOpen, setAreasOpen] = useState(false);
@@ -73,6 +75,14 @@ export default function AcceptSettingsPage() {
   useEffect(() => {
     if (!master) return;
     setSkills(Array.isArray(master.skills) ? (master.skills as string[]) : []);
+    setRegion({
+      province: master.province ?? null,
+      provinceCode: master.provinceCode ?? null,
+      city: master.city ?? null,
+      cityCode: master.cityCode ?? null,
+      district: master.district ?? null,
+      districtCode: master.districtCode ?? null,
+    });
     setServiceAreas(
       Array.isArray(master.serviceAreas)
         ? master.serviceAreas.map((s: any) => ({
@@ -85,13 +95,19 @@ export default function AcceptSettingsPage() {
           }))
         : [],
     );
-  }, [master?.skills, master?.serviceAreas]);
+  }, [master?.skills, master?.serviceAreas, master?.province, master?.city, master?.district]);
 
   const save = async () => {
     setSaving(true);
     try {
       await updateMasterMe({
         skills,
+        province: region.province ?? undefined,
+        provinceCode: region.provinceCode ?? undefined,
+        city: region.city ?? undefined,
+        cityCode: region.cityCode ?? undefined,
+        district: region.district ?? undefined,
+        districtCode: region.districtCode ?? undefined,
         serviceAreas: serviceAreas.map((s) => ({
           province: s.province ?? undefined,
           provinceCode: s.provinceCode ?? undefined,
@@ -160,6 +176,15 @@ export default function AcceptSettingsPage() {
           </PickerTrigger>
         </FormCard>
 
+        {/* 所在地：单值常驻地址（原 master/me/edit 搬入，统一在此配置） */}
+        <FormCard title="所在地">
+          <PickerTrigger hint="你的常驻地址，作为接单范围的一条隐含规则（与接单范围并集判定），并影响本地公告可见性">
+            <div style={{ marginTop: 12 }}>
+              <RegionCascader value={region} onChange={setRegion} />
+            </div>
+          </PickerTrigger>
+        </FormCard>
+
         {/* 接单范围：多省/市/区（与修改资料页同构） */}
         <FormCard
           title="接单范围"
@@ -173,7 +198,7 @@ export default function AcceptSettingsPage() {
             </button>
           }
         >
-          <PickerTrigger hint="可添加多个省/市/区（仅选省即代表该省全部）。空 = 全平台可接单">
+          <PickerTrigger hint="可添加多个省/市/区（仅选省即代表该省全部）。与所在地共同决定可见订单，两者都未配置时将看不到任何订单">
             {serviceAreas.length > 0 && (
               <div className="region-chips" style={{ marginTop: 12 }}>
                 {serviceAreas.map((r) => (
