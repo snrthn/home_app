@@ -169,6 +169,7 @@ export interface Address {
   detail: string;
   tag?: string | null;
   isDefault: boolean;
+  createdAt?: string;
 }
 export function getMyAddresses(): Promise<Address[]> {
   return api.get('/addresses').then((r) => r.data ?? []);

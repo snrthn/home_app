@@ -6,6 +6,7 @@ import { PortalNavSetter } from '@/components/PortalShell';
 import EmptyState from '@/components/EmptyState';
 import { getMyIncomeDetails, type Settlement } from '@/lib/orders-api';
 import { QK } from '@/lib/query-keys';
+import { formatDateTime } from '@/lib/format';
 
 const ST_STATUS: Record<string, { label: string; color: string }> = {
   credited: { label: '已入账', color: 'var(--color-success)' },
@@ -14,7 +15,7 @@ const ST_STATUS: Record<string, { label: string; color: string }> = {
 };
 
 function fmtTime(t?: string | null) {
-  return t ? t.slice(0, 19).replace('T', ' ') : '-';
+  return formatDateTime(t);
 }
 
 export default function MasterIncomeDetailsPage() {

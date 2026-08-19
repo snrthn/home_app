@@ -18,6 +18,7 @@ import {
 } from '@/lib/orders-api';
 import { QK } from '@/lib/query-keys';
 import { getApiErrorMsg } from '@/lib/api';
+import { formatDateTime } from '@/lib/format';
 
 const CHANNEL_LABEL: Record<string, string> = {
   wechat: '微信',
@@ -32,7 +33,7 @@ const WD_STATUS: Record<string, { label: string; color: string }> = {
 };
 
 function fmtTime(t?: string | null) {
-  return t ? t.slice(0, 19).replace('T', ' ') : '-';
+  return formatDateTime(t);
 }
 
 export default function MasterIncomePage() {

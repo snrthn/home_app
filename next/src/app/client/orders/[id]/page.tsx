@@ -14,6 +14,7 @@ import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE, type OrderStatus } from '@/lib/o
 import { StatusBadge } from '@/components/admin/DataTable';
 import EmptyState from '@/components/EmptyState';
 import { useOrderSocket } from '@/lib/useOrderSocket';
+import { formatDateTime } from '@/lib/format';
 
 // 可取消的状态：支付前取消无退款；支付后取消走退款
 const CANCELABLE: OrderStatus[] = [
@@ -270,6 +271,10 @@ export default function ClientOrderDetailPage() {
         {/* 订单信息 */}
         <div className="card" style={{ marginTop: 14 }}>
           <div className="field-inline-row">
+            <span className="field-label">下单时间</span>
+            <span className="field-inline-value">{formatDateTime(order.createdAt)}</span>
+          </div>
+          <div className="field-inline-row">
             <span className="field-label">订单金额</span>
             <span className="field-inline-value" style={{ color: 'var(--color-primary-text)', fontWeight: 600 }}>
               ¥{order.amount}
@@ -384,7 +389,7 @@ export default function ClientOrderDetailPage() {
               <div className="field-inline-row">
                 <span className="field-label">评价时间</span>
                 <span className="field-inline-value">
-                  {new Date(order.review.createdAt).toLocaleString('zh-CN', { hour12: false })}
+                  {formatDateTime(order.review.createdAt)}
                 </span>
               </div>
             )}

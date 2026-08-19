@@ -10,6 +10,7 @@ import { getApiErrorMsg } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import { useEscClose } from '@/lib/useEscClose';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE, type OrderStatus } from '@/lib/order-status';
+import { formatDateTime } from '@/lib/format';
 import DataTable, { type Column } from '@/components/admin/DataTable';
 import { StatusBadge } from '@/components/admin/DataTable';
 import { Modal } from '@/components/Modal';
@@ -150,6 +151,12 @@ export default function OrdersTable({
         render: (o) => (
           <StatusBadge tone={ORDER_STATUS_TONE[o.status]}>{ORDER_STATUS_LABEL[o.status]}</StatusBadge>
         ),
+      },
+      {
+        key: 'createdAt',
+        title: '下单时间',
+        width: '160px',
+        render: (o) => formatDateTime(o.createdAt),
       },
       {
         key: 'appointment',

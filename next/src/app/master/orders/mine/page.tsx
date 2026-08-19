@@ -9,6 +9,7 @@ import { QK } from '@/lib/query-keys';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE } from '@/lib/order-status';
 import { StatusBadge } from '@/components/admin/DataTable';
 import EmptyState from '@/components/EmptyState';
+import { formatDateTime } from '@/lib/format';
 
 export default function MasterMinePage() {
   const router = useRouter();
@@ -74,7 +75,7 @@ export default function MasterMinePage() {
                   <span style={{ color: 'var(--color-primary-text)', fontWeight: 600 }}>¥{o.amount}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, color: 'var(--color-text-soft)', fontSize: 12 }}>
-                  <span>下单 {(o.createdAt || '').slice(0, 10)}</span>
+                  <span>下单 {formatDateTime(o.createdAt)}</span>
                   <span>
                     {(o.appointmentDate?.slice(0, 10) || '未约')}
                     {o.appointmentSlot ? ` ${o.appointmentSlot}` : ''}

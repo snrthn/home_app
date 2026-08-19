@@ -8,6 +8,7 @@ import { QK } from '@/lib/query-keys';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE } from '@/lib/order-status';
 import { StatusBadge } from '@/components/admin/DataTable';
 import EmptyState from '@/components/EmptyState';
+import { formatDateTime } from '@/lib/format';
 
 export default function AdminOrderDetailPage() {
   const { id } = useParams();
@@ -59,7 +60,7 @@ export default function AdminOrderDetailPage() {
             </div>
             <div className="field-inline-row">
               <span className="field-label">下单时间</span>
-              <span className="field-inline-value">{(order.createdAt || '').slice(0, 16).replace('T', ' ')}</span>
+              <span className="field-inline-value">{formatDateTime(order.createdAt)}</span>
             </div>
             <div className="field-inline-row">
               <span className="field-label">预约时间</span>

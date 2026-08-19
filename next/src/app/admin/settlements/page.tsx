@@ -17,6 +17,7 @@ import { StatusBadge } from '@/components/admin/DataTable';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Modal } from '@/components/Modal';
 import { Textarea } from '@/components/form/Textarea';
+import { formatDateTime } from '@/lib/format';
 
 const SETTLEMENT_STATUS: Record<
   string,
@@ -155,7 +156,7 @@ export default function AdminSettlementsPage() {
         title: '生成时间',
         width: '160px',
         render: (s) =>
-          s.createdAt ? s.createdAt.slice(0, 19).replace('T', ' ') : '-',
+          formatDateTime(s.createdAt),
         },
       {
         key: 'op',

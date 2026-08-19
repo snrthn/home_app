@@ -20,6 +20,7 @@ import { useToast } from '@/components/Toast';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE } from '@/lib/order-status';
 import { StatusBadge } from '@/components/admin/DataTable';
+import { formatDateTime } from '@/lib/format';
 import EmptyState from '@/components/EmptyState';
 import { useOrderSocket } from '@/lib/useOrderSocket';
 
@@ -270,6 +271,10 @@ export default function MasterOrderDetailPage() {
         {/* 订单信息 */}
         <div className="card" style={{ marginTop: 14 }}>
           <div className="field-inline-row">
+            <span className="field-label">下单时间</span>
+            <span className="field-inline-value">{formatDateTime(order.createdAt)}</span>
+          </div>
+          <div className="field-inline-row">
             <span className="field-label">订单金额</span>
             <span className="field-inline-value" style={{ color: 'var(--color-primary-text)', fontWeight: 600 }}>
               ¥{order.amount}
@@ -373,7 +378,7 @@ export default function MasterOrderDetailPage() {
               <div className="field-inline-row">
                 <span className="field-label">评价时间</span>
                 <span className="field-inline-value">
-                  {new Date(order.review.createdAt).toLocaleString('zh-CN', { hour12: false })}
+                  {formatDateTime(order.review.createdAt)}
                 </span>
               </div>
             )}

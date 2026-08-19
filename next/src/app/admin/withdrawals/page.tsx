@@ -16,6 +16,7 @@ import { StatusBadge } from '@/components/admin/DataTable';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Modal } from '@/components/Modal';
 import { Textarea } from '@/components/form/Textarea';
+import { formatDateTime } from '@/lib/format';
 
 const WD_STATUS: Record<
   string,
@@ -137,7 +138,7 @@ export default function AdminWithdrawalsPage() {
         title: '申请时间',
         width: '160px',
         render: (w) =>
-          w.createdAt ? w.createdAt.slice(0, 19).replace('T', ' ') : '-',
+          formatDateTime(w.createdAt),
       },
       {
         key: 'note',
@@ -145,7 +146,7 @@ export default function AdminWithdrawalsPage() {
         render: (w) => {
           if (w.status === 'rejected' && w.reviewNote) return w.reviewNote;
           if (w.status === 'paid' && w.paidAt)
-            return `打款 ${w.paidAt.slice(0, 19).replace('T', ' ')}`;
+            return `打款 ${formatDateTime(w.paidAt)}`;
           return <span className="field-hint">—</span>;
         },
       },

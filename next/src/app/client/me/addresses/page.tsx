@@ -20,6 +20,7 @@ import {
 } from '@/lib/orders-api';
 import { QK } from '@/lib/query-keys';
 import { getApiErrorMsg } from '@/lib/api';
+import { formatDateTime } from '@/lib/format';
 import EmptyState from '@/components/EmptyState';
 
 const EMPTY_REGION: RegionValue = {
@@ -216,32 +217,40 @@ export default function AddressBookPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {list.map((a) => (
               <div className="card" key={a.id}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ fontWeight: 600 }}>
-                    {a.contactName} <span style={{ color: 'var(--color-muted)', fontWeight: 400 }}>{a.contactPhone}</span>
-                    {a.isDefault && <span className="tag" style={{ marginLeft: 8 }}>默认</span>}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                  <div style={{ fontWeight: 600, minWidth: 0 }}>
+                    {a.contactName}
+                    <span style={{ color: 'var(--color-muted)', fontWeight: 400, marginLeft: 8 }}>
+                      {a.contactPhone}
+                    </span>
                   </div>
+                  {a.isDefault && <span className="tag" style={{ flex: '0 0 auto' }}>默认</span>}
                 </div>
-                <p className="field-hint" style={{ marginTop: 6 }}>
+                <p className="field-hint" style={{ marginTop: 6, overflowWrap: 'anywhere' }}>
                   {[a.province, a.city, a.district, a.detail].filter(Boolean).join('')}
                 </p>
-                <div style={{ display: 'flex', gap: 14, marginTop: 10 }}>
-                  {!a.isDefault && (
-                    <button
-                      type="button"
-                      className="btn-link"
-                      disabled={settingDefaultId === a.id}
-                      onClick={() => setDefault(a.id)}
-                    >
-                      设为默认
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, gap: 8 }}>
+                  <span className="field-hint" style={{ margin: 0, flex: '1 1 auto', minWidth: 0, overflowWrap: 'anywhere' }}>
+                    创建时间 {a.createdAt ? formatDateTime(a.createdAt) : '-'}
+                  </span>
+                  <div style={{ display: 'flex', gap: 14, flex: '0 0 auto' }}>
+                    {!a.isDefault && (
+                      <button
+                        type="button"
+                        className="btn-link"
+                        disabled={settingDefaultId === a.id}
+                        onClick={() => setDefault(a.id)}
+                      >
+                        设为默认
+                      </button>
+                    )}
+                    <button type="button" className="btn-link" onClick={() => openEdit(a)}>
+                      编辑
                     </button>
-                  )}
-                  <button type="button" className="btn-link" onClick={() => openEdit(a)}>
-                    编辑
-                  </button>
-                  <button type="button" className="btn-link btn-link-danger" onClick={() => setDelId(a.id)}>
-                    删除
-                  </button>
+                    <button type="button" className="btn-link btn-link-danger" onClick={() => setDelId(a.id)}>
+                      删除
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}

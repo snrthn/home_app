@@ -1830,12 +1830,15 @@ body {
   outline: none;
 }
 
-/* 固定到页面底部的操作条（位于 56px 底部 TabBar 之上，safe-area 兼容） */
+/* 固定到页面底部的操作条。
+   注意：底栏（.portal-tabbar）仅在 4 个主 Tab 页渲染，子页（如地址管理）不渲染；
+   此工具条当前仅用于子页，故直接吸在视口真实底部（仅留 safe-area），
+   不再假设其下方有 56px 底栏——否则会在无底栏的子页浮空、底部留镂空带。 */
 .bottom-fixed-bar {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(env(safe-area-inset-bottom, 0px));
   z-index: 30;
   padding: 12px 16px;
   background: var(--color-surface);

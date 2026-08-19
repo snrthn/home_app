@@ -9,6 +9,7 @@ import {
   type OperationLogQuery,
 } from '@/lib/admin-api';
 import DataTable, { type Column } from '@/components/admin/DataTable';
+import { formatDateTime } from '@/lib/format';
 
 const MODULES = [
   { value: '', label: '全部模块' },
@@ -83,7 +84,7 @@ export default function OperationLogsPage() {
     {
       key: 'createdAt',
       title: '时间',
-      render: (r) => new Date(r.createdAt).toLocaleString('zh-CN'),
+      render: (r) => formatDateTime(r.createdAt),
     },
     {
       key: 'actions',
@@ -235,7 +236,7 @@ export default function OperationLogsPage() {
                 <Field label="IP" value={selected.ip || '—'} />
                 <Field
                   label="时间"
-                  value={new Date(selected.createdAt).toLocaleString('zh-CN')}
+                  value={formatDateTime(selected.createdAt)}
                 />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

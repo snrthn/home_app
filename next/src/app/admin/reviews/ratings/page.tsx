@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getReviews, type ReviewItem } from '@/lib/orders-api';
 import { QK } from '@/lib/query-keys';
 import DataTable, { type Column } from '@/components/admin/DataTable';
+import { formatDateTime } from '@/lib/format';
 
 export default function AdminReviewsPage() {
   const { data: list = [], isLoading } = useQuery<ReviewItem[]>({
@@ -59,7 +60,7 @@ export default function AdminReviewsPage() {
         key: 'createdAt',
         title: '评价时间',
         width: '160px',
-        render: (r) => (r.createdAt ? r.createdAt.slice(0, 19).replace('T', ' ') : '-'),
+        render: (r) => formatDateTime(r.createdAt),
       },
     ],
     [],
