@@ -1,0 +1,356 @@
+# 老马家电 (home_app) — 项目交接文档
+
+> **交接日期**：2026-08-19  
+> **维护者**：AI Agent「巴比」  
+> **用户称呼**：虎哥  
+> **目的**：下一个 Agent 接手时，从本文件出发即可快速了解项目全貌、工程纪律、当前进度和已知坑。
+
+---
+
+## 0. 快速上手清单
+
+| 事项 | 内容 |
+|---|---|
+| 工程根 | `D:\FrontEnd\home_app`（monorepo: `nest/` + `next/` + `shared/`） |
+| 技术栈 | NestJS + Next.js(App Router) + Prisma + MySQL + pnpm + Turborepo |
+| 用户开发端口 | 后端 3721 / 前端 3824（**AI 绝不起/kill**） |
+| AI 调试端口 | 后端 3722（跑完必退）；前端不可另起（`.next` 共享目录冲突 → ChunkLoadError） |
+| MySQL | 端口 3306，库 `laoma_jiadian`，root 空密码 |
+| 前端验证 | 直接 Playwright 打用户已运行的 3824（自己不起 next dev） |
+| 后端验证 | `PORT=3722` 起临时实例，跑完 netstat 确认端口释放 |
+
+---
+
+## 1. 关联文件索引（全部记忆与规则来源）
+
+### 1.1 项目记忆文件（WorkBuddy 托管）
+
+| 文件 | 作用 | 路径 |
+|---|---|---|
+| **项目长期记忆** | 工程纪律、Prisma 坑、UI 规矩、状态机、模块速查、下一步 | `C:\Users\yhnce\WorkBuddy\2026-08-06-09-48-07\.workbuddy\memory\MEMORY.md` |
+| **每日工作日志** | 按日记录做了什么、踩了什么坑、做了什么决策 | `…\.workbuddy\memory\YYYY-MM-DD.md`（2026-08-06 ~ 08-19） |
+| **用户级跨项目记忆** | 协作方式、端口分工、调试方法论、UI 偏好、身份称呼 | `C:\Users\yhnce\.workbuddy\MEMORY.md` |
+
+### 1.2 项目内文档（工程内 docs/）
+
+| 文件 | 作用 | 路径 |
+|---|---|---|
+| **RBAC 权限设计** | 四实体模型、权限码表、预设岗位角色、实现路线 | `docs/rbac-design.md` |
+| **下单接单 SOP** | 订单状态机、端点清单、业务约束、验收用例 | `docs/orders-sop.md` |
+| **项目计划** | 品牌定位、技术栈选型、数据库设计、路线图、决策清单 | `docs/需求文档/plan.md` |
+| **管理员初始化 SQL** | super_admin 种子账号 | `docs/sql/init-admin.sql` |
+| **MySQL 修复脚本** | MySQL 服务启动/修复 bat | `docs/shell/fix-mysql-service.bat` |
+
+### 1.3 会话注入的记忆（自动）
+
+每次会话启动时，系统会自动注入：
+- 项目 MEMORY.md（上方 1.1 第一条）的**截断版**（超长会被 truncate）
+- 用户级 MEMORY.md（上方 1.1 第三条）的**截断版**
+
+> **注意**：MEMORY.md 超长会被截断，关键规矩已在本文件完整收录，但完整原文仍以上方路径为准。
+
+---
+
+## 2. 工程纪律（硬规矩，违反必出问题）
+
+### 2.1 端口纪律
+
+```
+用户恒定：后端 3721 + 前端 3824  ← AI 绝不起/kill 这两个端口
+AI 调试：  后端 3722（跑完必退）   前端无独立端口（.next 共享目录冲突）
+```
+
+- **绝不在 3721/3824 上起自己的服务做验证**
+- 前端验证：直接 Playwright 打用户已运行的 3824
+- 后端验证：`PORT=3722` 起临时实例
+
+### 2.2 退服标准动作（必做，否则留孤儿进程）
+
+```bash
+# 1. 找 LISTEN 的 PID
+netstat -ano | findstr ":3722 "
+# 2. 杀进程（非管理员可杀自己起的进程）
+PowerShell Stop-Process -Id <PID> -Force
+# 3. 再 netstat 确认 LISTEN 行消失
+```
+
+> `TaskStop` 对 `pnpm dev`(turbo) 只杀父进程，nest/next 子进程变孤儿继续占端口。必须手动 netstat + Stop-Process 收尾。
+
+### 2.3 Prisma Client 坑
+
+- **EPERM 失败**：用户 3721 锁 DLL → `prisma generate` 会清空 `.prisma/client` 但写不回 → nest 编译挂
+- **免停机修复**：临时把 generator `output` 改到 `../.prisma-gen-tmp` → `prisma generate`（新目录无锁）→ `cp -r .prisma-gen-tmp/* node_modules/.prisma/client/` → 恢复 schema output → 删临时目录 → 核验 `index.d.ts` 存在且含新字段
+- **pnpm 双副本**：`nest/node_modules/@prisma/client` 是符号链接指向 store 旧副本（无新模型），临时脚本须直连 `nest/node_modules/.prisma/client`
+- **R-新5**：改 schema/后端逻辑 → 用户必须重启 3721
+- **R-新8**：枚举/表改动 → 必 `prisma db push` 同步 MySQL，否则 Data truncated(1265) → 500
+
+### 2.4 Role 枚举值是小写
+
+```typescript
+// shared/src/types.ts — 枚举值是小写字符串
+Role.Admin   = 'admin'    // 不是 'Admin'
+Role.Master  = 'master'
+Role.Customer = 'customer'
+```
+
+手写测试 JWT 时 role 必须写小写 `'admin'`，大写会 403。PermGuard 需 payload 带 `perms: string[]`。
+
+---
+
+## 3. 前端 UI 通用规矩（11 条，编号稳定）
+
+| # | 规矩 |
+|---|---|
+| 1 | 弹窗不点遮罩关闭（`.modal-overlay` 禁挂 onClick） |
+| 2 | 行内操作统一 `btn-link`，危险 `btn-link btn-link-danger`；页头「+新增」`btn-primary`（右对齐 `marginLeft:auto`） |
+| 3 | 操作列固定宽：单按钮 90px / 双按钮 130px / 三按钮 220px |
+| 4 | 列宽标尺：主名称 220+ 起；短列 70-80；价格 110；长文本不设宽 + `.cell-ellipsis` |
+| 5 | 弹窗用 `Modal.tsx`（`closeOnOverlay` 默认 false、`showClose` 默认 true）；宽度 480/600/760 |
+| 6 | headerBar 返回 `onBack=router.back()` 优先、`backHref` 仅兜底（防跳错） |
+| 7 | PC 宽屏适配：用户/师傅端 `.order-mod`+`.order-grid`；管理端 `.admin-detail-page`+`.admin-detail-grid` |
+| 8 | 空数据统一 `<EmptyState text="..." />` |
+| 9 | 列表行底色/hover 走 `:root` 令牌（`--row-bg` 等），禁止硬编码；卡片容器由 `.data-table-wrap` 统一承载 |
+| 10 | 订单状态切换一律二次确认（`ConfirmDialog` 再调 API，禁止 onClick 直发） |
+| 11 | 取消按钮走白名单 `CANCELABLE.includes(status)`；退款取消文案前置"资金状态以平台为准"；状态说明归集到订单信息卡备注下方「流转状态」区块（标红 `var(--color-danger)`） |
+
+---
+
+## 4. 时间显示金标准
+
+- **统一用 `formatDateTime(x)`**（`next/src/lib/format.ts`），纯前端零迁移
+- ❌ **禁止** `.slice(0,16).replace('T',' ')`（丢弃 Z，把 UTC 当本地，少 8 小时）
+- 例外：生日/预约日期 `.slice(0,10)`；`notices` startAt/endAt `.slice(0,16)`（datetime-local 输入值需无时区）
+
+---
+
+## 5. 订单状态机
+
+```
+pending_payment → pending_accept → accepted → departing → arrived → servicing → pending_confirm → reviewed → evaluated
+                                                                                                    ↑
+                                                      confirm(客户验收) → 释放托管金 → settlements 生成
+取消(支付后): → Refunding → Refunded (阶梯退款: departing 80%退 / arrived 50%退 / 其余全额)
+取消(支付前): → Cancelled (无退款, 终态)
+```
+
+- 取消原因必填落 `Order.cancelReason`（VarChar 200，1-200 字）
+- 到达验证码 `Order.arriveCode`（客户生成 6 位码 / 师傅校验 / 一次性消费）
+- 资金释放唯一入口：`confirm()`（验收），评价不再自行改订单状态
+
+---
+
+## 6. 规矩 R-新1~8（全局约束编号）
+
+| 编号 | 内容 |
+|---|---|
+| R-新1 | 枚举定全（状态/支付/结算等所有枚举在 shared 定义） |
+| R-新2 | 权限码稳定（改名同步 function-points + DB + @RequirePerm + 前端 menu） |
+| R-新3 | 级联删除保护（软删 deletedAt，不物理删） |
+| R-新4 | 价格快照隔离（下单写 Order.serviceSnapshot + Order.commissionSnapshot） |
+| R-新5 | 改 schema/后端必重启 3721 |
+| R-新6 | Prisma _count 含软删表带 `where:{deletedAt:null}` |
+| R-新7 | 工种类型轴已移除（改树形一级类目） |
+| R-新8 | 枚举/表改动必 `prisma db push` 同步 MySQL |
+
+---
+
+## 7. 关键模块速查
+
+### 7.1 后端模块（nest/src/）
+
+| 模块 | 路径 | 要点 |
+|---|---|---|
+| auth | `nest/src/auth/` | JWT(access+refresh) + bcrypt；手机号验证码 + 管理员账密 |
+| orders | `nest/src/orders/` | 状态机 transition() + canTransition 校；create 写快照；confirm 释放金 |
+| payments | `nest/src/payments/` | Provider 接缝(mock/wechat/alipay)；AES-256-GCM 加密落 `config/merchant.json` |
+| settlements | `nest/src/settlements/` | 余额实时聚合(无冗余字段)；releaseToMaster 幂等 |
+| withdrawals | `nest/src/withdrawals/` | pending(冻结)/paid/rejected(解冻)；乐观锁防超提 |
+| commission | `nest/src/commission/` | 三级降级解析(service→category→global)；区间断点 resolveTierRatio |
+| reviews | `nest/src/reviews/` | 一单一评(orderId unique)；评价成功自动 Reviewed→Evaluated+重算师傅评分 |
+| rbac | `nest/src/rbac/` | StaffRole + Permission + PermissionGuard(@RequirePerm) |
+| gateway | `nest/src/gateway/` | socket.io /ws；transition() 每次广播 order-update |
+| users | `nest/src/users/` | 三角色(admin/master/customer) CRUD |
+| services | `nest/src/services/` | 类目树(parentId) + 服务项(price/unit) + 区域(deletedAt×isActive) |
+| masters | `nest/src/masters/` | 接单范围 serviceAreas(Json)；技能 skills(Json) |
+| audit | `nest/src/audit/` | @Audit 装饰器写操作日志 |
+
+### 7.2 前端关键文件（next/src/）
+
+| 文件 | 作用 |
+|---|---|
+| `lib/admin-menu.ts` | 管理端菜单（唯一来源，含 perm 过滤） |
+| `lib/admin-api.ts` | 管理端 API 调用（服务项/类目/区域/支付配置/师傅） |
+| `lib/orders-api.ts` | 订单/结算/提现/分账 API 调用 |
+| `lib/api.ts` | axios 实例 + 拦截器（支持 `NEXT_PUBLIC_API_BASE` 覆盖） |
+| `lib/format.ts` | `formatDateTime()` 时间格式化（金标准） |
+| `lib/order-status.ts` | 前端状态流转辅助 |
+| `lib/query-keys.ts` | React Query key 常量 |
+| `components/Modal.tsx` | 弹窗组件（closeOnOverlay=false 默认） |
+| `components/ConfirmDialog.tsx` | 二次确认弹窗 |
+| `components/admin/DataTable.tsx` | 通用表格（Column 类型） |
+| `components/EmptyState.tsx` | 空数据占位 |
+| `components/CopyText.tsx` | CopyButton（一键复制，防父级跳转） |
+
+### 7.3 Shared 类型定义
+
+| 文件 | 内容 |
+|---|---|
+| `shared/src/types.ts` | OrderStatus 枚举(L9)、PaymentStatus 枚举(L24)、ORDER_STATUS_FLOW(L73)、Role 枚举(小写值) |
+
+---
+
+## 8. 分账规则引擎（2026-08-19 落地）
+
+- **数据模型**：`CommissionRule`(scope+refId 唯一, platformRate Decimal(5,4), refundPolicy(full/tiered/keep_commission), refundTiers Json, isActive, note)
+- **三级降级**：`resolve(serviceItemId)` → service 规则 → category 规则(沿 parentId 向上) → global 规则，取首个 active
+- **订单快照**：下单时调 `resolve()` 写入 `Order.commissionSnapshot`，退款/结算全程读快照
+- **区间断点**：`resolveTierRatio(status, tiers)` 沿 `CANCELLABLE_LIFECYCLE` 向前找最近断点（语义"from status onward"）
+- **管理端**：`/admin/finance/commission`（perm `finance:manage`；全局规则禁删只许改）
+- **当前库里**：仅一条全局默认（0% + tiered + departing 80% / arrived 50%），与改造前行为完全一致
+- ⚠️ 行为变更：默认配置下 `servicing`/`pending_confirm` 退款比例从旧 100% 变为继承 `arrived` 50%（如需全额退可显式加断点）
+
+---
+
+## 9. 当前完成状态（截至 2026-08-19）
+
+### 已完成 ✅
+
+- [x] Phase 0 脚手架 + 库表 + JWT + 三端 layout
+- [x] RBAC 四实体 + PermissionGuard + 7 预设岗位角色
+- [x] 支付前置 + 平台担保托管模型（订单状态机改造）
+- [x] PaymentProvider 接缝（mock/wechat/alipay 可切换）
+- [x] 前端三端订单全链路（下单/列表/详情/支付/取消/验收/评价）
+- [x] 师傅抢单并发防（updateMany 乐观锁）
+- [x] 到达验证码（客户生成 / 师傅校验 / 一次性）
+- [x] 阶梯退款全链路（departing 80% / arrived 50%）
+- [x] 评价模块（5 星 + 200 字 + 匿名，一单一评）
+- [x] 收入/提现模块（余额实时聚合 + 管理端审核）
+- [x] 分账规则引擎全链路（CommissionRule + 快照 + 三方分账 + 管理端配置页）
+- [x] WS 实时推送（OrdersGateway，transition 每次广播）
+- [x] 时间显示全量统一为 formatDateTime
+- [x] 登录页双击全屏修复
+- [x] 订单号一键复制（CopyButton 组件）
+- [x] 状态切换一律二次确认（ConfirmDialog）
+- [x] 取消白名单 + 流转状态红字区块
+- [x] UI 11 条规矩全量落地
+
+### 待办 / 已知缺口
+
+| 优先级 | 事项 | 说明 |
+|---|---|---|
+| P1 | 浏览器跑通 mock 全流程 | 用户重启 3721 后 Playwright 打 3824 验证 departing/arrived → evaluated + WS |
+| P1 | 订单内 IM 聊天 | 独立工程；会话锚点用 `Conversation.orderId`（非手机号 Hash）；验证码切勿走 IM 发送 |
+| P1 | WS 广播安全 | 当前无鉴权无 room 定向（全端广播所有订单），上线前必改按用户订阅 |
+| P2 | 客户未生成码兜底 | N 分钟后照片 + GPS 凭证到达 |
+| P2 | Refunding→Refunded 不写 orderLog | refund 直接 order.update，不走 transition |
+| P2 | 地域接 ServiceArea | 当前任意城市可下单 |
+| P2 | 师傅端无取消入口 | 如需再加 |
+| P3 | 真实支付联调 | 需商户凭证 + 公网回调地址 |
+| P3 | 阶梯退款真实渠道验证 | wechat provider refund/total 已分字段 |
+
+---
+
+## 10. 协作方式（跨项目通用，用户级记忆摘要）
+
+- 用户（虎哥）会**自己动手并行操作**——不能假设系统状态只由 AI 改变
+- 用户会**回头核查数据并直接质疑**——要可核查的证据链，不是漂亮话
+- 用户有管理员权限、愿意自己执行脚本；AI 会话通常非管理员
+- 用户否定 AI 结论时，**默认他是对的**，回去查代码，不要复述"复现不了"
+- 涉及提权的操作写成独立脚本交给用户跑
+
+---
+
+## 11. 工程结构速览
+
+```
+D:\FrontEnd\home_app\
+├── nest/                      # NestJS 后端
+│   ├── src/
+│   │   ├── auth/              # JWT 鉴权
+│   │   ├── orders/            # 订单状态机 + CRUD
+│   │   ├── payments/          # 支付接缝(mock/wechat/alipay)
+│   │   ├── settlements/       # 结算台账
+│   │   ├── withdrawals/       # 提现管理
+│   │   ├── commission/        # 分账规则引擎
+│   │   ├── reviews/           # 评价
+│   │   ├── rbac/              # 角色权限
+│   │   ├── gateway/           # WebSocket(socket.io /ws)
+│   │   ├── users/             # 用户管理
+│   │   ├── services/          # 服务类目/项目/区域
+│   │   ├── masters/           # 师傅管理
+│   │   ├── audit/             # 操作日志
+│   │   ├── prisma/            # PrismaService
+│   │   ├── common/            # 公共装饰器/守卫
+│   │   └── config/            # merchant.json(AES加密)
+│   ├── prisma/
+│   │   └── schema.prisma      # 数据模型(唯一真相源)
+│   └── tsconfig.json
+├── next/                      # Next.js 前端
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── (auth)/login   # 统一登录页
+│   │   │   ├── admin/         # 管理端(/admin/*)
+│   │   │   ├── client/        # 客户端(/client/*)
+│   │   │   └── master/        # 师傅端(/master/*)
+│   │   ├── components/         # 通用组件(Modal/DataTable/ConfirmDialog等)
+│   │   └── lib/               # API/格式化/菜单/QueryKeys
+│   └── tsconfig.json
+├── shared/                    # 三端共享类型
+│   └── src/types.ts           # 枚举 + 状态机定义
+├── docs/                      # 项目文档(本文件所在地)
+│   ├── HANDOFF.md             # ← 你在这里
+│   ├── rbac-design.md         # RBAC 权限设计
+│   ├── orders-sop.md          # 下单接单流程 SOP
+│   ├── 需求文档/plan.md       # 项目计划
+│   ├── sql/init-admin.sql     # 管理员种子
+│   └── shell/                 # 运维脚本
+├── mysql-data/                # MySQL 数据目录
+├── package.json               # pnpm workspace 根
+├── pnpm-workspace.yaml
+└── turbo.json
+```
+
+---
+
+## 12. MySQL 运行方式
+
+本机 MySQL 未注册为服务，用项目内数据目录直接拉进程：
+
+```bash
+cd "C:/Program Files/MySQL/MySQL Server 8.0/bin"
+./mysqld --datadir="D:/FrontEnd/home_app/mysql-data" \
+         --innodb-undo-directory="D:/FrontEnd/home_app/mysql-data" \
+         --port=3306 --console
+```
+
+库 `laoma_jiadian`，root 空密码。
+
+---
+
+## 13. 常用命令
+
+```bash
+# 构建顺序（先 shared 再 backend）
+pnpm --filter @laoma/shared build
+pnpm --filter @laoma/backend build
+
+# TypeScript 检查
+npx tsc --noEmit --project next/tsconfig.json   # 前端
+npx tsc --noEmit --project nest/tsconfig.json    # 后端
+
+# Prisma（改 schema 后）
+# 免停机：见第 2.3 节
+# 正常流程（用户停服后）：
+cd nest && npx prisma db push --skip-generate
+
+# 前端启动（用户自己跑）
+NEXT_PUBLIC_API_BASE=http://127.0.0.1:3721/api next dev -p 3824
+
+# 后端启动（用户自己跑）
+# main.ts 用 process.env.PORT
+cd nest && PORT=3721 pnpm start:dev
+```
+
+---
+
+> **结语**：本文件是所有记忆和规则的汇总入口。完整原文分散在各记忆文件中（见第 1 节索引），但关键约束已在此全部收录。接手时先通读本文件，再按需查阅关联文件即可。
