@@ -256,8 +256,11 @@ model Address {
   contactName  String
   contactPhone String
   province     String?
+  provinceCode String?  @db.VarChar(12)
   city         String
+  cityCode     String?  @db.VarChar(12)
   district     String?
+  districtCode String?  @db.VarChar(12)
   detail       String
   tag          String?
   isDefault    Boolean  @default(false)

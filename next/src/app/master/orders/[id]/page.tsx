@@ -74,6 +74,9 @@ export default function MasterOrderDetailPage() {
   const refresh = () => {
     qc.invalidateQueries({ queryKey: QK.orderPool });
     qc.invalidateQueries({ queryKey: QK.orderMaster });
+    // 退款/补偿结算单是独立查询，流转（取消→退款→生成补偿单）后必须一并刷新，
+    // 否则 compensation 仍为 null，会错误显示「全额退款·本单未产生收入」兜底文案
+    qc.invalidateQueries({ queryKey: ['settlementsByOrder', id] });
   };
   const refreshMenu = [{ label: '刷新数据', onClick: refresh }];
 

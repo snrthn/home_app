@@ -102,10 +102,8 @@ export function getReviews(): Promise<ReviewItem[]> {
 }
 
 // ---------- 师傅端 ----------
-export function getOrderPool(city?: string): Promise<OrderLite[]> {
-  return api
-    .get('/orders/pool', { params: city ? { city } : {} })
-    .then((r) => r.data ?? []);
+export function getOrderPool(): Promise<OrderLite[]> {
+  return api.get('/orders/pool').then((r) => r.data ?? []);
 }
 export function getMasterOrders(city?: string): Promise<OrderLite[]> {
   return api
@@ -164,8 +162,11 @@ export interface Address {
   contactName: string;
   contactPhone: string;
   province?: string | null;
+  provinceCode?: string | null;
   city: string;
+  cityCode?: string | null;
   district?: string | null;
+  districtCode?: string | null;
   detail: string;
   tag?: string | null;
   isDefault: boolean;

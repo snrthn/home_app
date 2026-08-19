@@ -39,8 +39,8 @@ export class OrdersController {
   @UseGuards(JwtAuthGuard)
   @Roles(Role.Master)
   @Get('pool')
-  pool(@Query('city') city?: string) {
-    return this.orders.pool(city);
+  pool(@Req() req: any) {
+    return this.orders.pool(req.user.sub);
   }
 
   @UseGuards(JwtAuthGuard)

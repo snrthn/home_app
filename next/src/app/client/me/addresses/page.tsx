@@ -62,12 +62,27 @@ function userRegionValue(me?: UserInfo): RegionValue {
   };
 }
 
-// 编辑既有地址时，仅存了省/市/区名称（无编码），按名称反查编码以驱动级联回显
+// 编辑既有地址时，优先使用已存储的 code（新数据已有），缺 code 时按名称反查兜底
 function regionFromNames(
   province?: string | null,
+  provinceCode?: string | null,
   city?: string | null,
+  cityCode?: string | null,
   district?: string | null,
+  districtCode?: string | null,
 ): RegionValue {
+  // 新数据已有 code，直接用
+  if (provinceCode || cityCode) {
+    return {
+      province: province ?? null,
+      provinceCode: provinceCode ?? null,
+      city: city ?? null,
+      cityCode: cityCode ?? null,
+      district: district ?? null,
+      districtCode: districtCode ?? null,
+    };
+  }
+  // 旧数据缺 code，按名称反查兜底
   const p = provinceOptions.find((o) => o.name === province);
   if (!p) {
     return {
@@ -131,7 +146,7 @@ export default function AddressBookPage() {
       id: a.id,
       contactName: a.contactName,
       contactPhone: a.contactPhone,
-      region: regionFromNames(a.province, a.city, a.district),
+      region: regionFromNames(a.province, a.provinceCode, a.city, a.cityCode, a.district, a.districtCode),
       detail: a.detail ?? '',
       isDefault: !!a.isDefault,
     });
@@ -155,8 +170,11 @@ export default function AddressBookPage() {
         contactName: form.contactName.trim(),
         contactPhone: form.contactPhone.trim(),
         province: form.region.province?.trim() || null,
+        provinceCode: form.region.provinceCode?.trim() || null,
         city: form.region.city!.trim(),
+        cityCode: form.region.cityCode?.trim() || null,
         district: form.region.district?.trim() || null,
+        districtCode: form.region.districtCode?.trim() || null,
         detail: form.detail.trim(),
         isDefault: form.isDefault,
       };

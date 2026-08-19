@@ -8,6 +8,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { regionMatches } from '../common/region-match';
 import { OrderStatus } from '@laoma/shared';
 import { canTransition } from './order-status';
 import { OrdersGateway } from '../gateway/orders.gateway';
@@ -112,17 +113,33 @@ export class OrdersService {
     });
   }
 
-  async pool(city?: string) {
+  async pool(masterId?: string) {
     // masterId:null 与抢单乐观锁条件对齐：抢单先占 masterId 再流转，
     // 中途异常会留下 PendingAccept+已占 的孤儿单，池子里不该再展示
-    return this.prisma.order.findMany({
-      where: {
-        status: OrderStatus.PendingAccept,
-        masterId: null,
-        ...(city ? { city } : {}),
-      },
+    const orders = await this.prisma.order.findMany({
+      where: { status: OrderStatus.PendingAccept, masterId: null },
       include: { serviceItem: true, address: true },
     });
+    // 未带师傅上下文（理论上 Guard 已保证，这里兜底宽松）：返回全部
+    if (!masterId) return orders;
+    // 地域匹配核心：按师傅服务区域(serviceAreas) 过滤。
+    // 严格不可见：未配置服务区域的师傅看不到任何单。
+    const master = await this.prisma.master.findUnique({
+      where: { userId: masterId },
+      select: { serviceAreas: true },
+    });
+    const areas = (master?.serviceAreas as any[]) ?? null;
+    if (!areas || areas.length === 0) return [];
+    return orders.filter((o) =>
+      regionMatches(areas, {
+        province: o.address?.province,
+        provinceCode: o.address?.provinceCode,
+        city: o.address?.city,
+        cityCode: o.address?.cityCode,
+        district: o.address?.district,
+        districtCode: o.address?.districtCode,
+      }),
+    );
   }
 
   async listForMaster(userId: string, city?: string) {

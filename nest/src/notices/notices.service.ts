@@ -4,6 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { regionMatches } from '../common/region-match';
 
 const SCOPES = ['customer', 'master', 'admin'];
 const STATUSES = ['draft', 'published', 'offline'];
@@ -159,28 +160,8 @@ export class NoticesService {
       regions.some(
         (r) =>
           r?.provinceCode &&
-          this.matchRegion(n.targetRegions as NoticeTargetRegion[] | null, r),
+          regionMatches(n.targetRegions as NoticeTargetRegion[] | null, r),
       ),
     );
-  }
-
-  // targetRegions 为空数组/null → 全国可见（不约束）；
-  // 非空 → 用户 (pCode,cCode,dCode) 命中任一条规则即可见。
-  private matchRegion(
-    targetRegions: NoticeTargetRegion[] | null,
-    region: RegionFilter,
-  ): boolean {
-    if (!targetRegions || targetRegions.length === 0) return true;
-    const pCode = region.provinceCode;
-    const cCode = region.cityCode;
-    const dCode = region.districtCode;
-    return targetRegions.some((r) => {
-      if (!r.provinceCode || r.provinceCode !== pCode) return false;
-      if (r.cityCode) {
-        if (r.cityCode !== cCode) return false;
-        if (r.districtCode && r.districtCode !== dCode) return false;
-      }
-      return true;
-    });
   }
 }
