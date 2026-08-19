@@ -3,12 +3,13 @@
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { getAllOrders, type OrderLite } from '@/lib/orders-api';
+import { getAllOrders, getSettlementsByOrder, type OrderLite } from '@/lib/orders-api';
 import { QK } from '@/lib/query-keys';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE } from '@/lib/order-status';
 import { StatusBadge } from '@/components/admin/DataTable';
 import EmptyState from '@/components/EmptyState';
 import { formatDateTime } from '@/lib/format';
+import { CopyButton } from '@/components/CopyText';
 
 export default function AdminOrderDetailPage() {
   const { id } = useParams();
@@ -20,6 +21,15 @@ export default function AdminOrderDetailPage() {
     refetchOnMount: 'always',
   });
   const order = orders.find((o) => o.id === orderId);
+
+  // 退款补偿说明（按订单查结算单，含退款补偿单）
+  const { data: settlements = [] } = useQuery({
+    queryKey: ['settlementsByOrder', orderId],
+    queryFn: () => getSettlementsByOrder(orderId),
+    refetchOnMount: 'always',
+  });
+  const compensation = settlements.find((s) => s.type === 'compensation') ?? null;
+  const normalSettlement = settlements.find((s) => s.type === 'normal') ?? null;
 
   const addr = order?.address;
   const addrLine = addr
@@ -51,7 +61,7 @@ export default function AdminOrderDetailPage() {
                 {ORDER_STATUS_LABEL[order.status]}
               </StatusBadge>
             </div>
-            <p className="field-hint" style={{ marginTop: 4 }}>单号 {order.orderNo}</p>
+            <p className="field-hint" style={{ marginTop: 4 }}>单号 {order.orderNo}<CopyButton value={order.orderNo} title="复制订单号" /></p>
             <div className="field-inline-row" style={{ marginTop: 10 }}>
               <span className="field-label">金额</span>
               <span className="field-inline-value" style={{ color: 'var(--color-primary-text)', fontWeight: 600 }}>
@@ -78,6 +88,30 @@ export default function AdminOrderDetailPage() {
               <div className="field-inline-row">
                 <span className="field-label">取消原因</span>
                 <span className="field-inline-value">{order.cancelReason}</span>
+              </div>
+            )}
+            {compensation && (
+              <div className="field-inline-row">
+                <span className="field-label">退款补偿</span>
+                <span className="field-inline-value" style={{ color: 'var(--color-danger)' }}>
+                  ¥{compensation.masterAmount} ·{' '}
+                  {compensation.status === 'pending'
+                    ? '待平台审核入账'
+                    : compensation.status === 'credited'
+                      ? '已入账'
+                      : '已驳回'}
+                  {compensation.reviewedByUser?.phone && compensation.reviewedAt
+                    ? `（审核人：${compensation.reviewedByUser.phone} · ${formatDateTime(compensation.reviewedAt)}）`
+                    : ''}
+                </span>
+              </div>
+            )}
+            {normalSettlement && Number(normalSettlement.platformFee) > 0 && (
+              <div className="field-inline-row">
+                <span className="field-label">分账信息</span>
+                <span className="field-inline-value">
+                  平台佣金 ¥{normalSettlement.platformFee} · 师傅所得 ¥{normalSettlement.masterAmount}
+                </span>
               </div>
             )}
           </div>

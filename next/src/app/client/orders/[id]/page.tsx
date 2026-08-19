@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { PortalNavSetter } from '@/components/PortalShell';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getMyOrders, payByMock, confirmOrder, cancelMyOrder, generateArriveCode, createReview } from '@/lib/orders-api';
+import { getMyOrders, payByMock, confirmOrder, cancelMyOrder, generateArriveCode, createReview, getSettlementsByOrder } from '@/lib/orders-api';
 import { QK } from '@/lib/query-keys';
 import { getApiErrorMsg, resolveAsset } from '@/lib/api';
 import { useToast } from '@/components/Toast';
@@ -15,6 +15,7 @@ import { StatusBadge } from '@/components/admin/DataTable';
 import EmptyState from '@/components/EmptyState';
 import { useOrderSocket } from '@/lib/useOrderSocket';
 import { formatDateTime } from '@/lib/format';
+import { CopyButton } from '@/components/CopyText';
 
 // 可取消的状态：支付前取消无退款；支付后取消走退款
 const CANCELABLE: OrderStatus[] = [
@@ -54,6 +55,14 @@ export default function ClientOrderDetailPage() {
     refetchOnMount: 'always',
   });
   const order = orders.find((o) => o.id === id);
+
+  // 退款补偿说明（按订单查结算单，含退款补偿单）
+  const { data: settlements = [] } = useQuery({
+    queryKey: ['settlementsByOrder', id],
+    queryFn: () => getSettlementsByOrder(id),
+    refetchOnMount: 'always',
+  });
+  const compensation = settlements.find((s) => s.type === 'compensation') ?? null;
 
   const refresh = () => qc.invalidateQueries({ queryKey: QK.orderMine });
   const refreshMenu = [{ label: '刷新数据', onClick: refresh }];
@@ -234,7 +243,7 @@ export default function ClientOrderDetailPage() {
                   {ORDER_STATUS_LABEL[order.status]}
                 </StatusBadge>
               </div>
-              <p className="field-hint" style={{ marginTop: 4 }}>单号 {order.orderNo}</p>
+              <p className="field-hint" style={{ marginTop: 4 }}>单号 {order.orderNo}<CopyButton value={order.orderNo} title="复制订单号" /></p>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
                 <div className="field-inline-row" style={{ margin: 0 }}>
                   <span className="field-label">服务单价</span>
@@ -308,6 +317,19 @@ export default function ClientOrderDetailPage() {
             <div className="field-inline-row">
               <span className="field-label">取消原因</span>
               <span className="field-inline-value">{order.cancelReason}</span>
+            </div>
+          )}
+          {compensation && (
+            <div className="field-inline-row">
+              <span className="field-label">退款补偿</span>
+              <span className="field-inline-value" style={{ color: 'var(--color-danger)' }}>
+                ¥{compensation.masterAmount} ·{' '}
+                {compensation.status === 'pending'
+                  ? '待平台审核入账'
+                  : compensation.status === 'credited'
+                    ? '已入账'
+                    : '已驳回'}
+              </span>
             </div>
           )}
           {order.status === 'departing' && (

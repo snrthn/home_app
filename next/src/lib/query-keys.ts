@@ -39,6 +39,8 @@ export const QK = {
   masterWithdrawals: ['master', 'withdrawals'] as const,
   // 管理端提现审核
   adminWithdrawals: ['admin', 'withdrawals'] as const,
+  // 分账规则配置
+  commissionRules: ['admin', 'commission', 'rules'] as const,
   adminReviews: ['admin', 'reviews'] as const,
   myAddresses: ['client', 'addresses'] as const,
   publicServices: ['public', 'services'] as const,

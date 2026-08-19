@@ -1,20 +1,55 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CommissionService } from '../commission/commission.service';
 
 @Injectable()
 export class SettlementsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private commission: CommissionService,
+  ) {}
 
   // ===== 管理端 =====
 
   list() {
-    return this.prisma.settlement.findMany({
-      include: {
-        master: { include: { user: { include: { profile: { select: { nickname: true } } } } } },
-        order: { select: { orderNo: true } },
-      },
+    return this.prisma.settlement
+      .findMany({
+        include: {
+          master: {
+            include: { user: { include: { profile: { select: { nickname: true } } } } },
+          },
+          order: { select: { orderNo: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+      .then((rows) => this.attachReviewers(rows));
+  }
+
+  /** 按订单查结算单（含常规单/退款补偿单），供三端订单详情展示补偿说明 */
+  async byOrder(orderId: string) {
+    const rows = await this.prisma.settlement.findMany({
+      where: { orderId, deletedAt: null },
+      include: { order: { select: { orderNo: true } } },
       orderBy: { createdAt: 'desc' },
     });
+    return this.attachReviewers(rows);
+  }
+
+  /** 附加审核人信息（reviewedBy 仅存 userId，需单独查 user 表） */
+  private async attachReviewers<T extends { reviewedBy?: string | null }>(rows: T[]): Promise<any[]> {
+    const ids = [...new Set(rows.map((r) => r.reviewedBy).filter(Boolean))] as string[];
+    if (ids.length === 0) return rows.map((r) => ({ ...r, reviewedByUser: null }));
+    const users = await this.prisma.user.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, phone: true },
+    });
+    const map = new Map(users.map((u) => [u.id, u.phone]));
+    return rows.map((r) => ({
+      ...r,
+      reviewedByUser: (r as any).reviewedBy
+        ? { id: (r as any).reviewedBy, phone: map.get((r as any).reviewedBy) ?? null }
+        : null,
+    }));
   }
 
   // 对已验收（托管金释放）且未生成台账的补生成记录（幂等）。常规单即时入账。
@@ -28,16 +63,23 @@ export class SettlementsService {
         where: { orderId: o.id },
       });
       if (!exist) {
+        // 分账走订单快照（历史单无快照则实时解析兜底），未配规则时 platformRate=0 等价旧行为
+        const snap = await this.commission.snapshotFromOrder(o);
+        const { platformFee, masterAmount } = this.commission.splitNormal(
+          Number(o.amount),
+          snap,
+        );
         const rec = await this.prisma.settlement.create({
           data: {
             orderId: o.id,
             masterId: o.masterId!,
             orderAmount: o.amount,
-            platformFee: 0,
-            masterAmount: o.amount,
+            platformFee,
+            masterAmount,
             type: 'normal',
             status: 'credited',
             settledAt: new Date(),
+            note: `常规结算｜平台佣金率 ${(snap.platformRate * 100).toFixed(2)}%（规则：${snap.source}）`,
           },
         });
         created.push(rec);
@@ -47,26 +89,37 @@ export class SettlementsService {
   }
 
   /** 补偿单确认入账：pending → credited（管理端审核通过，金额进入师傅余额） */
-  async credit(id: string, note?: string) {
+  async credit(id: string, note?: string, reviewerId?: string) {
     const s = await this.prisma.settlement.findUnique({ where: { id } });
     if (!s) throw new NotFoundException('结算单不存在');
     if (s.status !== 'pending')
       throw new BadRequestException('仅待审核的补偿单可确认入账');
     return this.prisma.settlement.update({
       where: { id },
-      data: { status: 'credited', settledAt: new Date(), note: note ?? s.note },
+      data: {
+        status: 'credited',
+        settledAt: new Date(),
+        note: note ?? s.note,
+        reviewedBy: reviewerId ?? s.reviewedBy,
+        reviewedAt: new Date(),
+      },
     });
   }
 
   /** 补偿单驳回：pending → rejected（不入账，需填原因） */
-  async reject(id: string, reason: string) {
+  async reject(id: string, reason: string, reviewerId?: string) {
     const s = await this.prisma.settlement.findUnique({ where: { id } });
     if (!s) throw new NotFoundException('结算单不存在');
     if (s.status !== 'pending')
       throw new BadRequestException('仅待审核的补偿单可驳回');
     return this.prisma.settlement.update({
       where: { id },
-      data: { status: 'rejected', note: reason },
+      data: {
+        status: 'rejected',
+        note: reason,
+        reviewedBy: reviewerId ?? s.reviewedBy,
+        reviewedAt: new Date(),
+      },
     });
   }
 
@@ -79,40 +132,55 @@ export class SettlementsService {
       where: { orderId },
     });
     if (exist) return exist;
+    // 平台佣金按订单快照解析（下单时固化），改类目佣金不影响历史单
+    const snap = await this.commission.snapshotFromOrder(order);
+    const { platformFee, masterAmount } = this.commission.splitNormal(
+      Number(order.amount),
+      snap,
+    );
     return this.prisma.settlement.create({
       data: {
         orderId,
         masterId: order.masterId!,
         orderAmount: order.amount,
-        platformFee: 0,
-        masterAmount: order.amount,
+        platformFee,
+        masterAmount,
         type: 'normal',
         status: 'credited',
         settledAt: new Date(),
+        note: `常规结算｜平台佣金率 ${(snap.platformRate * 100).toFixed(2)}%（规则：${snap.source}）`,
       },
     });
   }
 
-  /** 阶梯退款时为师傅生成补偿单（departing 取消师傅得 20%、arrived 得 50%）。
-   *  compensation = 订单金额 − 实退金额（由调用方 payments.refund 按比例算出传入）。
+  /** 阶梯退款时为师傅生成补偿单。三方金额由调用方 payments.refund 依订单快照算出：
+   *  未退给用户的留成 = platformKeep（平台佣金留成）+ compensation（师傅补偿）。
    *  补偿单不即时入账，需管理端审核确认。幂等：该订单已有结算单则跳过。 */
-  async createCompensation(orderId: string, compensation: number) {
+  async createCompensation(
+    orderId: string,
+    compensation: number,
+    platformKeep = 0,
+    ruleSource?: string,
+  ) {
     const comp = Math.round(compensation * 100) / 100;
     if (comp <= 0) return null;
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order || !order.masterId) return null;
     const exist = await this.prisma.settlement.findUnique({ where: { orderId } });
     if (exist) return exist;
+    const keep = Math.round(platformKeep * 100) / 100;
     return this.prisma.settlement.create({
       data: {
         orderId,
         masterId: order.masterId,
         orderAmount: order.amount,
-        platformFee: 0,
+        platformFee: keep,
         masterAmount: comp,
         type: 'compensation',
         status: 'pending',
-        note: '阶梯退款补偿（待管理端审核入账）',
+        note:
+          `阶梯退款补偿（待管理端审核入账）｜平台留成 ¥${keep.toFixed(2)}` +
+          (ruleSource ? `｜规则：${ruleSource}` : ''),
       },
     });
   }

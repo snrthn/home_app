@@ -88,6 +88,7 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     children: [
       { key: 'settlements', label: '结算台账', path: '/admin/settlements', perm: 'orders:read' },
       { key: 'withdrawals', label: '提现管理', path: '/admin/withdrawals', perm: 'finance:manage' },
+      { key: 'commission', label: '分账规则', path: '/admin/finance/commission', perm: 'finance:manage' },
     ],
   },
   {

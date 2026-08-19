@@ -13,6 +13,7 @@ import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE, type OrderStatus } from '@/lib/o
 import { formatDateTime } from '@/lib/format';
 import DataTable, { type Column } from '@/components/admin/DataTable';
 import { StatusBadge } from '@/components/admin/DataTable';
+import { CopyButton } from '@/components/CopyText';
 import { Modal } from '@/components/Modal';
 
 // 管理端可指派的状态（尚未分配给具体师傅）
@@ -117,7 +118,17 @@ export default function OrdersTable({
 
   const columns = useMemo<Column<OrderLite>[]>(
     () => [
-      { key: 'orderNo', title: '单号', width: '150px' },
+      {
+        key: 'orderNo',
+        title: '单号',
+        width: '170px',
+        render: (o) => (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            {o.orderNo}
+            <CopyButton value={o.orderNo} title="复制订单号" />
+          </span>
+        ),
+      },
       {
         key: 'service',
         title: '服务',

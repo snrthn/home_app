@@ -6,6 +6,7 @@ import { getReviews, type ReviewItem } from '@/lib/orders-api';
 import { QK } from '@/lib/query-keys';
 import DataTable, { type Column } from '@/components/admin/DataTable';
 import { formatDateTime } from '@/lib/format';
+import { CopyButton } from '@/components/CopyText';
 
 export default function AdminReviewsPage() {
   const { data: list = [], isLoading } = useQuery<ReviewItem[]>({
@@ -21,7 +22,13 @@ export default function AdminReviewsPage() {
         key: 'orderNo',
         title: '订单号',
         width: '170px',
-        render: (r) => r.order?.orderNo ?? '-',
+        render: (r) =>
+          r.order?.orderNo ? (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              {r.order.orderNo}
+              <CopyButton value={r.order.orderNo} title="复制订单号" />
+            </span>
+          ) : '-',
       },
       {
         key: 'customer',

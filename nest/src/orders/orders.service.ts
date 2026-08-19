@@ -11,6 +11,7 @@ import { canTransition } from './order-status';
 import { OrdersGateway } from '../gateway/orders.gateway';
 import { SettlementsService } from '../settlements/settlements.service';
 import { PaymentsService } from '../payments/payments.service';
+import { CommissionService } from '../commission/commission.service';
 
 function genOrderNo() {
   return (
@@ -38,6 +39,7 @@ export class OrdersService {
     private prisma: PrismaService,
     private settlements: SettlementsService,
     private payments: PaymentsService,
+    private commission: CommissionService,
     @Optional() private gateway?: OrdersGateway,
   ) {}
 
@@ -62,6 +64,10 @@ export class OrdersService {
     });
     if (!addr) throw new NotFoundException('地址不存在');
 
+    // 分账规则快照（R-新4 同款思路）：下单时按 服务项→类目树→全局 解析并固化，
+    // 之后退款/结算只读快照，后期调整类目佣金不会污染历史订单。
+    const commissionSnapshot = await this.commission.resolve(dto.serviceItemId);
+
     // 下单即进入「待支付」态（支付前置模型）；支付成功后再入抢单池。
     const order = await this.prisma.order.create({
       data: {
@@ -70,6 +76,7 @@ export class OrdersService {
         addressId: dto.addressId,
         serviceItemId: dto.serviceItemId,
         serviceSnapshot: item as any,
+        commissionSnapshot: commissionSnapshot as any,
         city: addr.city,
         amount: item.price,
         appointmentDate: dto.appointmentDate ? new Date(dto.appointmentDate) : null,
@@ -290,16 +297,9 @@ export class OrdersService {
     return updated;
   }
 
-  /** 取消：支付前取消无退款；支付后取消走退款（refunding → refunded）。
-   *  阶梯退款：师傅已出发(departing)取消退 80%；已到达(arrived)取消退 50%；其余支付后阶段全额退。
-   */
-  private refundRatioOf(status: OrderStatus): number {
-    if (status === OrderStatus.Departing) return 0.8;
-    if (status === OrderStatus.Arrived) return 0.5;
-    return 1;
-  }
-
-  /** 取消：需填写取消原因（必填，写入 orderLog）；支付前取消无退款；支付后取消走阶梯退款 */
+  /** 取消：需填写取消原因（必填，写入 orderLog）；支付前取消无退款；支付后取消走阶梯退款。
+   *  退款比例与三方分账不再硬编码，改由订单快照 commissionSnapshot 决定
+   *  （解析优先级：服务项 → 类目树 → 全局默认，见 CommissionService）。 */
   async cancel(orderId: string, userId: string, isAdmin = false, reason = '') {
     const r = (reason ?? '').trim();
     if (!r) throw new BadRequestException('请填写取消原因');
@@ -312,7 +312,8 @@ export class OrdersService {
       throw new ForbiddenException('无权取消该订单');
 
     if (POST_PAY_STATES.includes(order.status as OrderStatus)) {
-      const ratio = this.refundRatioOf(order.status as OrderStatus);
+      // 阶梯依据必须是「流转到 refunding 之前」的状态，故先留存再传给退款
+      const stageStatus = order.status as string;
       await this.transition(
         orderId,
         OrderStatus.Refunding,
@@ -320,7 +321,7 @@ export class OrdersService {
         `取消（发起退款）｜原因：${r}`,
         { cancelReason: r },
       );
-      await this.payments.refund(order.customerId, orderId, ratio);
+      await this.payments.refund(order.customerId, orderId, stageStatus);
       return this.prisma.order.findUnique({ where: { id: orderId } });
     }
     return this.transition(

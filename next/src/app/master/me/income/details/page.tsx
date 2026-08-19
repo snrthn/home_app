@@ -90,6 +90,11 @@ export default function MasterIncomeDetailsPage() {
                       {s.type === 'compensation' ? '补偿单 · ' : ''}
                       {fmtTime(s.settledAt ?? s.createdAt)} · <span style={{ color: st.color }}>{st.label}</span>
                     </div>
+                    {s.type !== 'compensation' && Number(s.platformFee) > 0 && (
+                      <div className="field-hint" style={{ marginTop: 2 }}>
+                        订单金额 ¥{Number(s.orderAmount).toFixed(2)} · 平台服务费 ¥{Number(s.platformFee).toFixed(2)}
+                      </div>
+                    )}
                     {s.status === 'rejected' && s.note ? (
                       <div className="field-hint" style={{ marginTop: 2, color: 'var(--color-danger)' }}>
                         驳回原因：{s.note}

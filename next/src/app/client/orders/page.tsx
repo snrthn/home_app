@@ -10,6 +10,7 @@ import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE } from '@/lib/order-status';
 import { StatusBadge } from '@/components/admin/DataTable';
 import EmptyState from '@/components/EmptyState';
 import { formatDateTime } from '@/lib/format';
+import { CopyButton } from '@/components/CopyText';
 
 export default function ClientOrdersPage() {
   const router = useRouter();
@@ -68,7 +69,7 @@ export default function ClientOrdersPage() {
                     fontSize: 13,
                   }}
                 >
-                  <span>单号 {o.orderNo}</span>
+                  <span>单号 {o.orderNo}<CopyButton value={o.orderNo} title="复制订单号" /></span>
                   <span style={{ color: 'var(--color-primary-text)', fontWeight: 600 }}>¥{o.amount}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, color: 'var(--color-text-soft)', fontSize: 12 }}>

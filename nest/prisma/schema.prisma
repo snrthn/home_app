@@ -280,6 +280,9 @@ model Order {
   serviceItemId    String
   serviceItem      ServiceItem @relation(fields: [serviceItemId], references: [id])
   serviceSnapshot  Json
+  // 分账规则快照（下单时按 服务项→类目树→全局 解析后固化，退款/结算全程读它，
+  // 与「当下配置」解耦：后期改类目佣金不会污染历史单）。结构见 CommissionRule 注释。
+  commissionSnapshot Json?
   city             String
   amount           Decimal     @db.Decimal(10, 2)
   appointmentDate  DateTime?
@@ -364,9 +367,50 @@ model Settlement {
   status       SettlementStatus @default(credited)
   settledAt    DateTime?        // 入账时间（credited 时写入）
   note         String?
+  reviewedBy   String?          // 审核操作人 userId（补偿单确认入账/驳回时写入，供台账与订单详情展示）
+  reviewedAt   DateTime?        // 审核时间
   createdAt    DateTime         @default(now())
 
   deletedAt    DateTime?
+}
+
+// ---------------- 分账规则配置（2026-08-19 新增） ----------------
+// 两条正交配置轴 × 三级降级 + 订单快照：
+//   轴1 分账比例 platformRate（平台抽佣率，师傅得 1-rate）
+//   轴2 退款佣金策略 refundPolicy + refundTiers（异常场景钱怎么分）
+// 解析优先级（越具体越优先）：service 覆盖 → category（沿 parentId 向上找最近命中）→ global 兜底。
+// 订单创建时解析结果固化进 Order.commissionSnapshot，退款/结算只读快照，不读实时配置。
+enum CommissionScope {
+  global   // 平台全局默认（refId 恒为空串）
+  category // 按服务类目覆盖（refId = ServiceCategory.id，支持树形向上继承）
+  service  // 按服务项覆盖（refId = ServiceItem.id，最高优先级）
+}
+
+enum RefundPolicy {
+  full            // 全额退款：忽略阶梯，退用户 100%，平台与师傅均不留成
+  tiered          // 阶梯退款（默认）：按 refundTiers 留成，留成再按 platformRate 拆平台/师傅
+  keep_commission // 佣金不退：在阶梯基础上，平台佣金部分始终不退给用户
+}
+
+model CommissionRule {
+  id           String          @id @default(cuid())
+  scope        CommissionScope
+  // 作用对象 id：global 为空串（MySQL 下 NULL 不参与唯一约束，故用空串保证 global 唯一）
+  refId        String          @default("")
+  // 平台抽佣率 0~1（0.1000 = 10%），师傅得 1 - platformRate
+  platformRate Decimal         @db.Decimal(5, 4) @default(0)
+  refundPolicy RefundPolicy    @default(tiered)
+  // 阶梯退款比例：{ "departing": 0.8, "arrived": 0.5 }（键为订单状态，缺省状态退全额）
+  refundTiers  Json?
+  isActive     Boolean         @default(true)
+  note         String?         @db.VarChar(200)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  deletedAt    DateTime?
+
+  @@unique([scope, refId])
+  @@index([scope, isActive])
 }
 
 // ---------------- 师傅提现（2026-08-18 新增） ----------------

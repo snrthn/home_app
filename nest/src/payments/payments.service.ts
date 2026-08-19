@@ -16,10 +16,15 @@ import type { PaymentProvider, PaymentProviderName } from './provider';
 import { OrderStatus } from '@laoma/shared';
 import { OrdersGateway } from '../gateway/orders.gateway';
 import { SettlementsService } from '../settlements/settlements.service';
+import { CommissionService } from '../commission/commission.service';
 
+// 支付后（平台托管）可退款的状态，须与 orders.service 的同名常量保持一致，
+// 否则直接调用退款接口时 departing/arrived 会被误判为「不可退款」。
 const POST_PAY_STATES = [
   OrderStatus.PendingAccept,
   OrderStatus.Accepted,
+  OrderStatus.Departing,
+  OrderStatus.Arrived,
   OrderStatus.Servicing,
   OrderStatus.PendingConfirm,
 ];
@@ -33,6 +38,7 @@ export class PaymentsService {
     private prisma: PrismaService,
     private gateway: OrdersGateway,
     private settlements: SettlementsService,
+    private commission: CommissionService,
   ) {}
 
   /** 当前启用的支付通道：读 MerchantConfig，enabled 且 provider!=mock 时返回对应真实实现，否则 mock。 */
@@ -156,9 +162,12 @@ export class PaymentsService {
   }
 
   /** 退款：支付后取消时调用，退款完成后置「已退款」。
-   *  ratio 为退款比例（0~1）：departing 取消退 80%、arrived 取消退 50%、其余 1（全额）。
+   *  金额与三方分账（退用户 / 平台留成 / 师傅补偿）全部由订单快照
+   *  Order.commissionSnapshot 决定（下单时固化，历史单实时解析兜底），不再硬编码比例。
+   *  stageStatus：发起取消时的原始订单状态（orders.cancel 会先流转到 refunding，
+   *  阶梯依据必须用流转前的状态，故由调用方显式传入）。
    */
-  async refund(customerId: string, orderId: string, ratio = 1) {
+  async refund(customerId: string, orderId: string, stageStatus?: string) {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order) throw new NotFoundException('订单不存在');
     if (order.customerId !== customerId)
@@ -169,8 +178,11 @@ export class PaymentsService {
     if (!REFUNDABLE_STATES.includes(order.status as OrderStatus))
       throw new BadRequestException('该订单当前不可退款');
 
-    // 阶梯退款金额：按比例实退，四舍五入到分
-    const refundAmount = Math.round(Number(order.amount) * ratio * 100) / 100;
+    // 按订单快照解析分账规则，一次算清三方金额
+    const snap = await this.commission.snapshotFromOrder(order);
+    const stage = stageStatus ?? (order.status as string);
+    const split = this.commission.splitRefund(Number(order.amount), stage, snap);
+    const { refundAmount, refundRatio: ratio, platformKeep, masterCompensation } = split;
 
     const pay = await this.prisma.payment.findFirst({
       where: { orderId, status: 'paid' },
@@ -194,24 +206,35 @@ export class PaymentsService {
     // 退款完成不走 orders.transition，需手动广播，双端详情页才能实时看到「已退款」
     this.gateway?.broadcastOrderUpdate(refundedOrder);
     const noteRatio = ratio < 1 ? `（实退 ${Math.round(ratio * 100)}%）` : '';
+    // 留成拆分写入日志，便于事后对账（谁拿了没退给用户的那部分钱）
+    const noteSplit =
+      ratio < 1
+        ? `｜留成拆分：平台 ¥${platformKeep.toFixed(2)} / 师傅补偿 ¥${masterCompensation.toFixed(2)}｜规则：${snap.source}`
+        : '';
     await this.prisma.orderLog.create({
       data: {
         orderId,
         action: 'refund',
         fromStatus: order.status as OrderStatus,
         toStatus: OrderStatus.Refunded,
-        note: `退款完成 ¥${refundAmount.toFixed(2)}${noteRatio} ` + refundRes.refundNo,
+        note:
+          `退款完成 ¥${refundAmount.toFixed(2)}${noteRatio} ` +
+          refundRes.refundNo +
+          noteSplit,
       },
     });
 
-    // 阶梯退款：师傅应得部分生成补偿结算单（pending，待管理端审核入账）
-    if (ratio < 1 && order.masterId) {
-      const compensation =
-        Math.round((Number(order.amount) - refundAmount) * 100) / 100;
-      if (compensation > 0) {
-        await this.settlements.createCompensation(orderId, compensation);
-      }
+    // 留成中属于师傅的部分生成补偿结算单（pending，待管理端审核入账）。
+    // 平台留成部分本就在平台账上，无需台账流转，仅记录在补偿单 platformFee 与日志中。
+    if (masterCompensation > 0 && order.masterId) {
+      await this.settlements.createCompensation(
+        orderId,
+        masterCompensation,
+        platformKeep,
+        snap.source,
+      );
     }
+    return split;
   }
 
   // ===== 旧二维码凭证支付（保留，与前置支付并存） =====

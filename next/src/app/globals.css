@@ -1965,6 +1965,29 @@ body {
 .about-list-edit {
   flex-shrink: 0;
 }
+/* 一键复制按钮（订单号等）：内联图标，跟随文本基线对齐；点击由组件内部 stopPropagation 防误触跳转 */
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  margin-left: 4px;
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  vertical-align: middle;
+  border-radius: 4px;
+  line-height: 0;
+  transition: color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+}
+.copy-btn:hover {
+  color: var(--color-primary);
+  background: rgba(0, 0, 0, 0.04);
+}
+.copy-btn:active {
+  transform: scale(0.9);
+}
 /* 关于我们 · 端上展示 */
 .about-title {
   font-size: 18px;

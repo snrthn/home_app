@@ -18,6 +18,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Modal } from '@/components/Modal';
 import { Textarea } from '@/components/form/Textarea';
 import { formatDateTime } from '@/lib/format';
+import { CopyButton } from '@/components/CopyText';
 
 const SETTLEMENT_STATUS: Record<
   string,
@@ -104,7 +105,15 @@ export default function AdminSettlementsPage() {
         key: 'orderNo',
         title: '订单号',
         width: '160px',
-        render: (s) => s.order?.orderNo ?? s.orderId,
+        render: (s) => {
+          const no = s.order?.orderNo ?? s.orderId;
+          return (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              {no}
+              <CopyButton value={no} title="复制订单号" />
+            </span>
+          );
+        },
       },
       {
         key: 'master',
@@ -158,6 +167,23 @@ export default function AdminSettlementsPage() {
         render: (s) =>
           formatDateTime(s.createdAt),
         },
+      {
+        key: 'reviewed',
+        title: '审核',
+        width: '170px',
+        render: (s) =>
+          s.status === 'pending' ? (
+            <span className="field-hint">待审核</span>
+          ) : s.reviewedByUser?.phone ? (
+            <span>
+              {s.reviewedByUser.phone}
+              <br />
+              <span className="field-hint">{formatDateTime(s.reviewedAt)}</span>
+            </span>
+          ) : (
+            <span className="field-hint">—</span>
+          ),
+      },
       {
         key: 'op',
         title: '操作',

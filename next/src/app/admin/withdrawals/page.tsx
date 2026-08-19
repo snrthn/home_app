@@ -153,7 +153,7 @@ export default function AdminWithdrawalsPage() {
       {
         key: 'op',
         title: '操作',
-        width: '130px',
+        width: '260px',
         render: (w) =>
           w.status === 'pending' ? (
             <span style={{ display: 'inline-flex', gap: 8 }}>

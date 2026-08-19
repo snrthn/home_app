@@ -238,6 +238,9 @@ export interface Settlement {
   type?: 'normal' | 'compensation';
   status: 'pending' | 'credited' | 'rejected' | string;
   note?: string | null;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  reviewedByUser?: { id: string; phone?: string | null } | null;
   createdAt: string;
   settledAt?: string | null;
 }
@@ -254,6 +257,10 @@ export function creditSettlement(id: string, note?: string): Promise<Settlement>
 /** 补偿单驳回（pending → rejected，需填原因） */
 export function rejectSettlement(id: string, reason: string): Promise<Settlement> {
   return api.post(`/settlements/${id}/reject`, { reason }).then((r) => r.data);
+}
+/** 按订单查结算单（含退款补偿单），供三端订单详情展示补偿说明 */
+export function getSettlementsByOrder(orderId: string): Promise<Settlement[]> {
+  return api.get(`/settlements/by-order/${orderId}`).then((r) => r.data ?? []);
 }
 
 // ---------- 师傅收入（汇总 / 明细） ----------
@@ -310,4 +317,67 @@ export function payWithdrawal(id: string): Promise<Withdrawal> {
 }
 export function rejectWithdrawal(id: string, reason: string): Promise<Withdrawal> {
   return api.post(`/withdrawals/${id}/reject`, { reason }).then((r) => r.data);
+}
+
+// ---------- 分账规则 ----------
+export interface CommissionRule {
+  id: string;
+  scope: 'global' | 'category' | 'service';
+  refId: string;
+  refName?: string;
+  platformRate: number;
+  refundPolicy: 'full' | 'tiered' | 'keep_commission';
+  refundTiers?: Record<string, number> | null;
+  isActive: boolean;
+  note?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommissionPreview {
+  snapshot: {
+    platformRate: number;
+    refundPolicy: string;
+    refundTiers: Record<string, number>;
+    source: string;
+    resolvedAt: string;
+  };
+  normal: { platformFee: number; masterAmount: number };
+  refunds: Array<{
+    status: string;
+    resolvedRatio: number;
+    refundRatio: number;
+    refundAmount: number;
+    platformKeep: number;
+    masterCompensation: number;
+  }>;
+}
+
+export function getCommissionRules(): Promise<CommissionRule[]> {
+  return api.get('/commission/rules').then((r) => r.data ?? []);
+}
+
+export function upsertCommissionRule(dto: {
+  scope: 'global' | 'category' | 'service';
+  refId?: string;
+  platformRate: number;
+  refundPolicy: 'full' | 'tiered' | 'keep_commission';
+  refundTiers?: Record<string, number> | null;
+  isActive?: boolean;
+  note?: string;
+}): Promise<CommissionRule> {
+  return api.put('/commission/rules', dto).then((r) => r.data);
+}
+
+export function deleteCommissionRule(id: string): Promise<unknown> {
+  return api.delete(`/commission/rules/${id}`).then((r) => r.data);
+}
+
+export function previewCommission(
+  serviceItemId: string,
+  amount?: number,
+): Promise<CommissionPreview> {
+  return api
+    .get('/commission/preview', { params: { serviceItemId, amount } })
+    .then((r) => r.data);
 }
