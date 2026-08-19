@@ -19,6 +19,14 @@ function addrLine(o: OrderLite) {
   return a ? [a.province, a.city, a.district, a.detail].filter(Boolean).join('') : '-';
 }
 
+function fmtCreatedAt(s?: string) {
+  if (!s) return '-';
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return s;
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 export default function MasterPoolPage() {
   const router = useRouter();
   const toast = useToast();
@@ -36,14 +44,17 @@ export default function MasterPoolPage() {
   });
 
   // 实时推送：新订单入池 / 池中订单被接走，均刷新接单池
-  useOrderSocket({
-    onNewOrder: () => qc.invalidateQueries({ queryKey: QK.orderPool }),
-    onOrderUpdate: (o: any) => {
-      if (o?.status && o.status !== 'pending_accept') {
-        qc.invalidateQueries({ queryKey: QK.orderPool });
-      }
+  useOrderSocket(
+    {
+      onNewOrder: () => qc.invalidateQueries({ queryKey: QK.orderPool }),
+      onOrderUpdate: (o: any) => {
+        if (o?.status && o.status !== 'pending_accept') {
+          qc.invalidateQueries({ queryKey: QK.orderPool });
+        }
+      },
     },
-  });
+    { pool: true },
+  );
 
   const onGrab = async (id: string) => {
     try {
@@ -106,6 +117,7 @@ export default function MasterPoolPage() {
                 <div className="field-hint">
                   联系人：{o.address?.contactName} {o.address?.contactPhone}
                 </div>
+                <div className="field-hint">下单时间：{fmtCreatedAt(o.createdAt)}</div>
                 {o.appointmentDate && (
                   <div className="field-hint">
                     预约：

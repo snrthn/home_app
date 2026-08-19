@@ -1,5 +1,7 @@
 import {
   Injectable,
+  Inject,
+  forwardRef,
   NotFoundException,
   ForbiddenException,
   BadRequestException,
@@ -17,6 +19,7 @@ import { OrderStatus } from '@laoma/shared';
 import { OrdersGateway } from '../gateway/orders.gateway';
 import { SettlementsService } from '../settlements/settlements.service';
 import { CommissionService } from '../commission/commission.service';
+import { OrdersService } from '../orders/orders.service';
 
 // 支付后（平台托管）可退款的状态，须与 orders.service 的同名常量保持一致，
 // 否则直接调用退款接口时 departing/arrived 会被误判为「不可退款」。
@@ -39,6 +42,8 @@ export class PaymentsService {
     private gateway: OrdersGateway,
     private settlements: SettlementsService,
     private commission: CommissionService,
+    @Inject(forwardRef(() => OrdersService))
+    private orders: OrdersService,
   ) {}
 
   /** 当前启用的支付通道：读 MerchantConfig，enabled 且 provider!=mock 时返回对应真实实现，否则 mock。 */
@@ -199,30 +204,38 @@ export class PaymentsService {
       where: { orderId },
       data: { status: 'refunded' },
     });
-    const refundedOrder = await this.prisma.order.update({
-      where: { id: orderId },
-      data: { status: OrderStatus.Refunded },
-    });
-    // 退款完成不走 orders.transition，需手动广播，双端详情页才能实时看到「已退款」
-    this.gateway?.broadcastOrderUpdate(refundedOrder);
     const noteRatio = ratio < 1 ? `（实退 ${Math.round(ratio * 100)}%）` : '';
     // 留成拆分写入日志，便于事后对账（谁拿了没退给用户的那部分钱）
     const noteSplit =
       ratio < 1
         ? `｜留成拆分：平台 ¥${platformKeep.toFixed(2)} / 师傅补偿 ¥${masterCompensation.toFixed(2)}｜规则：${snap.source}`
         : '';
-    await this.prisma.orderLog.create({
-      data: {
+    const refundNote =
+      `退款完成 ¥${refundAmount.toFixed(2)}${noteRatio} ` +
+      refundRes.refundNo +
+      noteSplit;
+    // 退款完成统一走订单状态机：
+    // 两段式收口——先确保经 refunding 中间态（OrdersService.cancel 已先行流转，
+    // 此处 order.status 已为 Refunding，跳过第一段），再置 refunded。
+    // canTransition 校验 + 统一日志(action='refund') + 实时广播，双端详情页即时可见。
+    if (order.status !== OrderStatus.Refunding) {
+      await this.orders.transition(
         orderId,
-        action: 'refund',
-        fromStatus: order.status as OrderStatus,
-        toStatus: OrderStatus.Refunded,
-        note:
-          `退款完成 ¥${refundAmount.toFixed(2)}${noteRatio} ` +
-          refundRes.refundNo +
-          noteSplit,
-      },
-    });
+        OrderStatus.Refunding,
+        customerId,
+        '取消（发起退款）｜退款流转',
+        undefined,
+        'refund',
+      );
+    }
+    await this.orders.transition(
+      orderId,
+      OrderStatus.Refunded,
+      customerId,
+      refundNote,
+      undefined,
+      'refund',
+    );
 
     // 留成中属于师傅的部分生成补偿结算单（pending，待管理端审核入账）。
     // 平台留成部分本就在平台账上，无需台账流转，仅记录在补偿单 platformFee 与日志中。

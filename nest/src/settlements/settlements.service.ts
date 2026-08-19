@@ -22,7 +22,8 @@ export class SettlementsService {
         },
         orderBy: { createdAt: 'desc' },
       })
-      .then((rows) => this.attachReviewers(rows));
+      .then((rows) => this.attachReviewers(rows))
+      .then((rows) => this.withRefundAmount(rows));
   }
 
   /** 按订单查结算单（含常规单/退款补偿单），供三端订单详情展示补偿说明 */
@@ -32,7 +33,20 @@ export class SettlementsService {
       include: { order: { select: { orderNo: true } } },
       orderBy: { createdAt: 'desc' },
     });
-    return this.attachReviewers(rows);
+    return this.attachReviewers(rows).then((rows) => this.withRefundAmount(rows));
+  }
+
+  /** 给用户看到「自己退回多少」一个明确、可核查的字段：用户退款 = 订单额 − 平台留成 − 师傅所得。
+   *  对补偿单：平台留成=platformFee、师傅所得=masterAmount，二者之和为未退部分，故该差值即退用户金额（与 payments.refund 的 splitRefund 精确一致）。
+   *  对常规单：无退款，结果为 0。 */
+  private withRefundAmount<T extends { orderAmount: any; platformFee: any; masterAmount: any }>(
+    rows: T[],
+  ): (T & { refundAmount: number })[] {
+    return rows.map((r) => ({
+      ...r,
+      refundAmount:
+        Math.round((Number(r.orderAmount) - Number(r.platformFee) - Number(r.masterAmount)) * 100) / 100,
+    }));
   }
 
   /** 附加审核人信息（reviewedBy 仅存 userId，需单独查 user 表） */
@@ -240,12 +254,14 @@ export class SettlementsService {
 
   /** 师傅收入明细：全部结算单（含待审核补偿/驳回），按时间倒序 */
   masterList(masterId: string) {
-    return this.prisma.settlement.findMany({
-      where: { masterId, deletedAt: null },
-      include: {
-        order: { select: { orderNo: true, serviceSnapshot: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    return this.prisma.settlement
+      .findMany({
+        where: { masterId, deletedAt: null },
+        include: {
+          order: { select: { orderNo: true, serviceSnapshot: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+      .then((rows) => this.withRefundAmount(rows));
   }
 }

@@ -6,13 +6,13 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrderStatus } from '@laoma/shared';
-import { OrdersGateway } from '../gateway/orders.gateway';
+import { OrdersService } from '../orders/orders.service';
 
 @Injectable()
 export class ReviewsService {
   constructor(
     private prisma: PrismaService,
-    private gateway: OrdersGateway,
+    private orders: OrdersService,
   ) {}
 
   async create(
@@ -51,22 +51,16 @@ export class ReviewsService {
       },
     });
 
-    // 评价完成 → 订单置「已评价」（evaluated），便于列表过滤与展示区分
-    const evaluatedOrder = await this.prisma.order.update({
-      where: { id: dto.orderId },
-      data: { status: OrderStatus.Evaluated },
-    });
-    // 评价流转不走 orders.transition，需手动广播，师傅端详情页才能实时看到「已评价」
-    this.gateway?.broadcastOrderUpdate(evaluatedOrder);
-    await this.prisma.orderLog.create({
-      data: {
-        orderId: dto.orderId,
-        action: 'review',
-        fromStatus: OrderStatus.Reviewed,
-        toStatus: OrderStatus.Evaluated,
-        note: `客户评价 ${dto.rating} 星${dto.anonymous ? '（匿名）' : ''}`,
-      },
-    });
+    // 评价完成 → 订单置「已评价」（evaluated）。统一走订单状态机：
+    // canTransition 校验 + 统一日志(action='review') + 实时广播，师傅端详情页即时可见。
+    await this.orders.transition(
+      dto.orderId,
+      OrderStatus.Evaluated,
+      customerId,
+      `客户评价 ${dto.rating} 星${dto.anonymous ? '（匿名）' : ''}`,
+      undefined,
+      'review',
+    );
 
     // 更新师傅评分（均值）与订单量
     const stats = await this.prisma.review.aggregate({

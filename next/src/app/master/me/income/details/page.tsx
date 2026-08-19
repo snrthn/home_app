@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { PortalNavSetter } from '@/components/PortalShell';
 import EmptyState from '@/components/EmptyState';
+import { CopyButton } from '@/components/CopyText';
 import { getMyIncomeDetails, type Settlement } from '@/lib/orders-api';
 import { QK } from '@/lib/query-keys';
 import { formatDateTime } from '@/lib/format';
@@ -42,7 +43,7 @@ export default function MasterIncomeDetailsPage() {
       />
 
       <div className="laoma-container">
-        <div className="card" style={{ marginTop: 12 }}>
+        <div className="card">
           <div style={{ fontWeight: 600, marginBottom: 8 }}>
             收入明细
             <span className="field-hint" style={{ marginLeft: 8 }}>
@@ -75,6 +76,7 @@ export default function MasterIncomeDetailsPage() {
                         {s.type === 'compensation' ? '退款补偿' : name}
                         <span className="field-hint" style={{ marginLeft: 6 }}>
                           {s.order?.orderNo ?? ''}
+                          {s.order?.orderNo ? <CopyButton value={s.order.orderNo} title="复制订单号" /> : null}
                         </span>
                       </span>
                       <span

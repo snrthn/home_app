@@ -144,6 +144,18 @@ export default function AdminSettlementsPage() {
         render: (s) => `¥${s.platformFee}`,
       },
       {
+        key: 'refundAmount',
+        title: '用户退款',
+        width: '100px',
+        align: 'right',
+        render: (s) =>
+          s.type === 'compensation' ? (
+            <span style={{ color: 'var(--color-danger)' }}>¥{s.refundAmount ?? '-'}</span>
+          ) : (
+            <span className="field-hint">—</span>
+          ),
+      },
+      {
         key: 'masterAmount',
         title: '师傅入账',
         width: '110px',

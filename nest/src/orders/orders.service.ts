@@ -1,6 +1,8 @@
 import {
   Injectable,
   Optional,
+  Inject,
+  forwardRef,
   BadRequestException,
   NotFoundException,
   ForbiddenException,
@@ -38,6 +40,7 @@ export class OrdersService {
   constructor(
     private prisma: PrismaService,
     private settlements: SettlementsService,
+    @Inject(forwardRef(() => PaymentsService))
     private payments: PaymentsService,
     private commission: CommissionService,
     @Optional() private gateway?: OrdersGateway,
@@ -151,12 +154,19 @@ export class OrdersService {
     });
   }
 
-  private async transition(
+  /**
+   * 订单状态机执行器（全局唯一）：
+   * 统一做 canTransition 校验 + 写库 + 统一日志 + 实时广播。
+   * 评价(reviews)、退款(payments) 等业务动作统一复用本方法，不再各自手写 update+broadcast。
+   * @param action 写入 orderLog 的语义动作，默认 'transition'；评价传 'review'、退款传 'refund'，保留业务语义便于后台追溯。
+   */
+  public async transition(
     orderId: string,
     to: OrderStatus,
     actorId?: string,
     note?: string,
     extraData?: { cancelReason: string },
+    action = 'transition',
   ) {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order) throw new NotFoundException('订单不存在');
@@ -171,7 +181,7 @@ export class OrdersService {
     await this.prisma.orderLog.create({
       data: {
         orderId,
-        action: 'transition',
+        action,
         fromStatus: order.status,
         toStatus: to,
         operatorId: actorId,
@@ -179,6 +189,10 @@ export class OrdersService {
       },
     });
     this.gateway?.broadcastOrderUpdate(updated);
+    // 订单离开接单态（被接走/取消）：通知接单池刷新移除
+    if (order.status === OrderStatus.PendingAccept && to !== OrderStatus.PendingAccept) {
+      this.gateway?.broadcastPoolUpdate(updated);
+    }
     return updated;
   }
 

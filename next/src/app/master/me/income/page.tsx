@@ -126,7 +126,7 @@ export default function MasterIncomePage() {
 
       <div className="laoma-container">
         {/* 账户概览 */}
-        <div className="card" style={{ marginTop: 12 }}>
+        <div className="card">
           <div style={{ textAlign: 'center' }}>
             <div className="field-hint">可提现余额（元）</div>
             <div

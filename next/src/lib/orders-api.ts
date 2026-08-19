@@ -234,6 +234,8 @@ export interface Settlement {
   orderAmount: string | number;
   platformFee: string | number;
   masterAmount: string | number;
+  /** 用户实际退回金额 = orderAmount − platformFee − masterAmount（后端计算返回，便于三端清晰展示三方份额） */
+  refundAmount?: string | number;
   /** normal=常规单（验收自动入账） compensation=退款补偿单（需管理端审核） */
   type?: 'normal' | 'compensation';
   status: 'pending' | 'credited' | 'rejected' | string;

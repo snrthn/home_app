@@ -78,11 +78,14 @@ export default function MasterOrderDetailPage() {
   const refreshMenu = [{ label: '刷新数据', onClick: refresh }];
 
   // 实时推送：客户支付/取消/验收/评价等流转时，本单自动刷新
-  useOrderSocket({
-    onOrderUpdate: (o: any) => {
-      if (o?.id === id) refresh();
+  useOrderSocket(
+    {
+      onOrderUpdate: (o: any) => {
+        if (o?.id === id) refresh();
+      },
     },
-  });
+    { orderId: id },
+  );
 
   const openMap = (addr: string) => {
     const url = `https://api.map.baidu.com/geocoder?address=${encodeURIComponent(addr)}&output=html&src=webapp.baidu.openAPIdemo`;
@@ -346,24 +349,60 @@ export default function MasterOrderDetailPage() {
           {compensation && (
             <div className="field-inline-row">
               <span className="field-label">退款补偿</span>
-              <span className="field-inline-value" style={{ color: 'var(--color-danger)' }}>
-                ¥{compensation.masterAmount} ·{' '}
-                {compensation.status === 'pending'
-                  ? '待平台审核入账'
-                  : compensation.status === 'credited'
-                    ? '已入账'
-                    : '已驳回'}
-                {compensation.reviewedByUser?.phone && compensation.reviewedAt
-                  ? `（审核人：${compensation.reviewedByUser.phone} · ${formatDateTime(compensation.reviewedAt)}）`
+              <span className="field-inline-value">
+                <span style={{ color: 'var(--color-primary)', fontWeight: 600 }}>¥{compensation.masterAmount}</span>
+                {' · '}
+                <span
+                  style={{
+                    color:
+                      compensation.status === 'pending'
+                        ? 'var(--color-warning)'
+                        : compensation.status === 'credited'
+                          ? 'var(--color-success)'
+                          : 'var(--color-danger)',
+                  }}
+                >
+                  {compensation.status === 'pending'
+                    ? '待平台审核入账'
+                    : compensation.status === 'credited'
+                      ? '已入账'
+                      : '已驳回'}
+                </span>
+              </span>
+            </div>
+          )}
+          {compensation?.reviewedByUser?.phone && compensation?.reviewedAt && (
+            <>
+              <div className="field-inline-row">
+                <span className="field-label">退款审核人</span>
+                <span className="field-inline-value" style={{ color: 'var(--color-muted)', fontSize: 13 }}>
+                  {compensation.reviewedByUser.phone}
+                </span>
+              </div>
+              <div className="field-inline-row">
+                <span className="field-label">退款审核时间</span>
+                <span className="field-inline-value" style={{ color: 'var(--color-muted)', fontSize: 13 }}>
+                  {formatDateTime(compensation.reviewedAt)}
+                </span>
+              </div>
+            </>
+          )}
+          {normalSettlement && !compensation && (
+            <div className="field-inline-row">
+              <span className="field-label">本单收入</span>
+              <span className="field-inline-value">
+                <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>¥{normalSettlement.masterAmount}</span>
+                {Number(normalSettlement.platformFee) > 0
+                  ? `（平台服务费 ¥${normalSettlement.platformFee}）`
                   : ''}
               </span>
             </div>
           )}
-          {normalSettlement && Number(normalSettlement.platformFee) > 0 && (
+          {order.status === 'refunded' && !compensation && !normalSettlement && (
             <div className="field-inline-row">
-              <span className="field-label">分账信息</span>
-              <span className="field-inline-value">
-                平台服务费 ¥{normalSettlement.platformFee} · 您的收入 ¥{normalSettlement.masterAmount}
+              <span className="field-label">退款说明</span>
+              <span className="field-inline-value" style={{ color: 'var(--color-muted)' }}>
+                全额退款 · 本单未产生收入
               </span>
             </div>
           )}

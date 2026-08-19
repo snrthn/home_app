@@ -68,11 +68,14 @@ export default function ClientOrderDetailPage() {
   const refreshMenu = [{ label: '刷新数据', onClick: refresh }];
 
   // 实时推送：师傅端流转（接单/出发/到达/开始/完成）或退款完成时，本单自动刷新
-  useOrderSocket({
-    onOrderUpdate: (o: any) => {
-      if (o?.id === id) refresh();
+  useOrderSocket(
+    {
+      onOrderUpdate: (o: any) => {
+        if (o?.id === id) refresh();
+      },
     },
-  });
+    { orderId: id },
+  );
 
   const onPay = () => setPayOpen(true);
   const onPayConfirm = async () => {
@@ -319,16 +322,11 @@ export default function ClientOrderDetailPage() {
               <span className="field-inline-value">{order.cancelReason}</span>
             </div>
           )}
-          {compensation && (
+          {(compensation || order.status === 'refunded') && (
             <div className="field-inline-row">
-              <span className="field-label">退款补偿</span>
-              <span className="field-inline-value" style={{ color: 'var(--color-danger)' }}>
-                ¥{compensation.masterAmount} ·{' '}
-                {compensation.status === 'pending'
-                  ? '待平台审核入账'
-                  : compensation.status === 'credited'
-                    ? '已入账'
-                    : '已驳回'}
+              <span className="field-label">退款金额</span>
+              <span className="field-inline-value" style={{ color: 'var(--color-primary)', fontWeight: 600 }}>
+                ¥{Number(compensation?.refundAmount ?? order.amount).toFixed(2)} · 已原路退回
               </span>
             </div>
           )}
@@ -348,7 +346,10 @@ export default function ClientOrderDetailPage() {
             <div className="field-inline-row">
               <span className="field-label">流转状态</span>
               <span className="field-inline-value" style={{ color: 'var(--color-danger)' }}>
-                {ORDER_STATUS_LABEL[order.status]}（资金状态以平台为准）
+                {ORDER_STATUS_LABEL[order.status]}
+                {order.status === 'cancelled'
+                  ? '（订单未完成支付）'
+                  : '（资金状态以平台为准）'}
               </span>
             </div>
           )}

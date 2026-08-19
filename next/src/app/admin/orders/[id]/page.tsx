@@ -90,21 +90,59 @@ export default function AdminOrderDetailPage() {
                 <span className="field-inline-value">{order.cancelReason}</span>
               </div>
             )}
-            {compensation && (
+            {(compensation || order.status === 'refunded') && (
               <div className="field-inline-row">
-                <span className="field-label">退款补偿</span>
-                <span className="field-inline-value" style={{ color: 'var(--color-danger)' }}>
-                  ¥{compensation.masterAmount} ·{' '}
-                  {compensation.status === 'pending'
-                    ? '待平台审核入账'
-                    : compensation.status === 'credited'
-                      ? '已入账'
-                      : '已驳回'}
-                  {compensation.reviewedByUser?.phone && compensation.reviewedAt
-                    ? `（审核人：${compensation.reviewedByUser.phone} · ${formatDateTime(compensation.reviewedAt)}）`
-                    : ''}
+                <span className="field-label">退款明细</span>
+                <span className="field-inline-value">
+                  <span style={{ color: 'var(--color-primary)', fontWeight: 600 }}>
+                    用户退款 ¥{Number(compensation?.refundAmount ?? order.amount).toFixed(2)}
+                  </span>
+                  {' · 平台留成 ¥'}
+                  {compensation ? compensation.platformFee : 0}
+                  {' · '}
+                  <span style={{ color: 'var(--color-primary)', fontWeight: 600 }}>
+                    师傅补偿 ¥{compensation ? compensation.masterAmount : 0}
+                  </span>
+                  {compensation ? (
+                    <span
+                      style={{
+                        color:
+                          compensation.status === 'pending'
+                            ? 'var(--color-warning)'
+                            : compensation.status === 'credited'
+                              ? 'var(--color-success)'
+                              : 'var(--color-danger)',
+                      }}
+                    >
+                      {'（'}
+                      {compensation.status === 'pending'
+                        ? '补偿待审核入账'
+                        : compensation.status === 'credited'
+                          ? '补偿已入账'
+                          : '补偿已驳回'}
+                      {'）'}
+                    </span>
+                  ) : (
+                    <span style={{ color: 'var(--color-muted)' }}>（全额退款 · 无补偿）</span>
+                  )}
                 </span>
               </div>
+            )}
+            {compensation?.reviewedByUser?.phone && compensation?.reviewedAt && (
+              <>
+                <div className="field-inline-row">
+                  <span className="field-label">退款审核人</span>
+                  <span className="field-inline-value" style={{ color: 'var(--color-muted)', fontSize: 13 }}>
+                    {compensation.reviewedByUser.phone}
+                  </span>
+                </div>
+                <div className="field-inline-row">
+                  <span className="field-label">退款审核时间</span>
+                  <span className="field-inline-value" style={{ color: 'var(--color-muted)', fontSize: 13 }}>
+                    {formatDateTime(compensation.reviewedAt)}
+                  </span>
+                </div>
+              </>
             )}
             {normalSettlement && Number(normalSettlement.platformFee) > 0 && (
               <div className="field-inline-row">
