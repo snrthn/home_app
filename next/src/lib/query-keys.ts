@@ -48,4 +48,8 @@ export const QK = {
   globalConfig: ['global', 'config'] as const,
   // 工作台聚合统计
   dashboard: ['admin', 'dashboard'] as const,
+  // 数据报表（经营 / 绩效 / 增长，维度作为二级 key）
+  reportBusiness: ['reports', 'business'] as const,
+  reportPerformance: ['reports', 'performance'] as const,
+  reportGrowth: ['reports', 'growth'] as const,
 } as const;

@@ -705,3 +705,98 @@ export interface DashboardStats {
 export function getDashboard(): Promise<DashboardStats> {
   return api.get('/reports/dashboard').then((r) => r.data);
 }
+
+// ============ 数据报表 ============
+
+export type ReportDimension = 'day' | 'week' | 'month';
+
+export interface ReportQuery {
+  dimension?: ReportDimension;
+  start?: string; // ISO 日期，可选
+  end?: string;
+  sort?: string; // performance 专用：orders|revenue|rating|completion
+  limit?: number; // performance 专用，默认 20
+}
+
+// 经营报表：按日/周/月分桶的订单量/营收/退款/完成率
+export interface BusinessPoint {
+  date: string;
+  orders: number; // 已支付订单量（按支付时间，去重）
+  gmv: number; // 营收（支付金额 sum）
+  refundOrders: number;
+  refundAmount: number;
+  createdOrders: number; // 范围内创建的订单（完成率分母）
+  doneOrders: number; // 完成订单（reviewed+evaluated）
+  completionRate: number; // %
+}
+export interface BusinessReport {
+  dimension: ReportDimension;
+  start: string;
+  end: string;
+  summary: {
+    totalOrders: number;
+    totalGMV: number;
+    totalRefundOrders: number;
+    totalRefundAmount: number;
+    totalCreatedOrders: number;
+    totalDoneOrders: number;
+    overallCompletionRate: number;
+  };
+  series: BusinessPoint[];
+}
+export function getBusinessReport(
+  q: ReportQuery = {},
+): Promise<BusinessReport> {
+  return api.get('/reports/business', { params: q }).then((r) => r.data);
+}
+
+// 师傅绩效：接单量/完成率/评分/收入排行
+export interface MasterPerformanceRow {
+  masterId: string;
+  realName: string;
+  phone: string;
+  city: string;
+  status: string;
+  orders: number;
+  done: number;
+  cancelled: number;
+  completionRate: number;
+  revenue: number;
+  rating: number | null;
+  reviewCount: number;
+}
+export interface PerformanceReport {
+  sort: string;
+  limit: number;
+  total: number;
+  list: MasterPerformanceRow[];
+}
+export function getPerformanceReport(
+  q: ReportQuery = {},
+): Promise<PerformanceReport> {
+  return api.get('/reports/performance', { params: q }).then((r) => r.data);
+}
+
+// 用户增长：新增客户/师傅/订单趋势 + 转化漏斗
+export interface GrowthPoint {
+  date: string;
+  customers: number;
+  masters: number;
+  orders: number;
+}
+export interface GrowthReport {
+  dimension: ReportDimension;
+  start: string;
+  end: string;
+  summary: {
+    newCustomers: number;
+    newMasters: number;
+    newOrders: number;
+    convertedCustomers: number;
+    conversionRate: number; // %
+  };
+  series: GrowthPoint[];
+}
+export function getGrowthReport(q: ReportQuery = {}): Promise<GrowthReport> {
+  return api.get('/reports/growth', { params: q }).then((r) => r.data);
+}

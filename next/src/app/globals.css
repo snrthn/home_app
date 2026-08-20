@@ -2199,3 +2199,191 @@ body {
   color: var(--color-text-soft);
   padding: 48px 16px;
 }
+
+/* ===== 数据报表页（经营/绩效/增长） ===== */
+.dim-tabs {
+  display: inline-flex;
+  gap: 4px;
+  background: var(--color-bg-soft, rgba(127, 127, 127, 0.08));
+  border-radius: 8px;
+  padding: 3px;
+  margin: 4px 0 14px;
+}
+.dim-tab {
+  border: none;
+  background: transparent;
+  color: var(--color-text-soft);
+  font-size: 13px;
+  padding: 6px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.dim-tab:hover {
+  color: var(--color-text);
+}
+.dim-tab.active {
+  background: var(--color-primary, #4f8cff);
+  color: #fff;
+  font-weight: 500;
+}
+
+/* 报表筛选行：维度/排序 tabs 在左，日期范围筛选在右 */
+.report-filters {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 4px 0 14px;
+  flex-wrap: wrap;
+}
+.report-filters .dim-tabs {
+  margin: 0;
+}
+.date-range-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.date-input {
+  border: 1px solid var(--color-border, rgba(127, 127, 127, 0.25));
+  background: var(--color-bg, #fff);
+  color: var(--color-text);
+  font-size: 13px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  outline: none;
+}
+.date-input:focus {
+  border-color: var(--color-primary, #4f8cff);
+}
+.range-sep {
+  color: var(--color-text-soft);
+  font-size: 13px;
+}
+.filter-btn {
+  border: none;
+  background: var(--color-bg-soft, rgba(127, 127, 127, 0.08));
+  color: var(--color-text-soft);
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.filter-btn:hover {
+  color: var(--color-text);
+}
+.filter-btn.primary {
+  background: var(--color-primary, #4f8cff);
+  color: #fff;
+}
+.filter-btn.primary:hover {
+  opacity: 0.9;
+  color: #fff;
+}
+
+.report-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.report-chart-box {
+  position: relative;
+  width: 100%;
+}
+/* 类 ECharts tooltip */
+.chart-tooltip {
+  position: absolute;
+  pointer-events: none;
+  z-index: 30;
+  min-width: 110px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.92);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.6;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+  white-space: nowrap;
+}
+.chart-tooltip-title {
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.72);
+  margin-bottom: 2px;
+}
+.chart-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chart-tooltip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.chart-tooltip-name {
+  color: rgba(255, 255, 255, 0.85);
+}
+.chart-tooltip-val {
+  margin-left: auto;
+  padding-left: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.chart-legend {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--color-text-soft);
+}
+.chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.chart-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.chart-empty {
+  color: var(--color-text-soft);
+  font-size: 13px;
+  padding: 24px 0;
+  text-align: center;
+}
+
+/* 注册转化漏斗 */
+.funnel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 520px;
+}
+.funnel-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.funnel-label {
+  font-size: 12px;
+  color: var(--color-text-soft);
+}
+.funnel-bar {
+  height: 34px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 10px;
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  min-width: 34px;
+  transition: width 0.3s ease;
+}
