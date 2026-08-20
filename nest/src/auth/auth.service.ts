@@ -12,6 +12,7 @@ import { randomUUID } from 'node:crypto';
 import { blacklistToken } from './token-blacklist';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { SetPasswordDto } from './dto/set-password.dto';
+import { OrdersGateway } from '../gateway/orders.gateway';
 
 interface CodeRecord {
   code: string;
@@ -27,6 +28,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwt: JwtService,
     private config: ConfigService,
+    private gateway: OrdersGateway,
   ) {}
 
   async sendSmsCode(phone: string): Promise<{ ok: boolean }> {
@@ -98,6 +100,14 @@ export class AuthService {
       secret: this.config.get('JWT_REFRESH_SECRET'),
       expiresIn: Number(this.config.get('JWT_REFRESH_TTL') ?? 604800),
     });
+
+    // 登录在线判定：登录/注册/刷新 token 都视为活跃，更新 lastActiveAt。
+    // 工作台「在线师傅」按 lastActiveAt 是否落在 5 分钟窗口内统计。
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastActiveAt: new Date() },
+    });
+
     return { accessToken, refreshToken, role: user.role };
   }
 
@@ -115,10 +125,30 @@ export class AuthService {
           { secret: this.config.get('JWT_ACCESS_SECRET') },
         );
         if (payload?.jti) blacklistToken(payload.jti, payload.exp);
+        // 登出即离线：清空活跃时间，工作台「在线师傅」立即减一。
+        // token 已失效走 catch，靠心跳窗口（5 分钟）自然掉线兜底。
+        if (payload?.sub) {
+          await this.prisma.user.update({
+            where: { id: payload.sub },
+            data: { lastActiveAt: null },
+          });
+          if (payload.role === Role.Master) this.gateway.notifyDashboardRefresh();
+        }
       } catch {
         // 已失效的 token：无需处理，直接视为已退出
       }
     }
+    return { ok: true };
+  }
+
+  // 登录心跳：前端登录后每 2 分钟调用一次，刷新 lastActiveAt 保活在线状态。
+  // 师傅心跳说明「登录着、在线」，通知工作台刷新在线数（登录即上线，关浏览器由窗口兜底掉线）。
+  async heartbeat(userId: string) {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { lastActiveAt: new Date() },
+    });
+    if (user.role === Role.Master) this.gateway.notifyDashboardRefresh();
     return { ok: true };
   }
 

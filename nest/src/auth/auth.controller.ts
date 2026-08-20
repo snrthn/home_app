@@ -116,6 +116,13 @@ export class AuthController {
     return this.auth.setPassword(req.user.sub, dto);
   }
 
+  // 登录心跳：刷新 lastActiveAt 保活「在线」状态，供工作台在线师傅统计。
+  @UseGuards(JwtAuthGuard)
+  @Post('heartbeat')
+  heartbeat(@Req() req: any) {
+    return this.auth.heartbeat(req.user.sub);
+  }
+
   // 退出登录：幂等（token 已失效/缺失也返回成功）；同时清除该角色的服务端 cookie
   @Post('logout')
   logout(

@@ -46,4 +46,6 @@ export const QK = {
   publicServices: ['public', 'services'] as const,
   // 全局配置（系统设置 - 全局配置）
   globalConfig: ['global', 'config'] as const,
+  // 工作台聚合统计
+  dashboard: ['admin', 'dashboard'] as const,
 } as const;

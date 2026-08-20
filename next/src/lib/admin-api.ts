@@ -692,3 +692,16 @@ export function getPaymentConfig(): Promise<MerchantConfigDto> {
 export function savePaymentConfig(dto: MerchantConfigDto): Promise<MerchantConfigDto> {
   return api.put('/payments/config', dto).then((r) => r.data);
 }
+
+// 工作台聚合统计
+export interface DashboardStats {
+  todayOrders: number;
+  pendingOrders: number;
+  onlineMasters: number;
+  monthlyGMV: number;
+  monthlyPlatformRevenue: number;
+}
+
+export function getDashboard(): Promise<DashboardStats> {
+  return api.get('/reports/dashboard').then((r) => r.data);
+}

@@ -13,6 +13,8 @@ import { getToken } from '@/lib/auth';
 export interface OrderSocketHandlers {
   onNewOrder?: (order: any) => void;
   onOrderUpdate?: (order: any) => void;
+  // 工作台刷新信号：后端在订单变化/师傅上线下线时推给 admin-dashboard room
+  onDashboardRefresh?: () => void;
 }
 
 export interface OrderSocketOptions {
@@ -47,7 +49,10 @@ export function useOrderSocket(
 
     socket.on('new-order', (order: any) => handlersRef.current.onNewOrder?.(order));
     socket.on('order-update', (order: any) => handlersRef.current.onOrderUpdate?.(order));
+    socket.on('dashboard-refresh', () => handlersRef.current.onDashboardRefresh?.());
+    socket.on('connect', () => console.log('[WS] connected:', socket.id));
     socket.on('connect_error', (err: any) => {
+      console.log('[WS] connect_error:', err.message);
       if (err?.message === 'unauthorized') {
         // token 失效/被拉黑：提示重新登录（精细化自动刷新可后续补充）
         console.warn('[WS] 鉴权失败，请重新登录');

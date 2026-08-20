@@ -38,12 +38,24 @@ export class OrdersGateway
     });
   }
 
-  handleConnection() {
-    this.logger.log('client connected');
+  handleConnection(socket: any) {
+    const role = socket.data?.user?.role;
+    this.logger.log(`client connected: ${socket.data?.user?.sub} (${role})`);
+    // admin 自动加入工作台刷新房，收到 dashboard-refresh 信号。
+    // 注：师傅在线不再按 WS 连接判定（师傅端只有接单页/订单页才建连接），
+    // 改由 auth.lastActiveAt + 前端心跳判定，见 reports.service。
+    if (role === 'admin') socket.join('admin-dashboard');
   }
 
-  handleDisconnect() {
-    this.logger.log('client disconnected');
+  handleDisconnect(socket: any) {
+    const role = socket.data?.user?.role;
+    this.logger.log(`client disconnected: ${socket.data?.user?.sub} (${role})`);
+    // WS 断开 ≠ 离线：师傅可能只是切页面。在线状态由 lastActiveAt 窗口兜底。
+  }
+
+  // 通知工作台刷新（订单状态变化、新单入池时调用；师傅上线下线由 auth 心跳/登出触发）
+  notifyDashboardRefresh() {
+    this.server?.to('admin-dashboard').emit('dashboard-refresh');
   }
 
   // 订阅某订单详情：只有订阅者才会收到该订单的 order-update
@@ -71,15 +83,18 @@ export class OrdersGateway
   // 新订单入池：仅推送给接单池内的师傅
   broadcastNewOrder(order: any) {
     this.server?.to('pool').emit('new-order', order);
+    this.notifyDashboardRefresh();
   }
 
   // 订单状态变更：仅推送给订阅了该订单详情的客户端
   broadcastOrderUpdate(order: any) {
     this.server?.to(`order:${order.id}`).emit('order-update', order);
+    this.notifyDashboardRefresh();
   }
 
   // 订单离开接单态（被接走/取消）：推给接单池，让其他师傅的池子刷新移除
   broadcastPoolUpdate(order: any) {
     this.server?.to('pool').emit('order-update', order);
+    this.notifyDashboardRefresh();
   }
 }

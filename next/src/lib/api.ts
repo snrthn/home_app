@@ -160,6 +160,12 @@ export function logoutApi() {
   return api.post('/auth/logout');
 }
 
+// 登录心跳：刷新 lastActiveAt 保活在线状态（工作台「在线师傅」统计依据）。
+// 失败静默——token 失效时由 401 拦截器统一处理登录态。
+export function heartbeatApi() {
+  return api.post('/auth/heartbeat').catch(() => undefined);
+}
+
 // 个人中心：拉取当前用户资料（含 UserProfile / Master 字段）
 export function getProfile() {
   return api.get('/auth/profile').then((r) => r.data);

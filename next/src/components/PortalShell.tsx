@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import type { AppRole } from '../lib/auth';
 import { useGlobalConfig } from '@/lib/global-config';
+import { heartbeatApi } from '../lib/api';
 import CurrentUserLoader from './CurrentUserLoader';
 import PortalTabBar from './PortalTabBar';
 import PageNav, { type PageNavMenuItem } from './PageNav';
@@ -96,6 +97,15 @@ export default function PortalShell({
     const isBrand = config.title === defaultTitle;
     document.title = isBrand ? config.title : `${fallback} · ${config.title}`;
   }, [config.title, defaultTitle, fallback]);
+
+  // 师傅端登录心跳：登录后任何页面每 2 分钟上报一次，保活「在线」状态。
+  // 登录接口已更新 lastActiveAt（登录即在线）；此处维持；登出清空；关浏览器由 5 分钟窗口兜底。
+  useEffect(() => {
+    if (role !== 'master') return;
+    heartbeatApi();
+    const t = setInterval(heartbeatApi, 2 * 60 * 1000);
+    return () => clearInterval(t);
+  }, [role]);
 
   return (
     <PortalNavContext.Provider value={{ config, setConfig }}>
