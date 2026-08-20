@@ -22,6 +22,7 @@ export interface DataTableProps<T> {
   rowKey: (row: T) => string;
   loading?: boolean;
   emptyText?: string;
+  onRowClick?: (row: T) => void;
 }
 
 // 轻量泛型表格：列配置 + 行渲染 + 加载/空态。四个管理端列表页共用。
@@ -31,6 +32,7 @@ export default function DataTable<T>({
   rowKey,
   loading,
   emptyText = '暂无数据',
+  onRowClick,
 }: DataTableProps<T>) {
   return (
     <div className="data-table-wrap">
@@ -46,7 +48,11 @@ export default function DataTable<T>({
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={rowKey(row)}>
+            <tr
+              key={rowKey(row)}
+              className={onRowClick ? 'data-row-clickable' : ''}
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+            >
               {columns.map((c) => (
                 <td key={c.key} style={{ textAlign: c.align || 'left' }}>
                   {c.render ? c.render(row) : (row as Record<string, ReactNode>)[c.key]}

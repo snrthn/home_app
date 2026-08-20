@@ -44,7 +44,10 @@ export class OrdersGateway
     // admin 自动加入工作台刷新房，收到 dashboard-refresh 信号。
     // 注：师傅在线不再按 WS 连接判定（师傅端只有接单页/订单页才建连接），
     // 改由 auth.lastActiveAt + 前端心跳判定，见 reports.service。
-    if (role === 'admin') socket.join('admin-dashboard');
+    if (role === 'admin') {
+      socket.join('admin-dashboard');
+      socket.join('tickets-pool'); // 工单池实时刷新房间
+    }
   }
 
   handleDisconnect(socket: any) {
@@ -96,5 +99,10 @@ export class OrdersGateway
   broadcastPoolUpdate(order: any) {
     this.server?.to('pool').emit('order-update', order);
     this.notifyDashboardRefresh();
+  }
+
+  // 工单池刷新：推送给管理端工单池房间（tickets-pool）
+  broadcastTicketUpdate(ticket: any) {
+    this.server?.to('tickets-pool').emit('ticket-update', ticket);
   }
 }

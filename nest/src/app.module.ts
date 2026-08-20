@@ -22,6 +22,7 @@ import { SiteContentModule } from './site-content/site-content.module';
 import { GatewayModule } from './gateway/gateway.module';
 import { AuditModule } from './audit/audit.module';
 import { ReportsModule } from './reports/reports.module';
+import { TicketsModule } from './tickets/tickets.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { ReportsModule } from './reports/reports.module';
     GatewayModule,
     AuditModule,
     ReportsModule,
+    TicketsModule,
   ],
 })
 export class AppModule {}

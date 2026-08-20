@@ -35,9 +35,11 @@
 
 | 文件 | 作用 | 路径 |
 |---|---|---|
-| **RBAC 权限设计** | 四实体模型、权限码表、预设岗位角色、实现路线 | `docs/rbac-design.md` |
+| **RBAC 权限设计** | 四实体模型、权限码表、预设岗位角色、实现路线（已实施） | `docs/rbac-design.md` |
 | **下单接单 SOP** | 订单状态机、端点清单、业务约束、验收用例 | `docs/orders-sop.md` |
-| **项目计划** | 品牌定位、技术栈选型、数据库设计、路线图、决策清单 | `docs/需求文档/plan.md` |
+| **投诉/工单设计** | 工单底座+投诉挂件、SLA 升级、Phase 1 已落地（先读其 0.5 实施状态节） | `docs/complaints-tickets-design.md` |
+| **WS 订阅改造方案** | JWT 握手鉴权 + 房间定向（已实施并验证） | `docs/WS_SUBSCRIPTION_PLAN.md` |
+| **项目计划** | 品牌定位、技术栈选型、数据库设计、路线图、决策清单（历史快照，支付模型已被后续迭代取代） | `docs/需求文档/plan.md` |
 | **管理员初始化 SQL** | super_admin 种子账号 | `docs/sql/init-admin.sql` |
 | **MySQL 修复脚本** | MySQL 服务启动/修复 bat | `docs/shell/fix-mysql-service.bat` |
 
@@ -104,7 +106,7 @@ Role.Customer = 'customer'
 |---|---|
 | 1 | 弹窗不点遮罩关闭（`.modal-overlay` 禁挂 onClick） |
 | 2 | 行内操作统一 `btn-link`，危险 `btn-link btn-link-danger`；页头「+新增」`btn-primary`（右对齐 `marginLeft:auto`） |
-| 3 | 操作列固定宽：单按钮 90px / 双按钮 130px / 三按钮 220px |
+| 3 | 操作列固定宽：单按钮 90px / 双按钮 130px / 三按钮水平一行 180px（纵向堆叠已被否——用户要求水平布局；2026-08-21 工单/投诉页实测） |
 | 4 | 列宽标尺：主名称 220+ 起；短列 70-80；价格 110；长文本不设宽 + `.cell-ellipsis` |
 | 5 | 弹窗用 `Modal.tsx`（`closeOnOverlay` 默认 false、`showClose` 默认 true）；宽度 480/600/760 |
 | 6 | headerBar 返回 `onBack=router.back()` 优先、`backHref` 仅兜底（防跳错） |
@@ -175,6 +177,7 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 | masters | `nest/src/masters/` | 接单范围 serviceAreas(Json) + 技能 skills(Json)；`updateMe` 白名单校验（详见第 10 节） |
 | common | `nest/src/common/` | `region-match.ts`：`regionMatches`(code-only) + `serviceAreasToRules` 转换器（详见第 10 节） |
 | reports | `nest/src/reports/` | 运营报表：dashboard 工作台 5 指标 + business/performance/growth 三报表（时间分桶、口径见第 12 节） |
+| tickets | `nest/src/tickets/` | 工单底座 + 投诉挂件（详见第 18 节）：Ticket/Complaint/TicketComment、SLA setInterval 升级、`tickets-pool` WS |
 | audit | `nest/src/audit/` | @Audit 装饰器写操作日志 |
 
 ### 7.2 前端关键文件（next/src/）
@@ -196,6 +199,10 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 | `components/admin/ReportCharts.tsx` | 纯 SVG 报表图表（GroupedBarChart/MultiLineChart，ECharts 风格 tooltip + axisPointer 竖线，图例 HTML 渲染） |
 | `components/admin/DateRangeFilter.tsx` | 报表页日期筛选（开始/结束 + 查询/清除，start/end 透传后端） |
 | `lib/useOrderSocket.ts` | WS 订阅 hook（订单详情/接单池/`onDashboardRefresh` 工作台刷新回调） |
+| `lib/tickets-api.ts` | 投诉/工单 API 封装（提交/列表/详情/留言/改派/流转/处置） |
+| `components/admin/Ticket*.tsx` | TicketDetail（只读详情）/ TicketProcess（处理·结案）/ TicketAssign（改派）三独立弹窗，确认按钮一律走 Modal `footer`（`.modal-actions`） |
+| `components/StickyTabs.tsx` | 吸顶 Tab（订单列表状态分类筛选；超宽右滑 + 右侧渐隐箭头指引） |
+| `components/form/Field.tsx` | 表单项组件（label 上/控件下，`.field` 底距 16px；Field 内 `.select` 宽度 100%） |
 
 ### 7.3 Shared 类型定义
 
@@ -312,7 +319,7 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 
 ---
 
-## 13. 当前完成状态（截至 2026-08-20）
+## 13. 当前完成状态（截至 2026-08-21）
 
 ### 已完成 ✅
 
@@ -346,13 +353,20 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 - [x] 数据报表模块（经营/绩效/增长三页 + 4 个后端接口 + 时间分桶，详见第 12.2 节）
 - [x] 报表图表组件优化（SVG 自适应容器宽度、HTML 图例、ECharts 风格 tooltip + axisPointer、Y 轴方向修正）
 - [x] 三页报表日期筛选（DateRangeFilter，start/end 全链路透传）
+- [x] 投诉/工单模块 Phase 1（详见第 18 节）：后端 tickets 模块 + SLA 升级 + 权限种子 + 迁移 SQL + 管理端两页（三弹窗解耦）+ 客户端「我的投诉」独立页与投诉记录页
+- [x] 管理端工单/投诉页交互规范化（操作列三按钮水平一行 180px；详情/处理/改派三独立弹窗，确认按钮走 Modal FooterBar；表单项用 Field 组件、下拉宽度 100%）
+- [x] 客户端/师傅端订单列表吸顶 Tab 分类筛选（StickyTabs，按两端业务性质拆分类别，超宽右滑 + 右侧渐隐箭头指引）
+- [x] 师傅端首页从占位改为正式布局（欢迎卡 + 4 格统计 + 可提现收入卡 + 进行中订单待办，WS 实时刷新）
 
 ### 待办 / 已知缺口
 
 | 优先级 | 事项 | 说明 |
 |---|---|---|
+| P1 | **投诉/工单端到端联调** | 用户本地须先 `cd nest && pnpm prisma migrate deploy`（三表迁移）+ `pnpm seed`（权限码/角色绑定），再起前后端验证：客户端提交投诉 → 管理端受理/处理/改派 → SLA 升级 |
 | P1 | 浏览器跑通 mock 全流程 | 用户重启 3721 后 Playwright 打 3824 验证 departing/arrived → evaluated + WS |
 | P1 | 订单内 IM 聊天 | 独立工程；会话锚点用 `Conversation.orderId`（非手机号 Hash）；验证码切勿走 IM 发送 |
+| P2 | 投诉/工单 Phase 2 | 师傅端「我的工单」查看+申诉、工作台「待处理工单」指标卡、SLA 倒计时前端展示（超时标红） |
+| P2 | 投诉入口补全 | 订单详情（reviewed/evaluated）「投诉」按钮 + 评价 1-2 星引导投诉（设计见 complaints-tickets-design.md 第 6 节，均未接） |
 | P2 | WS 新单广播按区域过滤 | 当前 `broadcastNewOrder` 推给 pool 房间全部师傅（含地址），需握手缓存 regions + 广播遍历过滤 |
 | P2 | 客户未生成码兜底 | N 分钟后照片 + GPS 凭证到达 |
 | P2 | admin 师傅管理加 serviceAreas 审计列 | 纯展示，让运营能审计师傅接单范围 |
@@ -391,6 +405,7 @@ D:\FrontEnd\home_app\
 │   │   ├── users/             # 用户管理
 │   │   ├── services/          # 服务类目/项目/区域
 │   │   ├── masters/           # 师傅管理
+│   │   ├── tickets/           # 投诉/工单（工单底座+投诉挂件，见第 18 节）
 │   │   ├── audit/             # 操作日志
 │   │   ├── reports/           # 运营报表（工作台 dashboard + 三报表）
 │   │   ├── prisma/            # PrismaService
@@ -464,6 +479,26 @@ NEXT_PUBLIC_API_BASE=http://127.0.0.1:3721/api next dev -p 3824
 # main.ts 用 process.env.PORT
 cd nest && PORT=3721 pnpm start:dev
 ```
+
+---
+
+## 18. 投诉/工单模块（2026-08-20 设计定稿，08-21 Phase 1 落地）
+
+> 设计文档：`docs/complaints-tickets-design.md`（v1.1，含实施差异清单，**先读其 0.5 节**）
+
+- **架构**：工单底座 + 投诉挂件——`Ticket`（type=consult/complaint/refund/report/system）统一流转，`type=complaint` 时 1:1 挂 `Complaint`（处置结果 refund/compensate/redispatch/no_fault 四选一）
+- **后端**：`nest/src/tickets/`（7 端点：建单/列表/详情/留言/改派/流转/投诉处置 + `GET /tickets/mine`）；SLA 定时升级用**原生 setInterval**（`sla.scheduler.ts`，`SLA_SCAN_MS` 可调默认 5min——`@nestjs/schedule` 沙箱装不了）；WS 走 `tickets-pool` 房间推 `ticket-update`
+- **投诉门槛**：仅 `order.status ∈ {reviewed, evaluated}` 可提交（决策点 2）
+- **前端管理端**：`/admin/reviews/tickets` + `/admin/reviews/complaints`，操作列【详情/处理/改派】三按钮（水平一行 180px）→ 三独立弹窗（`TicketDetail` 只读 / `TicketProcess` 处理·结案 / `TicketAssign` 改派），确认按钮一律走 Modal `footer`
+- **前端客户端**：个人中心「我的投诉」→ `/client/complaints`（提交，仅 reviewed/evaluated 订单可选）+ `/client/complaints/history`（记录）
+- **⚠️ 迁移与种子（用户本地必做，否则提交投诉 500）**：
+  ```bash
+  cd nest
+  pnpm prisma migrate deploy   # 三表迁移 20260821000000_add_tickets_module（手写 SQL）
+  pnpm seed                    # 权限码 complaints:handle/tickets:manage + cs_agent/ops_lead 绑定
+  ```
+- **坑**：`@prisma/client` re-export 破损 → Prisma 类型走相对路径 `../../node_modules/.prisma/client`；seed.js 用 CommonJS 直连 `.prisma/client`（绕开 pnpm 双副本）
+- **未做**：Phase 2（师傅端我的工单/工作台指标卡/SLA 倒计时展示）、订单详情投诉按钮、评价引导投诉、端到端联调
 
 ---
 

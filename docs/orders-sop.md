@@ -3,8 +3,8 @@
 > 文档定位：下单 / 接单 / 服务 / 支付 / 验收 / 退款 这一核心交易闭环的业务要领与进度台账。
 > 维护方式：本文件随 SOP 推进持续更新；状态变更请同步记一笔（日期 + 结论）。
 > 创建：2026-08-13
-> 最近改写：2026-08-20 **三端订单页全量落地 + 分账引擎/阶梯退款/地域闸门收口**
-> 当前状态：**前后端订单闭环已跑通（三端订单页 + 结算台账 + 师傅收入页已建）；分账规则引擎、阶梯退款、地域闸门 P0+P1 已落地；剩余 P2/P3：WS 广播按区域过滤、admin 师傅管理审计列、旧凭证支付语义收敛**
+> 最近改写：2026-08-21 **订单列表吸顶 Tab 分类筛选 + 师傅端首页落地（纯前端增强，不影响后端闭环）**
+> 当前状态：**前后端订单闭环已跑通（三端订单页 + 结算台账 + 师傅收入页已建）；分账规则引擎、阶梯退款、地域闸门 P0+P1 已落地；投诉/工单模块 Phase 1 已落地（见 complaints-tickets-design.md）；剩余 P2/P3：WS 广播按区域过滤、admin 师傅管理审计列、旧凭证支付语义收敛**
 
 ---
 
@@ -155,6 +155,8 @@ Cancelled(已取消,终态,无退款)        Refunding(退款中)          Accep
 | **master** | 接单池 `orders/pool`（轮询 + WS 实时）、我的订单 `orders/mine`、订单详情 `orders/[id]`（grab / depart / arrive / start / complete）、收入台账 `me/income`（含明细 `income/details`） | `GET /pool`、`grab`、`depart`、`arrive`、`start`、`complete`、`GET /master` |
 | **admin** | 订单台账 `orders/all`（assign/cancel）、`orders/active`、`orders/pending`、订单详情 `orders/[id]`、结算台账 `settlements`（含补偿单审核）、支付配置 `settings/payment` | `GET /all`、`assign`、`cancel`、`GET/PUT /payments/config`、`POST /payments/:id/confirm` |
 | 三端 | WebSocket 客户端（`subscribe-order`/`join-pool`，JWT 鉴权 + 房间定向） | gateway（已挂载） |
+| client/master | 订单列表吸顶 Tab 分类筛选（`components/StickyTabs.tsx`，sticky 贴 PageNav 下方，超宽右滑 + 右侧渐隐箭头指引；分类按两端业务性质拆分，见 `lib/order-status.ts`，纯前端过滤） | 复用 `GET /mine`、`GET /master` |
+| master | 师傅端首页（`app/master/page.tsx`：欢迎卡 + 4 格统计 + 可提现收入卡 + 进行中订单待办，数据来自 profile/income/orders/pool 现有接口 + WS 实时刷新） | 复用现有接口 |
 
 ### 3.3 已知缺口与风险（BUG 清单，带优先级）
 

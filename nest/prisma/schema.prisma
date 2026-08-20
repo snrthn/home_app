@@ -107,6 +107,9 @@ model User {
   addresses      Address[]
   payments       Payment[]
   reviews        Review[]
+  ticketsAsCustomer Ticket[] @relation("TicketCustomer")
+  ticketsAsAssignee  Ticket[] @relation("TicketAssignee")
+  ticketComments     TicketComment[] @relation("TicketCommentOperator")
 
   // 管理端 RBAC：单角色，一个后台账号(role=admin)绑一个岗位角色；role≠admin 时恒为空
   staffRoleId String?
@@ -177,6 +180,7 @@ model Master {
   settlements  Settlement[]
   withdrawals  Withdrawal[]
   quotations   Quotation[]
+  tickets      Ticket[]
 }
 
 model ServiceCategory {
@@ -305,6 +309,7 @@ model Order {
   quotations  Quotation[]
   settlement  Settlement?
   review      Review?
+  tickets     Ticket[]
 }
 
 model OrderLog {
@@ -465,6 +470,8 @@ model Review {
   createdAt   DateTime @default(now())
 
   deletedAt   DateTime?
+
+  tickets     Ticket[]
 }
 
 model PaymentQr {
@@ -652,4 +659,125 @@ model OperationLog {
   @@index([module])
   @@index([userId])
   @@index([action])
+}
+
+// ---------------- 工单 / 投诉（2026-08-20 新增，详见 docs/complaints-tickets-design.md） ----------------
+// 架构：工单底座 + 投诉挂件。Ticket 为统一流转载体，type=complaint 时挂 1:1 Complaint。
+// 处理结果四选一复用现有资产：refund 走 orders.transition 阶梯退款 + compensation 结算单；
+// compensate 走 Settlement(type=compensation)；redispatch 仅记录人工线下安排；no_fault 直接关闭。
+
+enum TicketType {
+  consult    // 咨询
+  complaint  // 投诉（挂件）
+  refund     // 退款申请
+  report     // 举报
+  system     // 系统异常
+}
+
+enum TicketStatus {
+  open        // 待受理
+  processing  // 受理中
+  pendingUser // 待用户确认方案
+  resolved    // 已解决
+  rejected    // 已驳回（投诉不成立）
+  closed      // 已关闭
+}
+
+enum TicketPriority {
+  low
+  normal
+  high
+  urgent
+}
+
+enum ComplaintReason {
+  attitude // 服务态度
+  quality  // 技术质量
+  fee     // 乱收费
+  late    // 迟到爽约
+  damage   // 损坏物品（强制 urgent）
+  other
+}
+
+enum ComplaintResult {
+  refund      // 退款（走 orders.transition 阶梯退款）
+  compensate   // 补偿（平台承担，Settlement.compensation）
+  redispatch   // 重新服务（仅记录，人工线下安排，不自动建单）
+  no_fault     // 无责关闭
+}
+
+model Ticket {
+  id            String        @id @default(cuid())
+  ticketNo      String        @unique            // GT + yyyyMMdd + 4位序列，如 GT202608200001
+  type          TicketType
+  source        String                             // client | master | admin | system
+  title         String        @db.VarChar(100)
+  content       String        @db.Text
+  images        Json?                             // 客户上传凭证（数组）
+  status        TicketStatus  @default(open)
+  priority      TicketPriority @default(normal)
+
+  // 关联三主体（均可空，系统类工单无关联）
+  orderId       String?
+  order         Order?         @relation(fields: [orderId], references: [id])
+  reviewId      String?                            // 评价后引导投诉时关联
+  review        Review?        @relation(fields: [reviewId], references: [id])
+  customerId    String?                           // 提交人（客户）
+  customer      User?          @relation("TicketCustomer", fields: [customerId], references: [id])
+  masterId      String?                           // 被投诉/相关师傅
+  master        Master?        @relation(fields: [masterId], references: [id])
+
+  assigneeId    String?                           // 受理客服 userId（cs_agent）
+  assignee      User?          @relation("TicketAssignee", fields: [assigneeId], references: [id])
+
+  // SLA 与自动升级（docs 第 4 节）
+  firstResponseDeadline DateTime?
+  resolveDeadline       DateTime?
+  escalatedFirstResponse Boolean @default(false)  // 首响是否已升级（防重复）
+  escalatedResolve       Boolean @default(false)  // 处理是否已升级
+  escalationLevel        Int    @default(0)
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  closedAt      DateTime?
+
+  deletedAt     DateTime?
+
+  complaint      Complaint?
+  comments       TicketComment[]
+
+  @@index([status, priority])
+  @@index([assigneeId, status])
+  @@index([orderId])
+  @@index([customerId])
+  @@index([masterId])
+}
+
+model Complaint {
+  ticketId            String          @id                 // 1:1，复用 Ticket.id
+  ticket              Ticket          @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  againstMasterId     String?                             // 被投诉师傅
+  reason              ComplaintReason
+  expectation         String?                            // 用户期望：退款/重做/赔偿
+  result              ComplaintResult?                   // resolved 时必填
+  handledById         String?                            // 处置人 userId
+  refundSettlementId  String?                            // 关联 compensation 结算单（result=refund/compensate 时）
+  handledAt           DateTime?
+  createdAt           DateTime        @default(now())
+}
+
+model TicketComment {
+  id          String   @id @default(cuid())
+  ticketId    String
+  ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  operatorId  String?                                     // 留言人（客服/客户/师傅）
+  operator    User?    @relation("TicketCommentOperator", fields: [operatorId], references: [id])
+  content     String   @db.Text
+  isInternal  Boolean  @default(false)                    // true=内部备注（仅客服可见，不对外）
+  visibleTo   String   @default("all")                   // all | customer | master（对外可见范围）
+  createdAt   DateTime @default(now())
+
+  deletedAt   DateTime?
+
+  @@index([ticketId])
 }

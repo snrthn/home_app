@@ -1,12 +1,14 @@
 'use client';
 
+import { useState } from 'react';
 import { PortalNavSetter } from '@/components/PortalShell';
+import StickyTabs from '@/components/StickyTabs';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getMyOrders } from '@/lib/orders-api';
 import { QK } from '@/lib/query-keys';
-import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE } from '@/lib/order-status';
+import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE, CLIENT_ORDER_TABS } from '@/lib/order-status';
 import { StatusBadge } from '@/components/admin/DataTable';
 import EmptyState from '@/components/EmptyState';
 import { formatDateTime } from '@/lib/format';
@@ -15,11 +17,22 @@ import { CopyButton } from '@/components/CopyText';
 export default function ClientOrdersPage() {
   const router = useRouter();
   const qc = useQueryClient();
+  const [tab, setTab] = useState('all');
   const { data: orders = [], isLoading } = useQuery({
     queryKey: QK.orderMine,
     queryFn: getMyOrders,
     refetchOnMount: 'always',
   });
+
+  // 各分类数量（角标）；statuses=null 为全部
+  const counts = CLIENT_ORDER_TABS.map((t) => ({
+    ...t,
+    count: t.statuses ? orders.filter((o) => t.statuses!.includes(o.status)).length : orders.length,
+  }));
+  const activeDef = CLIENT_ORDER_TABS.find((t) => t.key === tab) ?? CLIENT_ORDER_TABS[0];
+  const filtered = activeDef.statuses
+    ? orders.filter((o) => activeDef.statuses!.includes(o.status))
+    : orders;
 
   return (
     <>
@@ -33,16 +46,28 @@ export default function ClientOrdersPage() {
         }}
         menu={[{ label: '刷新数据', onClick: () => qc.invalidateQueries({ queryKey: QK.orderMine }) }]}
       />
+      <StickyTabs
+        tabs={counts.map(({ key, label, count }) => ({ key, label, count: key === 'all' ? 0 : count }))}
+        active={tab}
+        onChange={setTab}
+        ariaLabel="订单状态筛选"
+      />
       <div className="laoma-container order-mod">
         {isLoading ? (
           <p className="field-hint">加载中…</p>
-        ) : orders.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <div className="card">
-            <EmptyState text="还没有订单，去首页看看推荐服务吧。" />
+            <EmptyState
+              text={
+                tab === 'all'
+                  ? '还没有订单，去首页看看推荐服务吧。'
+                  : `暂无「${activeDef.label}」订单。`
+              }
+            />
           </div>
         ) : (
           <div className="order-grid">
-            {orders.map((o) => {
+            {filtered.map((o) => {
               const addr = o.address;
               const addrLine = addr
                 ? [addr.province, addr.city, addr.district, addr.detail].filter(Boolean).join('')

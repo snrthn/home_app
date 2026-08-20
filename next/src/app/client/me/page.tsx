@@ -33,14 +33,6 @@ function IconOrder() {
     </svg>
   );
 }
-function IconNotice() {
-  return (
-    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M3 11l14-6v14L3 13z" />
-      <path d="M3 11v2a2 2 0 0 0 2 2h1" />
-    </svg>
-  );
-}
 function IconAddress() {
   return (
     <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -56,6 +48,15 @@ function IconService() {
       <rect x="3" y="12" width="4" height="6" rx="2" />
       <rect x="17" y="12" width="4" height="6" rx="2" />
       <path d="M19 18a4 4 0 0 1-4 3h-2" />
+    </svg>
+  );
+}
+function IconFeedback() {
+  return (
+    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M21 11.5a8.5 8.5 0 0 1-12 7.7L3 21l1.8-6A8.5 8.5 0 1 1 21 11.5z" />
+      <line x1="8" y1="10.5" x2="16" y2="10.5" />
+      <line x1="8" y1="14" x2="13" y2="14" />
     </svg>
   );
 }
@@ -117,8 +118,8 @@ export default function ClientMe() {
         {/* 快速入口（保持不变） */}
         <div className="me-grid">
           <MeEntry label="我的订单" icon={<IconOrder />} href="/client/orders" />
-          <MeEntry label="平台公告" icon={<IconNotice />} href="/client/notices" />
           <MeEntry label="我的地址" icon={<IconAddress />} href="/client/me/addresses" />
+          <MeEntry label="我的投诉" icon={<IconFeedback />} href="/client/complaints" />
           <MeEntry label="在线客服" icon={<IconService />} href="/client/me/online-service" />
         </div>
 

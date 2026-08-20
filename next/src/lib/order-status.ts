@@ -48,3 +48,42 @@ export const ORDER_STATUS_TONE: Record<
   refunded: 'gray',
   cancelled: 'gray',
 };
+
+// ===== 订单列表状态 Tab 分类（按业务视角拆分，供吸顶 Tab 筛选） =====
+// statuses 为 null 表示「全部」，不做过滤。
+export interface OrderTabDef {
+  key: string;
+  label: string;
+  statuses: OrderStatus[] | null;
+}
+
+// 客户端视角：付钱（待支付）→ 等接单/上门 → 验收 → 评价 → 售后
+export const CLIENT_ORDER_TABS: OrderTabDef[] = [
+  { key: 'all', label: '全部', statuses: null },
+  {
+    key: 'ongoing',
+    label: '进行中',
+    statuses: [
+      'pending_payment',
+      'pending_accept',
+      'accepted',
+      'departing',
+      'arrived',
+      'servicing',
+      'pending_confirm',
+    ],
+  },
+  { key: 'to_review', label: '待评价', statuses: ['reviewed'] },
+  { key: 'aftersale', label: '售后', statuses: ['refunding', 'refunded'] },
+  { key: 'closed', label: '已取消', statuses: ['cancelled'] },
+];
+
+// 师傅端视角：接活干活（待上门 → 服务中）→ 交活（待验收）→ 收钱（已完成）→ 异常退单
+export const MASTER_ORDER_TABS: OrderTabDef[] = [
+  { key: 'all', label: '全部', statuses: null },
+  { key: 'todo', label: '待上门', statuses: ['accepted', 'departing'] },
+  { key: 'serving', label: '服务中', statuses: ['arrived', 'servicing'] },
+  { key: 'confirm', label: '待验收', statuses: ['pending_confirm'] },
+  { key: 'done', label: '已完成', statuses: ['reviewed', 'evaluated'] },
+  { key: 'closed', label: '退单/取消', statuses: ['cancelled', 'refunding', 'refunded'] },
+];

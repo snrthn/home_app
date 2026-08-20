@@ -1,7 +1,9 @@
 # 管理端角色权限设计文档（RBAC）
 
-> 状态：设计定稿（待实现）  ·  版本：v1.0  ·  日期：2026-08-11
+> 状态：**已实施并上线（2026-08 全量落地）**  ·  版本：v1.1  ·  设计定稿：2026-08-11
 > 适用范围：仅管理端（运营端 `/admin`）。用户端 / 师傅端不在本设计内。
+>
+> **实施情况**（2026-08-21 核对）：四实体（StaffRole/Permission/StaffRolePermission + User.staffRoleId）已入库；`PermissionGuard` + `@RequirePerm` 真相源校验已挂高风险接口；JWT 已扩容 `staffRole` + `perms`；7 个预设岗位角色已 seed；前端 `admin-menu.ts` perm 过滤 + `usePerm` 已接；角色权限管理页 `/admin/settings/roles` 已建；后台账号编辑表单含「所属岗位角色」下拉。2026-08-21 起新增 `complaints:handle` / `tickets:manage` 权限码已随 `nest/prisma/seed.js` 入库并绑定 `cs_agent` / `ops_lead`（详见 `complaints-tickets-design.md`）。
 
 ---
 

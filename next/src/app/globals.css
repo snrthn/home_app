@@ -111,6 +111,82 @@ body {
   background: var(--row-hover);
 }
 
+/* ===== 订单列表吸顶状态 Tab（StickyTabs）：贴在 PageNav（48px）下方 ===== */
+.sticky-tabs {
+  position: sticky;
+  top: 48px; /* PageNav 高度 */
+  z-index: 9; /* 低于 PageNav 的 10，避免遮住顶栏 */
+  background: var(--color-surface);
+  border-bottom: 1px solid #eef0f2;
+}
+/* 包裹层：与内容列同宽（720px 居中），箭头指引以此为定位基准 */
+.sticky-tabs-wrap {
+  position: relative;
+  max-width: 720px;
+  margin: 0 auto;
+}
+.sticky-tabs-inner {
+  display: flex;
+  gap: 2px;
+  padding: 0 16px;
+  overflow-x: auto;
+  scrollbar-width: none; /* Firefox 隐藏横向滚动条 */
+}
+.sticky-tabs-inner::-webkit-scrollbar {
+  display: none;
+}
+/* 右侧溢出指引：渐隐遮罩 + 箭头，提示还有更多分类；滚到底由组件隐藏 */
+.sticky-tabs-arrow {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  border: none;
+  padding: 0 6px 0 14px;
+  cursor: pointer;
+  color: var(--color-text-soft);
+  background: linear-gradient(to right, transparent, var(--color-surface) 62%);
+}
+.sticky-tabs-arrow:hover {
+  color: var(--color-primary);
+}
+.sticky-tab {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  background: transparent;
+  padding: 11px 10px 9px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--color-text-soft);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s ease;
+}
+.sticky-tab.active {
+  color: var(--color-primary);
+  font-weight: 600;
+  border-bottom-color: var(--color-primary);
+}
+.sticky-tab-count {
+  min-width: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+  font-weight: 500;
+}
+
 /* ===== 管理端详情页：不套用移动端窄栏，充分利用桌面横向空间 ===== */
 .admin-detail-page {
   width: 100%;
@@ -2386,4 +2462,323 @@ body {
   font-size: 14px;
   min-width: 34px;
   transition: width 0.3s ease;
+}
+
+/* ===================== 工单 / 投诉管理 ===================== */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.select {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--row-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 14px;
+}
+/* 表单项内的下拉控件占满一行（Field 规范：label 上、控件下、宽度一致） */
+.field .select {
+  width: 100%;
+}
+.textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--row-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 14px;
+  resize: vertical;
+  font-family: inherit;
+}
+.checkbox-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-text-soft);
+  margin: 6px 0;
+}
+.data-row-clickable {
+  cursor: pointer;
+}
+.data-row-clickable:hover {
+  background: var(--row-hover);
+}
+.form-msg {
+  margin: 10px 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-text);
+  font-size: 13px;
+}
+.text-overdue {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+.badge-escalated {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: #fff1f0;
+  color: var(--color-danger);
+  font-size: 12px;
+  border: 1px solid #ffccc7;
+}
+.tag-internal {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: #fff7e6;
+  color: #d46b08;
+  font-size: 11px;
+}
+.btn-ghost {
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--row-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text-soft);
+  font-size: 14px;
+  cursor: pointer;
+}
+.btn-ghost:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+/* 工单详情抽屉（右侧滑出） */
+.ticket-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 480px;
+  max-width: 92vw;
+  height: 100vh;
+  overflow-y: auto;
+  background: var(--color-surface);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+  padding: 18px 20px 40px;
+  z-index: 50;
+}
+.ticket-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.ticket-meta,
+.ticket-complaint {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+  margin-bottom: 14px;
+}
+.ticket-meta > div,
+.ticket-complaint > div {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+.ticket-meta span,
+.ticket-complaint span {
+  color: var(--color-muted);
+  margin-bottom: 2px;
+}
+.ticket-content-box {
+  margin-bottom: 14px;
+}
+.ticket-content {
+  margin: 4px 0 0;
+  padding: 10px 12px;
+  background: var(--color-bg);
+  border-radius: 8px;
+  white-space: pre-wrap;
+}
+.ticket-section-title {
+  font-weight: 600;
+  margin: 14px 0 8px;
+  color: var(--color-primary-text);
+}
+.ticket-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.timeline-item {
+  border-left: 3px solid var(--color-primary-weak);
+  padding: 6px 10px;
+  background: var(--color-bg);
+  border-radius: 0 8px 8px 0;
+}
+.timeline-item.is-internal {
+  border-left-color: #d46b08;
+  background: #fffbe6;
+}
+.timeline-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.timeline-content {
+  margin-top: 4px;
+  white-space: pre-wrap;
+}
+.ticket-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border-top: 1px solid var(--row-border);
+  padding-top: 14px;
+}
+.action-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.action-resolve {
+  background: #fff7e6;
+  padding: 10px;
+  border-radius: 8px;
+}
+
+/* ===================== 客户端：我的反馈 / 提交投诉 ===================== */
+.card-soft {
+  background: var(--color-surface);
+  border: 1px solid var(--row-border);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow);
+}
+.section-title {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--color-primary-text);
+  margin-bottom: 10px;
+}
+.form-label {
+  display: block;
+  margin: 12px 0 4px;
+  font-size: 13px;
+  color: var(--color-text-soft);
+}
+.feedback-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.feedback-item {
+  background: var(--color-surface);
+  border: 1px solid var(--row-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.feedback-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.feedback-no {
+  font-weight: 600;
+  color: var(--color-primary-text);
+}
+.feedback-title {
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+/* 我的投诉表单：控件独占一行、宽度一致（避免 select/input 与 textarea 参差）*/
+.complaint-form .select,
+.complaint-form .textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+}
+.complaint-form .btn-primary {
+  display: block;
+  width: 100%;
+  margin-top: 16px;
+}
+
+/* ===== 师傅端首页 ===== */
+/* 数据概览：4 格统计（接单池新单 / 进行中 / 待验收 / 本月入账） */
+.home-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.home-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 4px;
+}
+.home-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1.2;
+}
+.home-stat-value.is-primary {
+  color: var(--color-primary);
+}
+.home-stat-label {
+  font-size: 12px;
+  color: var(--color-text-soft);
+}
+/* 收入卡：可提现余额为主信息，副信息与入口靠右 */
+.home-income {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.home-income-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.home-income-amount {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--color-primary);
+  line-height: 1.2;
+}
+.home-income-sub {
+  font-size: 12px;
+  color: var(--color-text-soft);
+}
+/* 区块标题：右侧带「查看全部」入口 */
+.home-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 18px 4px 10px;
+}
+.home-section-head h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.home-section-more {
+  font-size: 13px;
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+/* 首页卡片行距：home-gap 容器内的顶级卡片之间留出正常间距 */
+.laoma-container.home-gap > .card:not(:last-child) {
+  margin-bottom: 12px;
 }
