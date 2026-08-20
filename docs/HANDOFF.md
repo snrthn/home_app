@@ -174,6 +174,7 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 | services | `nest/src/services/` | 类目树(parentId) + 服务项(price/unit) + 区域(deletedAt×isActive) |
 | masters | `nest/src/masters/` | 接单范围 serviceAreas(Json) + 技能 skills(Json)；`updateMe` 白名单校验（详见第 10 节） |
 | common | `nest/src/common/` | `region-match.ts`：`regionMatches`(code-only) + `serviceAreasToRules` 转换器（详见第 10 节） |
+| reports | `nest/src/reports/` | 运营报表：dashboard 工作台 5 指标 + business/performance/growth 三报表（时间分桶、口径见第 12 节） |
 | audit | `nest/src/audit/` | @Audit 装饰器写操作日志 |
 
 ### 7.2 前端关键文件（next/src/）
@@ -192,6 +193,9 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 | `components/admin/DataTable.tsx` | 通用表格（Column 类型） |
 | `components/EmptyState.tsx` | 空数据占位 |
 | `components/CopyText.tsx` | CopyButton（一键复制，防父级跳转） |
+| `components/admin/ReportCharts.tsx` | 纯 SVG 报表图表（GroupedBarChart/MultiLineChart，ECharts 风格 tooltip + axisPointer 竖线，图例 HTML 渲染） |
+| `components/admin/DateRangeFilter.tsx` | 报表页日期筛选（开始/结束 + 查询/清除，start/end 透传后端） |
+| `lib/useOrderSocket.ts` | WS 订阅 hook（订单详情/接单池/`onDashboardRefresh` 工作台刷新回调） |
 
 ### 7.3 Shared 类型定义
 
@@ -279,7 +283,36 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 
 ---
 
-## 12. 当前完成状态（截至 2026-08-20）
+## 12. 运营平台工作台与数据报表（2026-08-20 落地）
+
+### 12.1 工作台 Dashboard（`/admin`）
+
+- **5 个指标卡**：今日订单（已支付口径）、待处理订单（pending_accept 数）、在线师傅、本月 GMV、本月平台净收入
+- **实时刷新链路**：业务事件（新单/订单更新/池子更新/登出）→ `orders.gateway.ts` `notifyDashboardRefresh()` emit `dashboard-refresh` 到 `admin-dashboard` 房间 → 前端 `useOrderSocket({ onDashboardRefresh })` → `invalidateQueries(['dashboard'])` → React Query 重拉
+- ⚠️ **在线师傅 = lastActiveAt 5 分钟窗口，不是 WS 连接**（虎哥实测反馈驱动：只有切到接单页的师傅才有 WS 连接，不代表登录在线）。判定：`User.lastActiveAt >= now-5min && role==='master'`
+- **心跳机制**：`auth` 新增 `POST /auth/heartbeat`；前端 `PortalShell` 对 `role==='master'` 挂载立即调 + `setInterval` 每 2 分钟一次；`issueTokens()` 登录时更新 lastActiveAt，`logoutFromHeader()` 登出清空
+- **口径**：GMV = 已支付订单金额（`Payment.paidAt` 当月），平台净收入 = 平台留成合计（含补偿单），今日订单按 `Payment.paidAt` 今天
+
+### 12.2 数据报表（`/admin/reports/*`）
+
+| 页面 | 路由 | 后端接口 | 内容 |
+|---|---|---|---|
+| 经营报表 | `/admin/reports/business` | `GET /reports/business?dimension=&start=&end=` | 营收/订单量趋势图 + 明细表（按日/周/月分桶，最近 30 桶） |
+| 师傅绩效 | `/admin/reports/performance` | `GET /reports/performance?sort=&limit=&start=&end=` | 收入/订单/评分/完成率 4 种排序，Top10 收入图 + 排名表 |
+| 用户增长 | `/admin/reports/growth` | `GET /reports/growth?dimension=&start=&end=` | 新客户/新师傅/新订单趋势 + 注册→首单转化漏斗 |
+
+- **统一口径**（后端 `reports.service.ts` 注释同步）：
+  - 营收/订单量按**支付时间** `Payment.paidAt` 归桶；订单量按 orderId 去重
+  - 退款单数/金额按补偿结算单 `settledAt`（近似退款时间），金额 = orderAmount − platformFee − masterAmount 反推
+  - 完成订单 = status ∈ {reviewed, evaluated}（按 createdAt 归桶）；完成率 = 完成 ÷ 创建
+  - `PAID_STATUSES` = paid/confirmed/completed/reviewed/evaluated/refunding（排除 PendingPayment/Cancelled/Refunded）
+- **图表组件** `ReportCharts.tsx`：纯 SVG（viewBox 1000×200，5:1 自适应容器宽度）；图例 HTML 渲染在标题下方；自定义 ECharts 风格 tooltip（深色圆角面板 + 系列色点 + axisPointer 虚线竖线，`useChartTip` hook 换算 viewBox 坐标反推索引）；坐标轴 label 字号 9（SVG 等比放大后视觉 ≈ 14px）
+- **日期筛选**：三页均有 `DateRangeFilter`，格式 `YYYY-MM-DDT00:00:00` / `YYYY-MM-DDT23:59:59`（本地时区含整天），不传则走后端默认范围（近 30 桶/全历史）
+- **已发现缺口**：`lastActiveAt` 从 2026-08-20 才开始维护，历史在线数据无留存；`Order.refundedAt` 缺失（用 settlement.settledAt 近似）；均不影响当前展示
+
+---
+
+## 13. 当前完成状态（截至 2026-08-20）
 
 ### 已完成 ✅
 
@@ -291,6 +324,7 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 - [x] 师傅抢单并发防（updateMany 乐观锁）
 - [x] 到达验证码（客户生成 / 师傅校验 / 一次性）
 - [x] 阶梯退款全链路（departing 80% / arrived 50%）
+- [x] 退款两段式走状态机（Refunding→Refunded 均经 `orders.transition()`，统一写 orderLog + 实时广播；不再直接 order.update 绕过）
 - [x] 评价模块（5 星 + 200 字 + 匿名，一单一评）
 - [x] 收入/提现模块（余额实时聚合 + 管理端审核）
 - [x] 分账规则引擎全链路（CommissionRule + 快照 + 三方分账 + 管理端配置页）
@@ -308,6 +342,10 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 - [x] 状态切换一律二次确认（ConfirmDialog）
 - [x] 取消白名单 + 流转状态红字区块（含未支付取消文案区分）
 - [x] UI 11 条规矩全量落地
+- [x] 运营平台工作台（5 指标卡 + WS 实时刷新 + lastActiveAt 在线判定 + 师傅端心跳，详见第 12.1 节）
+- [x] 数据报表模块（经营/绩效/增长三页 + 4 个后端接口 + 时间分桶，详见第 12.2 节）
+- [x] 报表图表组件优化（SVG 自适应容器宽度、HTML 图例、ECharts 风格 tooltip + axisPointer、Y 轴方向修正）
+- [x] 三页报表日期筛选（DateRangeFilter，start/end 全链路透传）
 
 ### 待办 / 已知缺口
 
@@ -317,15 +355,15 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 | P1 | 订单内 IM 聊天 | 独立工程；会话锚点用 `Conversation.orderId`（非手机号 Hash）；验证码切勿走 IM 发送 |
 | P2 | WS 新单广播按区域过滤 | 当前 `broadcastNewOrder` 推给 pool 房间全部师傅（含地址），需握手缓存 regions + 广播遍历过滤 |
 | P2 | 客户未生成码兜底 | N 分钟后照片 + GPS 凭证到达 |
-| P2 | Refunding→Refunded 不写 orderLog | refund 直接 order.update，不走 transition |
 | P2 | admin 师傅管理加 serviceAreas 审计列 | 纯展示，让运营能审计师傅接单范围 |
 | P3 | 真实支付联调 | 需商户凭证 + 公网回调地址 |
 | P3 | 阶梯退款真实渠道验证 | wechat provider refund/total 已分字段 |
 | P3 | assign() 管理员指派区域校验 | 暂不加（虎哥 2026-08-20 决策），如需可加「强制指派」开关 |
+| P3 | lastActiveAt 历史数据缺失 | 在线数判定字段 2026-08-20 才开始维护，历史在线趋势无法回溯；`Order.refundedAt` 缺失用 settledAt 近似 |
 
 ---
 
-## 13. 协作方式（跨项目通用，用户级记忆摘要）
+## 14. 协作方式（跨项目通用，用户级记忆摘要）
 
 - 用户（虎哥）会**自己动手并行操作**——不能假设系统状态只由 AI 改变
 - 用户会**回头核查数据并直接质疑**——要可核查的证据链，不是漂亮话
@@ -335,7 +373,7 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 
 ---
 
-## 14. 工程结构速览
+## 15. 工程结构速览
 
 ```
 D:\FrontEnd\home_app\
@@ -354,6 +392,7 @@ D:\FrontEnd\home_app\
 │   │   ├── services/          # 服务类目/项目/区域
 │   │   ├── masters/           # 师傅管理
 │   │   ├── audit/             # 操作日志
+│   │   ├── reports/           # 运营报表（工作台 dashboard + 三报表）
 │   │   ├── prisma/            # PrismaService
 │   │   ├── common/            # 公共装饰器/守卫 + region-match.ts（地域匹配规则集）
 │   │   └── config/            # merchant.json(AES加密)
@@ -387,7 +426,7 @@ D:\FrontEnd\home_app\
 
 ---
 
-## 15. MySQL 运行方式
+## 16. MySQL 运行方式
 
 本机 MySQL 未注册为服务，用项目内数据目录直接拉进程：
 
@@ -402,7 +441,7 @@ cd "C:/Program Files/MySQL/MySQL Server 8.0/bin"
 
 ---
 
-## 16. 常用命令
+## 17. 常用命令
 
 ```bash
 # 构建顺序（先 shared 再 backend）
