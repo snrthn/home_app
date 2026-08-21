@@ -1,0 +1,52 @@
+name: Deploy
+
+# 触发：推送到 main 自动部署；也可在 Actions 页面手动触发（可选分支）
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: '部署的分支/tag（默认 main）'
+        required: false
+        default: 'main'
+
+# 同一时刻只允许一个生产部署，避免并发构建/迁移冲突
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  # 1) 质量门禁：在 GitHub runner 上做 typecheck，失败则不部署
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+
+  # 2) 部署：SSH 登录 ECS 执行服务器端构建与重启
+  deploy:
+    needs: verify
+    runs-on: ubuntu-latest
+    # 在 GitHub 仓库 Settings → Environments 新建 production 环境，
+    # 可配置 Required reviewers 实现部署前人工审批
+    environment: production
+    steps:
+      - name: 部署到 ECS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          # 服务器需已安装 git/pnpm/pm2，仓库已克隆到 DEPLOY_DIR
+          script: |
+            cd ${{ secrets.DEPLOY_PATH }}
+            bash scripts/deploy.sh "${{ inputs.ref || github.ref_name }}"
