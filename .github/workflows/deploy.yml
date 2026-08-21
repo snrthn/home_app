@@ -36,9 +36,9 @@ jobs:
   deploy:
     needs: verify
     runs-on: ubuntu-latest
-    # 在 GitHub 仓库 Settings → Environments 新建 production 环境，
-    # 可配置 Required reviewers 实现部署前人工审批
-    environment: production
+    # 如需部署前人工审批：Settings→Environments 新建 production 环境
+    # 并加 Required reviewers，然后取消下行注释
+    # environment: production
     steps:
       - name: 部署到 ECS
         uses: appleboy/ssh-action@v1
