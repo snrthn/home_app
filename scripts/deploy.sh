@@ -6,12 +6,12 @@
 # 前置（首次）：
 #   1. 服务器已装 git / pnpm@8 / pm2 / mysql
 #   2. 仓库已克隆到 DEPLOY_DIR
-#   3. nest/.env 已放置生产环境变量（DATABASE_URL/JWT_*/PORT=4000/UPLOAD_DIR）
+#   3. nest/.env 已放置生产环境变量（DATABASE_URL/JWT_*/PORT=4200/UPLOAD_DIR）
 #   4. next/.env.production 已配置 NEXT_PUBLIC_API_BASE=/api
 set -euo pipefail
 
 BRANCH="${1:-main}"
-DEPLOY_DIR="${DEPLOY_DIR:-/opt/home_app}"
+DEPLOY_DIR="${DEPLOY_DIR:-/usr/local/www/loama}"
 
 echo "==> [1/7] 拉取代码 ($BRANCH)"
 cd "$DEPLOY_DIR"
@@ -41,11 +41,11 @@ else
 fi
 
 echo "==> [6/7] 数据库迁移 + 种子（均幂等，可重复执行）"
-( cd nest && npx prisma migrate deploy )
+( cd nest && npx prisma db push )
 node nest/prisma/seed.js
 
 echo "==> [7/7] 重载 PM2 进程"
-pm2 startOrReload ecosystem.config.js --env production
+pm2 startOrReload ecosystem.config.js
 pm2 save
 
 echo "==> 部署完成"

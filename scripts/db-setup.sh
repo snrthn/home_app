@@ -10,10 +10,10 @@
 # 可选：
 #   MYSQL_HOST(127.0.0.1) MYSQL_PORT(3306) DB_NAME(laoma_jiadian)
 #   ADMIN_PHONE(admin)   ADMIN_NICKNAME(超级管理员)
-#   DEPLOY_DIR(/opt/home_app)
+#   DEPLOY_DIR(/usr/local/www/loama)
 set -euo pipefail
 
-DEPLOY_DIR="${DEPLOY_DIR:-/opt/home_app}"
+DEPLOY_DIR="${DEPLOY_DIR:-/usr/local/www/loama}"
 cd "$DEPLOY_DIR"
 
 # 复用 nest/.env 里的 DATABASE_URL / JWT 等
@@ -34,7 +34,7 @@ mysql -h"$MYSQL_HOST" -P"$MYSQL_PORT" -uroot -p"$MYSQL_ROOT_PASSWORD" 2>/dev/nul
   -e "CREATE DATABASE IF NOT EXISTS \`$DB_NAME\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 
 echo "==> [2/4] 应用 Prisma 迁移"
-( cd nest && npx prisma migrate deploy )
+( cd nest && npx prisma db push )
 
 echo "==> [3/4] 种子：权限码与岗位角色（幂等）"
 node nest/prisma/seed.js
