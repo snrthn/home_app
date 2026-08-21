@@ -2790,3 +2790,412 @@ body {
 .laoma-container.home-gap > .card:not(:last-child) {
   margin-bottom: 12px;
 }
+
+/* ===== 师傅端首页 v2：更大气聚焦的布局 ===== */
+
+.master-home {
+  padding-top: 12px;
+  padding-bottom: 24px;
+}
+
+/* 顶部 Hero：渐变背景 + 个人信息 + 本月收入 */
+.master-home-hero {
+  position: relative;
+  border-radius: 20px;
+  padding: 20px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-deep) 100%);
+  box-shadow: 0 8px 24px rgba(62, 143, 176, 0.28);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+
+.master-home-hero::before {
+  content: '';
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 160px;
+  height: 160px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+}
+
+.master-home-hero::after {
+  content: '';
+  position: absolute;
+  bottom: -60px;
+  right: 40px;
+  width: 120px;
+  height: 120px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 50%;
+}
+
+.master-home-hero-main {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.master-home-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 3px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.master-home-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.master-home-avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.9);
+  padding: 12px;
+}
+
+.master-home-hero-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.master-home-name-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.master-home-name {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.master-home-name-row .status-badge {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.master-home-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.master-home-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.master-home-star {
+  width: 13px;
+  height: 13px;
+  color: #fbbf24;
+  display: inline-flex;
+}
+
+/* 合并进 Hero 的关键指标条：单行、分散对齐、字号统一 */
+.master-home-hero-metrics {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-around;
+  gap: 8px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  text-align: center;
+}
+
+.master-home-hero-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.master-home-hero-metric-value {
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #fff;
+}
+
+.master-home-hero-metric-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.82);
+  white-space: nowrap;
+}
+
+.master-home-hero-metric-divider {
+  width: 1px;
+  height: 22px;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* 可提现余额大卡 */
+.master-home-balance {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px;
+  margin-bottom: 14px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fbfc 100%);
+  border: 1px solid var(--color-primary-soft);
+}
+
+.master-home-balance-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.master-home-balance-label {
+  font-size: 13px;
+  color: var(--color-text-soft);
+}
+
+.master-home-balance-amount {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--color-primary-text);
+  line-height: 1.1;
+}
+
+.master-home-balance-sub {
+  font-size: 12px;
+  color: var(--color-text-soft);
+  margin-top: 2px;
+}
+
+.master-home-balance-btn {
+  flex-shrink: 0;
+  padding: 11px 22px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(62, 143, 176, 0.25);
+}
+
+/* 快捷功能 4 宫格 */
+.master-home-quick {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 18px 12px;
+  margin-bottom: 14px;
+}
+
+.master-home-quick-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 4px;
+  border-radius: 12px;
+  transition: background 0.15s ease;
+  color: var(--color-text);
+}
+
+.master-home-quick-item:active {
+  background: var(--row-hover);
+}
+
+.master-home-quick-icon {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+
+.master-home-quick-icon.is-primary {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.master-home-quick-icon.is-text {
+  background: #f3f7f9;
+  color: var(--color-primary-text);
+}
+
+.master-home-quick-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--color-danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
+}
+
+.master-home-quick-label {
+  font-size: 13px;
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+/* 进行中订单列表 */
+.master-home-order-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.master-home-order-card {
+  position: relative;
+  padding: 16px;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.master-home-order-card:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06);
+}
+
+.master-home-order-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.master-home-order-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.master-home-order-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.master-home-order-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-text-soft);
+}
+
+.master-home-order-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--color-muted);
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.master-home-order-amount {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-primary-text);
+  flex-shrink: 0;
+}
+
+.master-home-order-address {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-muted);
+  line-height: 1.45;
+  padding-right: 22px;
+}
+
+.master-home-order-arrow {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  color: var(--color-muted);
+  opacity: 0.5;
+}
+
+/* 小屏微调 */
+@media (max-width: 374px) {
+  .master-home-hero {
+    padding: 18px 16px;
+  }
+  .master-home-avatar {
+    width: 56px;
+    height: 56px;
+  }
+  .master-home-name {
+    font-size: 18px;
+  }
+  .master-home-hero-metrics {
+    padding-top: 10px;
+  }
+  .master-home-hero-metric-value {
+    font-size: 15px;
+  }
+  .master-home-hero-metric-label {
+    font-size: 10px;
+  }
+  .master-home-balance-amount {
+    font-size: 28px;
+  }
+  .master-home-balance-btn {
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+  .master-home-quick-icon {
+    width: 46px;
+    height: 46px;
+  }
+  .master-home-hero-metric-value {
+    font-size: 15px;
+  }
+  .master-home-hero-metric-label {
+    font-size: 10px;
+  }
+}

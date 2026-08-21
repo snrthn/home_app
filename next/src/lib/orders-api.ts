@@ -140,6 +140,47 @@ export function cancelOrderAdmin(id: string, reason: string): Promise<OrderLite>
   return api.post(`/orders/${id}/cancel`, { reason }).then((r) => r.data);
 }
 
+// ---------- 智能派单 ----------
+export interface CandidateMaster {
+  masterId: string;
+  realName: string;
+  phone: string | null;
+  skillMatch: boolean;
+  /** 技能命中方式：exact=直接命中子类目，ancestor=父类目覆盖 */
+  skillMatchDetail?: 'exact' | 'ancestor' | null;
+  /** 命中的类目名（用于「父类目覆盖」展示） */
+  matchedCategoryName?: string | null;
+  /** 该师傅在目标订单预约时段已有在手单 */
+  conflict?: boolean;
+  /** 首个冲突订单号 */
+  conflictOrderNo?: string | null;
+  activeOrderCount: number;
+  rating: number;
+  orderCount: number;
+}
+export function getOrderCandidates(orderId: string): Promise<CandidateMaster[]> {
+  return api.get(`/orders/${orderId}/candidates`).then((r) => r.data ?? []);
+}
+
+// ---------- 派单看板统计（Phase 2） ----------
+export interface DispatchStats {
+  pendingCount: number;
+  /** 待派中已超过 timeoutMs 未接的单数（红色告警） */
+  overdueCount: number;
+  /** 超时阈值 ms（前端据此标「已超时」徽章） */
+  timeoutMs: number;
+  /** 超时自动派单开关（env AUTO_DISPATCH_ENABLED） */
+  autoDispatchEnabled: boolean;
+  activeMasterCount: number;
+  todayCreated: number;
+  todayAssigned: number;
+  /** 近 7 日平均接单时长（分钟，整数） */
+  avgAcceptMinutes: number;
+}
+export function getDispatchStats(): Promise<DispatchStats> {
+  return api.get('/orders/dispatch/stats').then((r) => r.data);
+}
+
 // ---------- 支付（平台托管 + 模拟回调） ----------
 export function chargeOrder(orderId: string): Promise<ChargeResult> {
   return api.post('/payments/charge', { orderId }).then((r) => r.data);

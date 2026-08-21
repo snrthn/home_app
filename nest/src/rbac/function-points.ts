@@ -30,7 +30,6 @@ export const FUNCTION_POINTS: FunctionPoint[] = [
   { code: 'menu:services:areas', label: '服务区域', perm: 'services:area_manage', type: 'menu', path: '/admin/services/areas' },
   // 调度派单
   { code: 'menu:dispatch:smart', label: '智能派单', perm: 'dispatch:smart', type: 'menu', path: '/admin/dispatch/smart' },
-  { code: 'menu:dispatch:pool', label: '抢单池', perm: 'dispatch:pool', type: 'menu', path: '/admin/dispatch/pool' },
   // 订单管理
   { code: 'menu:orders', label: '订单管理', perm: 'orders:read', type: 'menu', path: '/admin/orders' },
   { code: 'btn:orders:edit', label: '订单·状态变更', perm: 'orders:edit', type: 'button' },

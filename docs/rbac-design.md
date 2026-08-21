@@ -100,8 +100,7 @@ Function(功能点：菜单项 / 按钮 / 接口)  —— 代码注册表，非 
 | 服务项目 | `/admin/services/items` | `services:item_manage` | |
 | 服务区域 | `/admin/services/areas` | `services:area_manage` | |
 | **调度派单** | | | |
-| 智能派单 | `/admin/dispatch/smart` | `dispatch:smart` | |
-| 抢单池 | `/admin/dispatch/pool` | `dispatch:pool` | |
+| 智能派单 | `/admin/dispatch/smart` | `dispatch:smart` | 推荐师傅 + 一键指派 |
 | **订单管理** | | | |
 | 全部/待接单/进行中 | `/admin/orders/*` | `orders:read` / `orders:edit` | 查看 / 状态变更 |
 | 退款/售后 | `/admin/orders/refund` | `orders:refund` | **高风险，单独授权** |
@@ -130,7 +129,7 @@ Function(功能点：菜单项 / 按钮 / 接口)  —— 代码注册表，非 
 | 财务 | `finance` | 订单读、报表、结算相关 |
 | 审核员 | `auditor` | 认证审核、评价处置 |
 | 内容编辑 | `editor` | 内容管理 |
-| 调度员 | `dispatcher` | 智能派单、抢单池 |
+| 调度员 | `dispatcher` | 智能派单 |
 
 > 不让每个客户从零配——预设 7 个覆盖典型岗位，空白角色也允许自建。
 

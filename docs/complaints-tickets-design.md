@@ -12,7 +12,7 @@
 
 | 项 | 实施情况 |
 |---|---|
-| 数据层 | ✅ `schema.prisma` 三模型 + 5 枚举 + 关系已加；迁移为**手写 SQL** `prisma/migrations/20260821000000_add_tickets_module/migration.sql`（沙箱无 DB 无法 diff，MySQL 方言对齐 baseline 约定）。⚠️ 用户本地须执行 `pnpm prisma migrate deploy`（勿用 migrate dev，避免 shadow 校验触发 reset） |
+| 数据层 | ✅ `schema.prisma` 三模型 + 5 枚举 + 关系已加；迁移为**手写 SQL** `prisma/migrations/20260821000000_add_tickets_module/migration.sql`（沙箱无 DB 无法 diff，MySQL 方言对齐 baseline 约定）。✅ **已应用**（2026-08-21 14:00 用户授权后本机 `migrate resolve --applied` 补账 + `migrate deploy` 完成，14 迁移全绿） |
 | 后端模块 | ✅ `nest/src/tickets/`（controller 7 端点 + service + `sla.scheduler.ts`）；complaints 处置直接合入 tickets 模块（`POST /tickets/:id/complaint/resolve`），未单独建模块 |
 | SLA 定时任务 | ⚠️ **差异**：`@nestjs/schedule` 沙箱装不了 → `sla.scheduler.ts` 用原生 `setInterval` 等价实现，`SLA_SCAN_MS` 环境变量可调（默认 5 分钟） |
 | 权限种子 | ✅ `nest/prisma/seed.js`（CommonJS 直连 `.prisma/client` 生成客户端，绕开 pnpm 双副本坑）：写 `complaints:handle`/`tickets:manage` 入 Permission 表并绑定 `cs_agent`/`ops_lead`。⚠️ 用户本地须执行 `pnpm seed` |
@@ -20,14 +20,14 @@
 | 管理端两页 | ✅ `/admin/reviews/tickets` + `/admin/reviews/complaints`；交互为**操作列【详情/处理/改派】三入口 + 三独立弹窗**（`TicketDetail` 纯只读 / `TicketProcess` 处理·结案 / `TicketAssign` 改派），确认按钮走 Modal FooterBar 规范 |
 | 客户端 | ✅ 入口为个人中心「我的投诉」→ 独立页 `/client/complaints`（提交表单）+ `/client/complaints/history`（投诉记录），历史入口在表单底部文本链接 + headerBar 菜单 |
 | Phase 2（师傅端我的工单 / 工作台指标卡 / SLA 倒计时展示） | ❌ 未做 |
-| 端到端联调 | ❌ 未做（沙箱无 DB/不能起服务）；migrate + seed 后由用户本地验证 |
+| 端到端联调 | ❌ 未做（沙箱无 DB/不能起服务）；迁移已应用，剩 `pnpm seed` 后由用户本地验证 |
 | 类型坑 | `@prisma/client` re-export 在本项目破损，Prisma 类型一律走相对路径 `../../node_modules/.prisma/client`（与 PrismaService 一致） |
 
 ---
 
 ## 0. 背景与现状
 
-- **DB 层**：`Ticket` / `Complaint` / `TicketComment` 三表已入 schema + 迁移 SQL（见 0.5 节，待本地 `migrate deploy`）。
+- **DB 层**：`Ticket` / `Complaint` / `TicketComment` 三表已入 schema + 迁移 SQL（见 0.5 节，✅ 已应用）。
 - **代码层**：`nest/src/tickets/` 模块已实现（见 0.5 节）。
 - **RBAC 已预留口子**（`rbac-design.md` 第 4 节）：
   - `complaints:handle` → 管理端 `/admin/reviews/complaints`

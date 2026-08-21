@@ -57,6 +57,15 @@ export class OrdersController {
     return this.orders.listAll();
   }
 
+  // 派单看板统计（Phase 2）：待派/超时/在岗师傅/今日已派/平均接单时长
+  @UseGuards(JwtAuthGuard, PermGuard)
+  @Roles(Role.Admin)
+  @RequirePerm('dispatch:smart')
+  @Get('dispatch/stats')
+  dispatchStats() {
+    return this.orders.dispatchStats();
+  }
+
   @UseGuards(JwtAuthGuard)
   @Roles(Role.Master)
   @Post(':id/grab')
@@ -75,6 +84,14 @@ export class OrdersController {
     @Req() req: any,
   ) {
     return this.orders.assign(id, dto.masterId, req.user.sub);
+  }
+
+  @UseGuards(JwtAuthGuard, PermGuard)
+  @Roles(Role.Admin)
+  @RequirePerm('dispatch:smart')
+  @Get(':id/candidates')
+  candidates(@Param('id') id: string) {
+    return this.orders.listCandidates(id);
   }
 
   @UseGuards(JwtAuthGuard)

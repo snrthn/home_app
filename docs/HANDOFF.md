@@ -39,6 +39,7 @@
 | **下单接单 SOP** | 订单状态机、端点清单、业务约束、验收用例 | `docs/orders-sop.md` |
 | **投诉/工单设计** | 工单底座+投诉挂件、SLA 升级、Phase 1 已落地（先读其 0.5 实施状态节） | `docs/complaints-tickets-design.md` |
 | **退款/售后设计** | 价值分析 + 最小闭环（Refund 表审核流），Phase 1 已落地（先读其实施清单节） | `docs/refund-aftersale-design.md` |
+| **智能派单设计** | 价值分析 + candidates 匹配算法 + 派单工作台 + 看板/自动派单，Phase 1/1.5/2 已落地（先读第 0 节） | `docs/dispatch-design.md` |
 | **WS 订阅改造方案** | JWT 握手鉴权 + 房间定向（已实施并验证） | `docs/WS_SUBSCRIPTION_PLAN.md` |
 | **项目计划** | 品牌定位、技术栈选型、数据库设计、路线图、决策清单（历史快照，支付模型已被后续迭代取代） | `docs/plan.md` |
 | **管理员初始化 SQL** | super_admin 种子账号 | `docs/sql/init-admin.sql` |
@@ -360,12 +361,15 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 - [x] 师傅端首页从占位改为正式布局（欢迎卡 + 4 格统计 + 可提现收入卡 + 进行中订单待办，WS 实时刷新）
 - [x] 退款/售后模块 Phase 1（详见第 19 节）：Refund 表审核流（投诉处置退款建单 → 通过/驳回）+ 3 后端端点 + shared 状态机放行已完单退款（Reviewed/Evaluated→Refunding）+ 管理端 `/admin/orders/refund` 台账页（通过/驳回 Modal FooterBar）+ 工单处理/详情弹窗联动提示
 - [x] filter-bar 控件尺寸统一（`.filter-bar .input` 与 `.select`/`.btn-ghost` 同高 34px/14px，globals.css 已沉淀）
+- [x] 智能派单模块 Phase 1（详见第 20 节）：candidates 推荐查询（区域硬过滤 + 技能软加分 + 负载排序）+ 派单工作台 `/admin/dispatch/smart`（左右分栏 + 一键指派 + 全量兜底）+ 移除冗余抢单池页面/权限码/菜单
+- [x] 智能派单 Phase 1.5（推荐质量升级）：祖先链技能匹配（父类目覆盖子类目订单，前端「父类目覆盖」徽章）+ 预约时间冲突检测（同日 slot 重叠降权不排除，前端橙色「时段冲突」标签）
+- [x] 智能派单 Phase 2 看板 + 自动派单（详见第 20 节）：`GET /orders/dispatch/stats` 看板统计（待派/超时/在岗/今日已派/平均接单时长）+ `DispatchSchedulerService` 超时自动派单（推荐第一名，`actorId='system'`，预约单豁免，env 可配）+ 工作台接 WS `dashboard-refresh` 实时刷新 + 超时徽章
 
 ### 待办 / 已知缺口
 
 | 优先级 | 事项 | 说明 |
 |---|---|---|
-| P1 | **投诉/工单 + 退款审核端到端联调** | 用户本地须先 `cd nest && pnpm prisma migrate deploy`（三表迁移 `20260821000000_add_tickets_module` + 退款迁移 `20260821010000_add_refund`）+ `pnpm seed`（权限码/角色绑定）+ `pnpm prisma generate`（清 DLL 残留），再起前后端验证：客户端提交投诉 → 管理端受理/处理（选退款 → 生成 RF 退款单）→ 退款/售后 通过/驳回 → 阶梯退款入账 |
+| P1 | **投诉/工单 + 退款审核端到端联调** | ✅ 迁移已应用（2026-08-21 14:00 用户授权后本机 `migrate resolve --applied 20260821000000_add_tickets_module` + `migrate deploy`，14 迁移全绿，工单带 refunds 关联查询实测通过）。剩用户本地：`pnpm seed`（权限码/角色绑定）+ 重启后端（加载自动派单调度器 + stats 端点），再起前后端验证：客户端提交投诉 → 管理端受理/处理（选退款 → 生成 RF 退款单）→ 退款/售后 通过/驳回 → 阶梯退款入账 |
 | P1 | 浏览器跑通 mock 全流程 | 用户重启 3721 后 Playwright 打 3824 验证 departing/arrived → evaluated + WS |
 | P1 | 订单内 IM 聊天 | 独立工程；会话锚点用 `Conversation.orderId`（非手机号 Hash）；验证码切勿走 IM 发送 |
 | P2 | 投诉/工单 Phase 2 | 师傅端「我的工单」查看+申诉、工作台「待处理工单」指标卡、SLA 倒计时前端展示（超时标红） |
@@ -516,8 +520,24 @@ cd nest && PORT=3721 pnpm start:dev
 - **后端**：`payments.service.ts` 新增 `createRefundRequest`/`listRefunds`/`reviewRefund`；`refund()` 增加 `opts.allowCompleted/reason`；`tickets.service.resolveComplaint` result=refund 由「发起即执行」改为「创建退款申请」；3 端点 `GET /payments/refunds`、`POST /payments/refunds/:id/approve|reject`（perm `orders:refund` + @Audit）
 - **前端管理端**：`/admin/orders/refund` 台账页（`next/src/lib/refunds-api.ts` + `next/src/app/admin/orders/refund/page.tsx`）——状态筛选 + 订单号搜索 + 通过/驳回弹窗（Modal FooterBar：驳回必填原因）；工单处理弹窗 refund 结果提示「需审核」；工单详情展示退款单状态徽章
 - **保留直退**：取消单自动退 / 客户端手动退款仍直退，不建单不审核；审核流只针对「运营判定性退款」（投诉处置）
-- **⚠️ 用户本地必做**：`pnpm --filter @laoma/shared build`（如未执行）+ `pnpm prisma migrate deploy` + 重跑 `pnpm prisma generate`（清沙箱中断的 DLL 残留）；`orders:refund` 权限已在 seed，无需新增
+- **✅ 迁移已应用**（2026-08-21 14:00 用户授权后本机 `migrate resolve --applied 20260821000000_add_tickets_module` + `migrate deploy` 完成，`20260821010000_add_refund` 已落库，14 迁移全绿）；`orders:refund` 权限已在 seed，用户本地只需重跑 `pnpm seed`（权限码/角色绑定）
 - **未做**：Phase 2（运营主动发起退款 / 售后工作台聚合 / business 报表直读 Refund 表 / 退款失败对账）
+
+---
+
+## 20. 智能派单模块（2026-08-21 Phase 1 + Phase 1.5 + Phase 2 看板/自动派单落地）
+
+> 设计文档：`docs/dispatch-design.md`（v1.2，含价值分析与匹配算法，**先读第 0 节**）
+
+- **背景**：原始 RBAC 预留「调度派单」含 2 子页（智能派单 + 抢单池），经审视：抢单池与 `/admin/orders/pending` 完全重叠 → 移除；智能派单是唯一功能缺口（现有 `assign()` 从全量师傅盲选）
+- **后端**：`orders.service.ts` 新增 `listCandidates(orderId)` — 区域硬过滤（复用 `masterCoversOrder`）+ 技能软加分 + 预约冲突降权 + 负载排序（`groupBy` 批量查在手中订单数）；排序键：skillMatch DESC → conflict ASC → activeOrderCount ASC → rating DESC → orderCount DESC；`orders.controller.ts` 新增 `GET /orders/:id/candidates`（perm `dispatch:smart`）
+- **前端**：`/admin/dispatch/smart` 派单工作台（左右分栏：左侧待接单卡片列表 + 右侧推荐师傅面板 + 一键指派 ConfirmDialog + 全量兜底）；`orders-api.ts` 新增 `CandidateMaster` 类型 + `getOrderCandidates()`
+- **菜单清理**：`admin-menu.ts` 移除 `dispatch.pool` 子项；`function-points.ts` 移除 `menu:dispatch:pool`；`seed.js` CODES 移除 `dispatch:pool`，`ops_lead` 角色补绑 `dispatch:smart`
+- **Phase 1.5 算法增强**（2026-08-21）：① 祖先链技能匹配 — `categoryId` 沿 parent 收集祖先集合，`skills ∩ ancestors` 即命中，返回 `skillMatchDetail`（exact 直接命中 / ancestor 父类目覆盖）+ `matchedCategoryName`，前端徽章区分「技能匹配 / 父类目覆盖（类目名）」；② 预约时间冲突检测 — 订单有 `appointmentDate` 时查候选师傅 active 订单同日预约，`slotsOverlap` 判定（`HH:mm-HH:mm` 区间相交，否则去空白字符串相等），返回 `conflict` + `conflictOrderNo`，前端橙色「时段冲突（单号）」标签；冲突**降权不排除**（排序键 `conflict ASC` 沉底，防「全部冲突无人可派」死局）
+- **无新表、无迁移**：推荐查询实时计算，复用现有 Master + Order + ServiceCategory 字段；看板统计与自动派单同样不建表（接单时长口径 = Accepted 的 orderLog 时间 − 订单 createdAt，近似）
+- **Phase 2 看板 + 自动派单**（2026-08-21）：① `GET /orders/dispatch/stats`（perm `dispatch:smart`）返回待派/超时/在岗师傅/今日已派/平均接单时长；② `DispatchSchedulerService`（`nest/src/orders/dispatch.scheduler.ts`，setInterval 模式）定时扫描超时未接订单 → `listCandidates` 第一名自动 `assign(orderId, masterId, 'system')`（orderLog `operatorId='system'` 可溯源，**预约单豁免**）；env 可配：`AUTO_DISPATCH_ENABLED`（默认 true）/ `AUTO_DISPATCH_SCAN_MS`（默认 60s）/ `AUTO_DISPATCH_TIMEOUT_MS`（默认 30 分钟）；③ 前端工作台接 `useOrderSocket` `dashboard-refresh` 实时刷新（不再依赖手动刷新）+ 顶部 5 张看板卡片 + 超时订单红色「已超时」徽章
+- **⚠️ 用户本地必做**：`pnpm seed`（刷新权限码：移除 `dispatch:pool`、`ops_lead` 绑定 `dispatch:smart`）；重启后端加载自动派单调度器与 stats 端点
+- **未做**：LBS 就近排序（需师傅表加坐标字段 + 坐标来源方案，待定）
 
 ---
 

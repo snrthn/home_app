@@ -65,7 +65,6 @@ export const ADMIN_MENU: AdminMenuItem[] = [
     icon: 'truck',
     children: [
       { key: 'smart', label: '智能派单', path: '/admin/dispatch/smart', perm: 'dispatch:smart' },
-      { key: 'pool', label: '抢单池', path: '/admin/dispatch/pool', perm: 'dispatch:pool' },
     ],
   },
   {

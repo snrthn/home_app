@@ -51,7 +51,7 @@ const CODES = [
   'users:admin_read', 'users:admin_manage', 'users:customer_read', 'users:customer_toggle',
   'users:master_read', 'users:master_toggle', 'users:master_verify', 'users:verify',
   'services:category_manage', 'services:item_manage', 'services:area_manage',
-  'dispatch:smart', 'dispatch:pool', 'orders:read', 'orders:edit', 'orders:refund',
+  'dispatch:smart', 'orders:read', 'orders:edit', 'orders:refund',
   'finance:manage', 'reviews:read', 'reviews:moderate',
   'complaints:handle', 'tickets:manage', 'content:manage', 'reports:view',
   'settings:role_manage', 'logs:view',
@@ -68,7 +68,7 @@ const ROLES = {
   super_admin: { name: '超级管理员', perms: '*', system: true },
   ops_lead: {
     name: '运营主管',
-    perms: ['complaints:handle', 'tickets:manage', 'reviews:read', 'orders:read', 'orders:refund', 'finance:manage'],
+    perms: ['complaints:handle', 'tickets:manage', 'reviews:read', 'orders:read', 'orders:refund', 'finance:manage', 'dispatch:smart'],
   },
   cs_agent: {
     name: '客服',

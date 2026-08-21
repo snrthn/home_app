@@ -113,7 +113,7 @@ model Refund {
 - [x] `resolveComplaint` result=refund 改为创建退款申请
 - [x] 管理端退款/售后台账页（列表 + 状态筛选 + 通过/驳回弹窗）
 - [x] 工单处理弹窗 refund 结果提示「需审核」；工单详情展示退款单状态
-- [ ] **用户本地**：`pnpm --filter @laoma/shared build` + `pnpm prisma migrate deploy`（`orders:refund` 权限已在 seed，无需新增）
+- [ ] **用户本地剩项**：重跑 `pnpm seed`（`orders:refund` 权限已在 seed，无需新增；迁移 `20260821010000_add_refund` 已于 2026-08-21 14:00 应用）
 
 ## 5. 后续扩展（Phase 2，未排期）
 

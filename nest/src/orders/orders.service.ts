@@ -299,6 +299,299 @@ export class OrdersService {
     );
   }
 
+  // 在手中订单状态（用于负载统计）
+  private static readonly ACTIVE_STATUSES: OrderStatus[] = [
+    OrderStatus.Accepted,
+    OrderStatus.Departing,
+    OrderStatus.Arrived,
+    OrderStatus.Servicing,
+    OrderStatus.PendingConfirm,
+  ];
+
+  /**
+   * 预约时段重叠判定：双方均为 "HH:mm-HH:mm" 区间格式 → 区间相交；否则（枚举/自由文本如「上午」）去空白后字符串相等即冲突。
+   */
+  private static slotsOverlap(a?: string | null, b?: string | null): boolean {
+    const norm = (s?: string | null) => (s ?? '').replace(/\s+/g, '');
+    const pa = norm(a);
+    const pb = norm(b);
+    if (!pa || !pb) return false;
+    const toMin = (t: string) => {
+      const m = t.match(/^(\d{1,2}):(\d{2})$/);
+      return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+    };
+    const ra = pa.match(/^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/);
+    const rb = pb.match(/^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/);
+    if (ra && rb) {
+      const a1 = toMin(ra[1]);
+      const a2 = toMin(ra[2]);
+      const b1 = toMin(rb[1]);
+      const b2 = toMin(rb[2]);
+      if (a1 === null || a2 === null || b1 === null || b2 === null) return false;
+      return a1 < b2 && b1 < a2; // 区间相交（半开区间）
+    }
+    return pa === pb; // 自由文本/枚举：相等即冲突
+  }
+
+  /**
+   * 智能派单：为指定订单推荐候选师傅。
+   * 匹配算法：区域硬过滤（masterCoversOrder）→ 技能软加分（含祖先链）→ 预约冲突降权 → 负载排序。
+   * 仅 PendingAccept + masterId:null 的订单才推荐（已被接走的不推荐）。
+   */
+  async listCandidates(orderId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        address: true,
+        serviceItem: { select: { categoryId: true, name: true } },
+      },
+    });
+    if (!order) throw new NotFoundException('订单不存在');
+    if (order.status !== OrderStatus.PendingAccept || order.masterId) {
+      throw new BadRequestException('该订单不在待接单状态');
+    }
+
+    const categoryId = order.serviceItem?.categoryId;
+
+    // 祖先链：categoryId 沿 parent 向上收集（含自身），Map<id, name>，用于技能匹配
+    const ancestors = new Map<string, string>();
+    if (categoryId) {
+      let cur = await this.prisma.serviceCategory.findUnique({
+        where: { id: categoryId },
+        select: { id: true, parentId: true, name: true },
+      });
+      while (cur) {
+        if (!ancestors.has(cur.id)) ancestors.set(cur.id, cur.name);
+        if (!cur.parentId) break;
+        cur = await this.prisma.serviceCategory.findUnique({
+          where: { id: cur.parentId },
+          select: { id: true, parentId: true, name: true },
+        });
+      }
+    }
+
+    // 查全部 active 师傅
+    const masters = await this.prisma.master.findMany({
+      where: { status: 'active', deletedAt: null },
+      select: {
+        id: true,
+        realName: true,
+        userId: true,
+        serviceAreas: true,
+        skills: true,
+        provinceCode: true,
+        cityCode: true,
+        districtCode: true,
+        rating: true,
+        orderCount: true,
+        user: { select: { phone: true } },
+      },
+    });
+
+    // 区域硬过滤
+    const covered = masters.filter((m) => this.masterCoversOrder(m, order.address));
+    if (covered.length === 0) return [];
+
+    const coveredIds = covered.map((m) => m.id);
+
+    // 批量查在手中订单数（一次 groupBy，避免 N+1）
+    const activeCounts = await this.prisma.order.groupBy({
+      by: ['masterId'],
+      where: {
+        masterId: { in: coveredIds },
+        status: { in: OrdersService.ACTIVE_STATUSES },
+      },
+      _count: { _all: true },
+    });
+    const countMap = new Map<string, number>(
+      activeCounts.map((r) => [r.masterId!, r._count._all]),
+    );
+
+    // 预约冲突：目标订单有预约日期时，查候选师傅 active 订单同日预约，slot 重叠即冲突（降权不排除）
+    const conflictMap = new Map<string, { orderNo: string; slot: string | null }>();
+    if (order.appointmentDate) {
+      const dayStart = new Date(order.appointmentDate);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(dayStart);
+      dayEnd.setDate(dayEnd.getDate() + 1);
+      const sameDay = await this.prisma.order.findMany({
+        where: {
+          masterId: { in: coveredIds },
+          status: { in: OrdersService.ACTIVE_STATUSES },
+          appointmentDate: { gte: dayStart, lt: dayEnd },
+          id: { not: orderId },
+        },
+        select: { masterId: true, orderNo: true, appointmentSlot: true },
+      });
+      for (const o of sameDay) {
+        if (!o.masterId) continue;
+        if (OrdersService.slotsOverlap(order.appointmentSlot, o.appointmentSlot)) {
+          if (!conflictMap.has(o.masterId)) {
+            conflictMap.set(o.masterId, { orderNo: o.orderNo, slot: o.appointmentSlot });
+          }
+        }
+      }
+    }
+
+    // 组装推荐列表 + 排序
+    const candidates = covered.map((m) => {
+      const skills = (m.skills as string[]) ?? [];
+      // 技能命中：优先精确命中 categoryId（exact），否则命中祖先类目（ancestor，父类目覆盖）
+      let skillMatch = false;
+      let skillMatchDetail: 'exact' | 'ancestor' | null = null;
+      let matchedCategoryName: string | null = null;
+      if (categoryId && skills.length > 0) {
+        if (skills.includes(categoryId)) {
+          skillMatch = true;
+          skillMatchDetail = 'exact';
+          matchedCategoryName = ancestors.get(categoryId) ?? null;
+        } else {
+          const hit = skills.find((s) => ancestors.has(s));
+          if (hit) {
+            skillMatch = true;
+            skillMatchDetail = 'ancestor';
+            matchedCategoryName = ancestors.get(hit) ?? null;
+          }
+        }
+      }
+      const conflict = conflictMap.get(m.id);
+      return {
+        masterId: m.id,
+        realName: m.realName,
+        phone: m.user?.phone ?? null,
+        skillMatch,
+        skillMatchDetail,
+        matchedCategoryName,
+        conflict: !!conflict,
+        conflictOrderNo: conflict?.orderNo ?? null,
+        activeOrderCount: countMap.get(m.id) ?? 0,
+        rating: Number(m.rating),
+        orderCount: m.orderCount,
+      };
+    });
+
+    // 排序：技能匹配 DESC → 无冲突 ASC（降权不排除）→ 在手单数 ASC → 评分 DESC → 经验 DESC
+    candidates.sort((a, b) => {
+      if (a.skillMatch !== b.skillMatch) return b.skillMatch ? 1 : -1;
+      if (a.conflict !== b.conflict) return a.conflict ? 1 : -1;
+      if (a.activeOrderCount !== b.activeOrderCount) return a.activeOrderCount - b.activeOrderCount;
+      if (a.rating !== b.rating) return b.rating - a.rating;
+      return b.orderCount - a.orderCount;
+    });
+
+    return candidates;
+  }
+
+  /**
+   * 派单看板统计（Phase 2，docs/dispatch-design.md §3.4）：实时查询，无新表。
+   * 口径：avgAcceptMinutes = (Accepted 的 orderLog.createdAt − order.createdAt) 近 7 日均值；
+   * Order 无独立「入池时间」字段，用 createdAt（支付完成后入池）近似。
+   */
+  async dispatchStats() {
+    const now = new Date();
+    const dayStart = new Date();
+    dayStart.setHours(0, 0, 0, 0);
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const timeoutMs = Number(process.env.AUTO_DISPATCH_TIMEOUT_MS ?? 30 * 60 * 1000);
+    const autoDispatchEnabled = (process.env.AUTO_DISPATCH_ENABLED ?? 'true') !== 'false';
+
+    const [pending, activeMasterCount, todayCreated, acceptedLogs] = await Promise.all([
+      // 待派单（PendingAccept + masterId:null）
+      this.prisma.order.findMany({
+        where: { status: OrderStatus.PendingAccept, masterId: null },
+        select: { id: true, createdAt: true },
+      }),
+      // 在岗师傅数
+      this.prisma.master.count({ where: { status: 'active', deletedAt: null } }),
+      // 今日新单
+      this.prisma.order.count({ where: { createdAt: { gte: dayStart } } }),
+      // 近 7 日「待接 → 已接」的流转记录（用于今日已派 + 平均接单时长）
+      this.prisma.orderLog.findMany({
+        where: {
+          action: 'transition',
+          fromStatus: OrderStatus.PendingAccept,
+          toStatus: OrderStatus.Accepted,
+          createdAt: { gte: weekAgo },
+        },
+        select: { orderId: true, createdAt: true },
+      }),
+    ]);
+
+    const overdueCount = pending.filter(
+      (o) => now.getTime() - o.createdAt.getTime() > timeoutMs,
+    ).length;
+    const todayAssigned = acceptedLogs.filter((l) => l.createdAt >= dayStart).length;
+
+    // 平均接单时长：Accepted log 时间 − 订单 createdAt
+    const orderIds = [...new Set(acceptedLogs.map((l) => l.orderId))];
+    const orders = orderIds.length
+      ? await this.prisma.order.findMany({
+          where: { id: { in: orderIds } },
+          select: { id: true, createdAt: true },
+        })
+      : [];
+    const orderMap = new Map(orders.map((o) => [o.id, o.createdAt]));
+    const diffs: number[] = [];
+    for (const l of acceptedLogs) {
+      const oc = orderMap.get(l.orderId);
+      if (oc) diffs.push(Math.max(0, (l.createdAt.getTime() - oc.getTime()) / 60000));
+    }
+    const avgAcceptMinutes = diffs.length
+      ? Math.round(diffs.reduce((a, b) => a + b, 0) / diffs.length)
+      : 0;
+
+    return {
+      pendingCount: pending.length,
+      overdueCount,
+      timeoutMs,
+      autoDispatchEnabled,
+      activeMasterCount,
+      todayCreated,
+      todayAssigned,
+      avgAcceptMinutes,
+    };
+  }
+
+  /**
+   * 超时自动派单（Phase 2，docs/dispatch-design.md §3.5）：扫描超时未接订单，
+   * 取推荐第一名自动指派（actorId='system'，与管理员指派可区分）。
+   * 幂等：并发已被接走的单由 listCandidates 抛错捕获跳过；无覆盖师傅跳过；
+   * 预约单（appointmentDate 非空）豁免，留给人工处理。
+   */
+  async autoDispatchOverdue() {
+    if ((process.env.AUTO_DISPATCH_ENABLED ?? 'true') === 'false') {
+      return { dispatched: 0, skipped: 0, disabled: true };
+    }
+    const timeoutMs = Number(process.env.AUTO_DISPATCH_TIMEOUT_MS ?? 30 * 60 * 1000);
+    const due = await this.prisma.order.findMany({
+      where: {
+        status: OrderStatus.PendingAccept,
+        masterId: null,
+        createdAt: { lt: new Date(Date.now() - timeoutMs) },
+        appointmentDate: null,
+      },
+      select: { id: true, orderNo: true },
+    });
+    let dispatched = 0;
+    let skipped = 0;
+    for (const o of due) {
+      try {
+        const cands = await this.listCandidates(o.id);
+        const top = cands[0];
+        if (!top) {
+          skipped++;
+          continue;
+        }
+        await this.assign(o.id, top.masterId, 'system');
+        dispatched++;
+      } catch {
+        skipped++;
+      }
+    }
+    return { dispatched, skipped, disabled: false };
+  }
+
   /** 师傅出发上门：已接单 → 出发上门中 */
   async depart(orderId: string, userId: string) {
     const mid = await this.masterIdOf(userId);

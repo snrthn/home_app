@@ -52,4 +52,6 @@ export const QK = {
   reportBusiness: ['reports', 'business'] as const,
   reportPerformance: ['reports', 'performance'] as const,
   reportGrowth: ['reports', 'growth'] as const,
+  // 智能派单：看板统计
+  dispatchStats: ['dispatch', 'stats'] as const,
 } as const;
