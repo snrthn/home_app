@@ -22,13 +22,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 8
       - uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'pnpm'
+      - run: npm install -g pnpm@8.15.4
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
 
@@ -46,7 +43,6 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
-          # 服务器需已安装 git/pnpm/pm2，仓库已克隆到 DEPLOY_DIR
           script: |
             cd ${{ secrets.DEPLOY_PATH }}
             bash scripts/deploy.sh "${{ inputs.ref || github.ref_name }}"
