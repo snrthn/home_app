@@ -152,6 +152,7 @@ export class PaymentsService {
     const updated = await this.prisma.order.update({
       where: { id: orderId },
       data: { status: OrderStatus.PendingAccept },
+      include: { address: true }, // 带上地址地域，供网关按区域投递新单
     });
     await this.prisma.orderLog.create({
       data: {

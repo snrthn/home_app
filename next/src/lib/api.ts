@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { getToken, clearSession, clearUserCache, setSession, getRefreshToken, setRefreshToken, roleFromPath } from './auth';
 import { queryClient } from '@/app/providers';
+import type { ToastApi } from '@/components/Toast';
 
 // 解析 API 基地址：
 // - 优先用环境变量 NEXT_PUBLIC_API_BASE（部署/联调时可显式指定）。
@@ -198,4 +199,38 @@ export function setPassword(dto: {
   newPassword: string;
 }) {
   return api.post('/auth/password', dto);
+}
+
+// POST /api/auth/send-code：发送登录/重置验证码（公开）。
+// 开发模式（SMS_MOCK≠false）下，后端会在响应里带回 code，便于本地调试。
+export function requestSmsCode(phone: string) {
+  return api.post<{ ok: boolean; code?: string; dev?: boolean }>(
+    '/auth/send-code',
+    { phone },
+  );
+}
+
+// POST /api/auth/reset-password：找回密码（公开，无需登录态）。
+// 以「手机号 + 验证码」完成身份核验后直接设置新密码，绕过旧密码。
+export function resetPassword(dto: {
+  phone: string;
+  code: string;
+  newPassword: string;
+}) {
+  return api.post('/auth/reset-password', dto);
+}
+
+// 发码结果反馈：开发模式携带 code 时，醒目 Toast 展示 + 控制台打印；
+// 生产模式不返回 code，仅提示「验证码已发送」。登录页与找回密码页共用。
+export function notifySmsResult(
+  toast: ToastApi,
+  data: { ok: boolean; code?: string; dev?: boolean },
+) {
+  if (data.code) {
+    // eslint-disable-next-line no-console
+    console.log(`[DEV] 短信验证码（开发模式）：${data.code}`);
+    toast.success(`【开发模式】验证码：${data.code}`);
+  } else {
+    toast.success('验证码已发送');
+  }
 }

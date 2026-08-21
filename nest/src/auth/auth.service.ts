@@ -31,12 +31,19 @@ export class AuthService {
     private gateway: OrdersGateway,
   ) {}
 
-  async sendSmsCode(phone: string): Promise<{ ok: boolean }> {
+  async sendSmsCode(
+    phone: string,
+  ): Promise<{ ok: boolean; code?: string; dev?: boolean }> {
     const code = String(Math.floor(100000 + Math.random() * 900000));
     this.codes.set(phone, { code, expires: Date.now() + 5 * 60 * 1000 });
-    // eslint-disable-next-line no-console
-    console.log(`[SMS-MOCK] 验证码 ${code} (phone=${phone})`);
-    return { ok: true };
+    // 开发模式（SMS_MOCK 非 false）下，把验证码随响应回传前端便于本地调试；
+    // 生产环境设 SMS_MOCK=false 即不返回 code，避免泄露。后端日志保留。
+    const mock = this.config.get('SMS_MOCK') !== 'false';
+    if (mock) {
+      // eslint-disable-next-line no-console
+      console.log(`[SMS-MOCK] 验证码 ${code} (phone=${phone})`);
+    }
+    return mock ? { ok: true, code, dev: true } : { ok: true };
   }
 
   private verifyCode(phone: string, code: string): boolean {
@@ -283,6 +290,25 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(dto.newPassword, 10);
     await this.prisma.user.update({
       where: { id: userId },
+      data: { passwordHash },
+    });
+    return { ok: true };
+  }
+
+  // 找回密码（无需登录态）：验证码核验通过后直接设置新密码，绕过旧密码。
+  // 与 setPassword 区分：setPassword 用于「已登录且记得旧密码」改密；
+  // 此方法用于「忘记密码」场景，OTP 本身即为身份凭证。
+  async resetPasswordByCode(phone: string, code: string, newPassword: string) {
+    if (!this.verifyCode(phone, code)) {
+      throw new BadRequestException('验证码无效或已过期');
+    }
+    const user = await this.prisma.user.findUnique({ where: { phone } });
+    if (!user) {
+      throw new BadRequestException('该手机号尚未注册，请先使用验证码登录注册');
+    }
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await this.prisma.user.update({
+      where: { id: user.id },
       data: { passwordHash },
     });
     return { ok: true };

@@ -241,6 +241,7 @@ export class OrdersService {
     const updated = await this.prisma.order.update({
       where: { id: orderId },
       data: { status: to, ...(extraData ?? {}) },
+      include: { address: true }, // 带上地址地域，供网关按区域刷新接单池
     });
     await this.prisma.orderLog.create({
       data: {

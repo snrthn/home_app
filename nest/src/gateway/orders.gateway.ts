@@ -11,6 +11,7 @@ import {
   MessageBody,
 } from '@nestjs/websockets';
 import { isBlacklisted } from '../auth/token-blacklist';
+import { PrismaService } from '../prisma/prisma.service';
 
 @WebSocketGateway({ cors: true, path: '/ws' })
 export class OrdersGateway
@@ -19,7 +20,7 @@ export class OrdersGateway
   @WebSocketServer() server: any;
   private logger = new Logger('OrdersGateway');
 
-  constructor(private jwt: JwtService) {}
+  constructor(private jwt: JwtService, private prisma: PrismaService) {}
 
   // WS 握手鉴权：连接必须携带合法 JWT（与 HTTP 端同一套 Bearer token）。
   // 无 token / 过期 / 已拉黑 → 拒绝握手，前端收到 connect_error: 'unauthorized'。
@@ -72,10 +73,37 @@ export class OrdersGateway
     if (orderId) socket.leave(`order:${orderId}`);
   }
 
-  // 进入接单池：仅师傅（role=master）可加入，避免客户/管理员混入接单池
+  // 进入接单池：仅师傅（role=master）可加入。
+  // 区域化：按师傅 serviceAreas 把连接 join 到对应 zone 房间（zone:<省>:<市>:<区>，空段=通配），
+  // 新单仅推送给区域匹配的师傅；serviceAreas 为空=全平台可见，留在 pool 房间兜底。
   @SubscribeMessage('join-pool')
-  handleJoinPool(@ConnectedSocket() socket: any) {
-    if (socket.data?.user?.role === 'master') socket.join('pool');
+  async handleJoinPool(@ConnectedSocket() socket: any) {
+    if (socket.data?.user?.role !== 'master') return;
+    const sub = socket.data.user.sub;
+    let areas: any[] = [];
+    try {
+      const master = await this.prisma.master.findUnique({
+        where: { userId: sub },
+        select: { serviceAreas: true },
+      });
+      areas = Array.isArray(master?.serviceAreas) ? (master!.serviceAreas as any[]) : [];
+    } catch {
+      areas = [];
+    }
+    if (areas.length === 0) {
+      socket.join('pool'); // 全平台可见兜底
+      return;
+    }
+    let joinedAny = false;
+    for (const a of areas) {
+      const p = a?.provinceCode, c = a?.cityCode, d = a?.districtCode;
+      if (!p) continue; // 缺省级无法定位区域，跳过该项
+      socket.join(`zone:${p}::`);
+      if (c) socket.join(`zone:${p}:${c}:`);
+      if (d) socket.join(`zone:${p}:${c}:${d}`);
+      joinedAny = true;
+    }
+    if (!joinedAny) socket.join('pool');
   }
 
   @SubscribeMessage('leave-pool')
@@ -83,9 +111,24 @@ export class OrdersGateway
     socket.leave('pool');
   }
 
-  // 新订单入池：仅推送给接单池内的师傅
+  // 接单池投递房间：按订单地址地域推导 zone 房间（zone:<省>:<市>:<区>，空段=通配），
+  // 始终包含 pool 兜底（serviceAreas 为空的师傅在该房间=全平台可见）。
+  // 订单地域取自 order.address（调用方须 include: { address: true }）。
+  private dispatchZones(order: any): string[] {
+    const addr = order?.address;
+    const p = addr?.provinceCode, c = addr?.cityCode, d = addr?.districtCode;
+    const rooms = ['pool'];
+    if (p) {
+      rooms.push(`zone:${p}::`);
+      if (c) rooms.push(`zone:${p}:${c}:`);
+      if (d) rooms.push(`zone:${p}:${c}:${d}`);
+    }
+    return rooms;
+  }
+
+  // 新订单入池：按订单地址地域推送给区域匹配的师傅（zone 房间），全平台可见师傅走 pool 兜底
   broadcastNewOrder(order: any) {
-    this.server?.to('pool').emit('new-order', order);
+    for (const room of this.dispatchZones(order)) this.server?.to(room).emit('new-order', order);
     this.notifyDashboardRefresh();
   }
 
@@ -95,9 +138,9 @@ export class OrdersGateway
     this.notifyDashboardRefresh();
   }
 
-  // 订单离开接单态（被接走/取消）：推给接单池，让其他师傅的池子刷新移除
+  // 订单离开接单态（被接走/取消）：按区域推给接单池，让其他师傅的池子刷新移除
   broadcastPoolUpdate(order: any) {
-    this.server?.to('pool').emit('order-update', order);
+    for (const room of this.dispatchZones(order)) this.server?.to(room).emit('order-update', order);
     this.notifyDashboardRefresh();
   }
 

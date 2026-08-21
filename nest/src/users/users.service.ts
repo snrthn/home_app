@@ -63,7 +63,13 @@ export class UsersService {
     const data: Record<string, unknown> = {};
     if (passwordHash) data.passwordHash = passwordHash;
     if (dto.nickname !== undefined) {
-      data.profile = { update: { nickname: dto.nickname } };
+      data.profile = {
+        upsert: {
+          where: { userId: id },
+          create: { nickname: dto.nickname },
+          update: { nickname: dto.nickname },
+        },
+      };
     }
     if (dto.staffRoleId !== undefined) {
       data.staffRole = dto.staffRoleId

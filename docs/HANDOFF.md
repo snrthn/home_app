@@ -369,18 +369,18 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 
 | 优先级 | 事项 | 说明 |
 |---|---|---|
-| P1 | **投诉/工单 + 退款审核端到端联调** | ✅ 迁移已应用（2026-08-21 14:00 用户授权后本机 `migrate resolve --applied 20260821000000_add_tickets_module` + `migrate deploy`，14 迁移全绿，工单带 refunds 关联查询实测通过）。剩用户本地：`pnpm seed`（权限码/角色绑定）+ 重启后端（加载自动派单调度器 + stats 端点），再起前后端验证：客户端提交投诉 → 管理端受理/处理（选退款 → 生成 RF 退款单）→ 退款/售后 通过/驳回 → 阶梯退款入账 |
+| P1 | **投诉/工单 + 退款审核端到端联调** | ✅ 迁移已应用（2026-08-21 14:00 用户授权后本机 `migrate resolve --applied 20260821000000_add_tickets_module` + `migrate deploy`，14 迁移全绿，工单带 refunds 关联查询实测通过）。**2026-08-21 脚本端到端验证 PASS（`nest/scripts/verify-p1-runtime.cjs` 10/10：投诉→退款审核→阶梯退款入账 refundedAmount=100 + 状态机→evaluated + WS new-order/order-update 推送）**；剩用户重启 3721（加载新 client）+ Playwright 浏览器冒烟 |
 | P1 | 浏览器跑通 mock 全流程 | 用户重启 3721 后 Playwright 打 3824 验证 departing/arrived → evaluated + WS |
 | P1 | 订单内 IM 聊天 | 独立工程；会话锚点用 `Conversation.orderId`（非手机号 Hash）；验证码切勿走 IM 发送 |
-| P2 | 投诉/工单 Phase 2 | 师傅端「我的工单」查看+申诉、工作台「待处理工单」指标卡、SLA 倒计时前端展示（超时标红） |
-| P2 | 投诉入口补全 | 订单详情（reviewed/evaluated）「投诉」按钮 + 评价 1-2 星引导投诉（设计见 complaints-tickets-design.md 第 6 节，均未接） |
-| P2 | WS 新单广播按区域过滤 | 当前 `broadcastNewOrder` 推给 pool 房间全部师傅（含地址），需握手缓存 regions + 广播遍历过滤 |
+| P2 | 投诉/工单 Phase 2 | 师傅端「我的工单」查看+申诉、工作台「待处理工单」指标卡、SLA 倒计时前端展示（超时标红）（**评估 2026-08-21：4 项 P2 互相独立、无架构改动，可一次批量实现，待虎哥确认开工**） |
+| P2 | 投诉入口补全 | 订单详情（reviewed/evaluated）「投诉」按钮 + 评价 1-2 星引导投诉（设计见 complaints-tickets-design.md 第 6 节，均未接）（**评估 2026-08-21：后端 `GET /tickets/mine` 就绪，仅前端 4 处，可随 P2-1 批量实现，待确认**） |
+| ~~**P2**~~ ✅ | WS 新单广播按区域过滤 | `orders.gateway.ts` `join-pool` 握手按 `Master.serviceAreas` 加入 `zone:<省>:<市>:<区>` 房间（空段通配）；`broadcastNewOrder`/`broadcastPoolUpdate` 按 `dispatchZones(order)` 定向投递；`verify-ws-zone-e2e.cjs` 9/9 + `verify-zone-match.cjs` 9/9 PASS（2026-08-21） |
 | P2 | 客户未生成码兜底 | N 分钟后照片 + GPS 凭证到达 |
 | P2 | admin 师傅管理加 serviceAreas 审计列 | 纯展示，让运营能审计师傅接单范围 |
-| P3 | 真实支付联调 | 需商户凭证 + 公网回调地址 |
-| P3 | 阶梯退款真实渠道验证 | wechat provider refund/total 已分字段 |
-| P3 | assign() 管理员指派区域校验 | 暂不加（虎哥 2026-08-20 决策），如需可加「强制指派」开关 |
-| P3 | lastActiveAt 历史数据缺失 | 在线数判定字段 2026-08-20 才开始维护，历史在线趋势无法回溯；`Order.refundedAt` 缺失用 settledAt 近似 |
+| P3 | 真实支付联调 | 需商户凭证 + 公网回调地址（**暂不处理 · 2026-08-21 虎哥决策**） |
+| P3 | 阶梯退款真实渠道验证 | wechat provider refund/total 已分字段（**暂不处理 · 2026-08-21 虎哥决策**） |
+| P3 | assign() 管理员指派区域校验 | 暂不加（虎哥 2026-08-20 决策），如需可加「强制指派」开关（整体 P3 **暂不处理 · 2026-08-21 虎哥决策**） |
+| P3 | lastActiveAt 历史数据缺失 | 在线数判定字段 2026-08-20 才开始维护，历史在线趋势无法回溯；`Order.refundedAt` 缺失用 settledAt 近似（**暂不处理 · 2026-08-21 虎哥决策**） |
 
 ---
 

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import api, { getApiErrorMsg, resolveAsset } from '@/lib/api';
+import api, { getApiErrorMsg, resolveAsset, requestSmsCode, notifySmsResult } from '@/lib/api';
 import { setSession, roleFromToken, setRefreshToken } from '@/lib/auth';
 import { useToast } from '@/components/Toast';
 import { getAgreementDefault } from '@/lib/admin-api';
@@ -178,8 +178,8 @@ export default function LoginPage() {
       return;
     }
     try {
-      await api.post('/auth/send-code', { phone });
-      toast.success('验证码已发送，请查看后端控制台输出');
+      const resp = await requestSmsCode(phone);
+      notifySmsResult(toast, resp.data);
       setCountdown(60);
       const timer = setInterval(() => {
         setCountdown((n) => {
@@ -414,6 +414,18 @@ export default function LoginPage() {
             </button>
           </form>
 
+          {/* 密码登录模式：忘记密码入口 */}
+          {mode === 'password' && (
+            <div className="mt-3 text-center">
+              <Link
+                href="/forgot-password"
+                className="text-sm text-[var(--color-primary)] hover:underline"
+              >
+                忘记密码？
+              </Link>
+            </div>
+          )}
+
           {/* 注册协议与隐私政策入口：仅在注册模式、且对应端存在「当前生效」版本时展示，点击在当前页面打开公开展示页 */}
           {mode === 'code' && (regQ.data || priQ.data) && (
             <div className="agreement-consent">
@@ -473,12 +485,12 @@ export default function LoginPage() {
               <ul className="list-disc space-y-0.5 pl-4">
                 <li>使用「手机号 + 密码」登录</li>
                 <li>首次使用请先到「注册」页创建账号并在个人中心设置密码</li>
-                <li>忘记密码可在个人中心重置</li>
+                <li>忘记密码？点击上方「忘记密码」链接找回</li>
               </ul>
             ) : (
               <ul className="list-disc space-y-0.5 pl-4">
                 <li>输入手机号，点「获取验证码」</li>
-                <li>当前为开发模式，验证码会打印在后端控制台</li>
+                <li>验证码将以 Toast 弹窗方式显示（开发模式）</li>
                 <li>首次将自动创建账号（客户/师傅），已注册可直接登录</li>
               </ul>
             )}

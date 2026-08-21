@@ -17,6 +17,7 @@ import { RegisterDto } from './dto/register.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { SetPasswordDto } from './dto/set-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { Role } from '@laoma/shared';
 import { setRoleTokenCookie, clearRoleTokenCookie } from './cookie.util';
 
@@ -114,6 +115,12 @@ export class AuthController {
   @Post('password')
   setPassword(@Req() req: any, @Body() dto: SetPasswordDto) {
     return this.auth.setPassword(req.user.sub, dto);
+  }
+
+  // 找回密码（公开，无需登录态）：手机号 + 验证码 + 新密码，OTP 即身份凭证。
+  @Post('reset-password')
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.auth.resetPasswordByCode(dto.phone, dto.code, dto.newPassword);
   }
 
   // 登录心跳：刷新 lastActiveAt 保活「在线」状态，供工作台在线师傅统计。

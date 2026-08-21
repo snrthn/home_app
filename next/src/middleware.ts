@@ -91,5 +91,6 @@ export const config = {
     '/master/:path*',
     '/admin/:path*',
     '/login/:path*',
+    '/forgot-password/:path*',
   ],
 };

@@ -59,13 +59,6 @@ export default function ClientHome() {
         menu={[{ label: '关于我们', href: '/client/about' }]}
       />
       <div className="laoma-container">
-        <div className="card">
-          <h2 style={{ marginTop: 0, marginBottom: 4 }}>家庭服务，随时上门</h2>
-          <p style={{ margin: 0, color: 'var(--color-text-soft)' }}>
-            选服务 → 看详情 → 下单 → 上门 → 验收付款
-          </p>
-        </div>
-
         <h3 style={{ margin: '18px 4px 10px', fontSize: 16 }}>推荐服务</h3>
 
         {isLoading ? (
