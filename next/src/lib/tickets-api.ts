@@ -1,4 +1,5 @@
 import api from './api';
+import type { RefundStatus } from './refunds-api';
 
 // 工单 / 投诉管理（管理端）接口封装。
 // 权限：列表/改派/流转需 tickets:manage；投诉处置需 complaints:handle（由后端 @RequirePerm 校验）。
@@ -56,6 +57,17 @@ export interface TicketDetail extends TicketListItem {
   closedAt?: string | null;
   comments: TicketComment[];
   review?: { id: string; rating?: number; comment?: string } | null;
+  // 投诉处置 result=refund 生成的退款申请单（管理端「退款/售后」台账审核）
+  refunds?: {
+    id: string;
+    refundNo: string;
+    amount: string | number;
+    status: RefundStatus;
+    refundedAmount: string | number | null;
+    reviewNote: string | null;
+    reviewedAt: string | null;
+    createdAt: string;
+  }[];
 }
 
 export interface TicketListQuery {

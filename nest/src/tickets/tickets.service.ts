@@ -144,6 +144,19 @@ export class TicketsService {
         assignee: { select: { id: true, phone: true } },
         order: { select: { id: true, orderNo: true, status: true, amount: true } },
         review: { select: { id: true, rating: true, comment: true } },
+        refunds: {
+          select: {
+            id: true,
+            refundNo: true,
+            amount: true,
+            status: true,
+            refundedAmount: true,
+            reviewNote: true,
+            reviewedAt: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        },
       },
     });
     if (!t) throw new NotFoundException('工单不存在');
@@ -207,13 +220,20 @@ export class TicketsService {
     let refundSettlementId: string | null = null;
     const order = t.order as any;
     if (result === 'refund' && order) {
-      // 走订单状态机阶梯退款 + 自动生成 compensation 结算单（师傅应退部分）
-      await this.payments.refund(order.customerId, order.id, order.status);
-      const comp = await this.prisma.settlement.findFirst({
-        where: { orderId: order.id, type: 'compensation' },
-        orderBy: { createdAt: 'desc' },
+      // 审核流：仅创建退款申请（pending_review），不直接退款。
+      // 已完单（reviewed/evaluated）直接调 payments.refund 会被状态机双重拦截，
+      // 且缺人工审核；运营在管理端「退款/售后」台账审核通过后才执行阶梯退款。
+      // 详见 docs/refund-aftersale-design.md 第 3 节。
+      const reason = t.complaint.expectation
+        ? `${t.complaint.expectation}（投诉分类：${t.complaint.reason}）`
+        : `投诉分类：${t.complaint.reason}`;
+      await this.payments.createRefundRequest({
+        ticketId: id,
+        orderId: order.id,
+        amount: Number(order.amount),
+        reason,
+        requestedBy: actorId,
       });
-      refundSettlementId = comp?.id ?? null;
     } else if (result === 'compensate' && order) {
       // 平台承担全额补偿，师傅不动（compensation 结算单：师傅 0，平台留成=订单金额）
       const comp = await this.settlements.createCompensation(

@@ -12,6 +12,7 @@ import {
   STATUS_TONE,
   COMPLAINT_RESULT_LABEL,
 } from '@/lib/tickets-api';
+import { REFUND_STATUS_LABEL, REFUND_STATUS_TONE } from '@/lib/refunds-api';
 
 const COMPLAINT_REASONS: Record<string, string> = {
   attitude: '服务态度',
@@ -81,6 +82,24 @@ export default function TicketDetail({ ticket, onClose }: { ticket: TD; onClose:
         <div className="ticket-complaint">
           <div><span>投诉原因</span><b>{ticket.complaint?.reason ? COMPLAINT_REASONS[ticket.complaint.reason] ?? ticket.complaint.reason : '-'}</b></div>
           <div><span>处置结果</span><b>{ticket.complaint?.result ? COMPLAINT_RESULT_LABEL[ticket.complaint.result] : '未处置'}</b></div>
+        </div>
+      )}
+
+      {ticket.refunds && ticket.refunds.length > 0 && (
+        <div className="ticket-complaint">
+          {ticket.refunds.map((rf) => (
+            <div key={rf.id}>
+              <span>退款单</span>
+              <b>
+                {rf.refundNo}
+                {' · '}
+                <StatusBadge tone={REFUND_STATUS_TONE[rf.status]}>
+                  {REFUND_STATUS_LABEL[rf.status]}
+                </StatusBadge>
+                {rf.status === 'rejected' && rf.reviewNote ? `（${rf.reviewNote}）` : ''}
+              </b>
+            </div>
+          ))}
         </div>
       )}
 

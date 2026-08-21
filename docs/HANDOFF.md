@@ -38,8 +38,9 @@
 | **RBAC 权限设计** | 四实体模型、权限码表、预设岗位角色、实现路线（已实施） | `docs/rbac-design.md` |
 | **下单接单 SOP** | 订单状态机、端点清单、业务约束、验收用例 | `docs/orders-sop.md` |
 | **投诉/工单设计** | 工单底座+投诉挂件、SLA 升级、Phase 1 已落地（先读其 0.5 实施状态节） | `docs/complaints-tickets-design.md` |
+| **退款/售后设计** | 价值分析 + 最小闭环（Refund 表审核流），Phase 1 已落地（先读其实施清单节） | `docs/refund-aftersale-design.md` |
 | **WS 订阅改造方案** | JWT 握手鉴权 + 房间定向（已实施并验证） | `docs/WS_SUBSCRIPTION_PLAN.md` |
-| **项目计划** | 品牌定位、技术栈选型、数据库设计、路线图、决策清单（历史快照，支付模型已被后续迭代取代） | `docs/需求文档/plan.md` |
+| **项目计划** | 品牌定位、技术栈选型、数据库设计、路线图、决策清单（历史快照，支付模型已被后续迭代取代） | `docs/plan.md` |
 | **管理员初始化 SQL** | super_admin 种子账号 | `docs/sql/init-admin.sql` |
 | **MySQL 修复脚本** | MySQL 服务启动/修复 bat | `docs/shell/fix-mysql-service.bat` |
 
@@ -357,12 +358,14 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 - [x] 管理端工单/投诉页交互规范化（操作列三按钮水平一行 180px；详情/处理/改派三独立弹窗，确认按钮走 Modal FooterBar；表单项用 Field 组件、下拉宽度 100%）
 - [x] 客户端/师傅端订单列表吸顶 Tab 分类筛选（StickyTabs，按两端业务性质拆分类别，超宽右滑 + 右侧渐隐箭头指引）
 - [x] 师傅端首页从占位改为正式布局（欢迎卡 + 4 格统计 + 可提现收入卡 + 进行中订单待办，WS 实时刷新）
+- [x] 退款/售后模块 Phase 1（详见第 19 节）：Refund 表审核流（投诉处置退款建单 → 通过/驳回）+ 3 后端端点 + shared 状态机放行已完单退款（Reviewed/Evaluated→Refunding）+ 管理端 `/admin/orders/refund` 台账页（通过/驳回 Modal FooterBar）+ 工单处理/详情弹窗联动提示
+- [x] filter-bar 控件尺寸统一（`.filter-bar .input` 与 `.select`/`.btn-ghost` 同高 34px/14px，globals.css 已沉淀）
 
 ### 待办 / 已知缺口
 
 | 优先级 | 事项 | 说明 |
 |---|---|---|
-| P1 | **投诉/工单端到端联调** | 用户本地须先 `cd nest && pnpm prisma migrate deploy`（三表迁移）+ `pnpm seed`（权限码/角色绑定），再起前后端验证：客户端提交投诉 → 管理端受理/处理/改派 → SLA 升级 |
+| P1 | **投诉/工单 + 退款审核端到端联调** | 用户本地须先 `cd nest && pnpm prisma migrate deploy`（三表迁移 `20260821000000_add_tickets_module` + 退款迁移 `20260821010000_add_refund`）+ `pnpm seed`（权限码/角色绑定）+ `pnpm prisma generate`（清 DLL 残留），再起前后端验证：客户端提交投诉 → 管理端受理/处理（选退款 → 生成 RF 退款单）→ 退款/售后 通过/驳回 → 阶梯退款入账 |
 | P1 | 浏览器跑通 mock 全流程 | 用户重启 3721 后 Playwright 打 3824 验证 departing/arrived → evaluated + WS |
 | P1 | 订单内 IM 聊天 | 独立工程；会话锚点用 `Conversation.orderId`（非手机号 Hash）；验证码切勿走 IM 发送 |
 | P2 | 投诉/工单 Phase 2 | 师傅端「我的工单」查看+申诉、工作台「待处理工单」指标卡、SLA 倒计时前端展示（超时标红） |
@@ -430,7 +433,7 @@ D:\FrontEnd\home_app\
 │   ├── HANDOFF.md             # ← 你在这里
 │   ├── rbac-design.md         # RBAC 权限设计
 │   ├── orders-sop.md          # 下单接单流程 SOP
-│   ├── 需求文档/plan.md       # 项目计划
+│   ├── plan.md               # 项目计划（历史快照，原 docs/需求文档/ 迁入）
 │   ├── sql/init-admin.sql     # 管理员种子
 │   └── shell/                 # 运维脚本
 ├── mysql-data/                # MySQL 数据目录
@@ -499,6 +502,22 @@ cd nest && PORT=3721 pnpm start:dev
   ```
 - **坑**：`@prisma/client` re-export 破损 → Prisma 类型走相对路径 `../../node_modules/.prisma/client`；seed.js 用 CommonJS 直连 `.prisma/client`（绕开 pnpm 双副本）
 - **未做**：Phase 2（师傅端我的工单/工作台指标卡/SLA 倒计时展示）、订单详情投诉按钮、评价引导投诉、端到端联调
+
+---
+
+## 19. 退款/售后模块（2026-08-21 Phase 1 落地）
+
+> 设计文档：`docs/refund-aftersale-design.md`（v1.1，含价值分层与关键发现，**先读第 3 节**）
+
+- **背景**：退款能力早已闭环（阶梯分账/渠道退款/审计），但运营端无任何「看得见、管得住」退款的页面；菜单「退款/售后」一直是占位 404
+- **关键发现**：投诉处置 result=refund 对已完单（reviewed/evaluated）订单会被**双重拦截**（`REFUNDABLE_STATES` 不含完单态 + `ORDER_STATUS_FLOW` 无 refunding 出口）——该退款路径从未真正成功过，本轮顺带修复
+- **数据层**：`Refund` 表（RF+yyyyMMdd+4位 单号，status pending_review/approved/rejected，`settlementId @unique` 1:1 关联补偿结算单）+ 手写迁移 `20260821010000_add_refund`
+- **状态机**：`shared/src/types.ts` 放行 `Reviewed→Refunding`、`Evaluated→Refunding`（仅 `payments.reviewRefund` 的 allowCompleted 场景可用，取消单直退不受影响）；shared dist 已重建
+- **后端**：`payments.service.ts` 新增 `createRefundRequest`/`listRefunds`/`reviewRefund`；`refund()` 增加 `opts.allowCompleted/reason`；`tickets.service.resolveComplaint` result=refund 由「发起即执行」改为「创建退款申请」；3 端点 `GET /payments/refunds`、`POST /payments/refunds/:id/approve|reject`（perm `orders:refund` + @Audit）
+- **前端管理端**：`/admin/orders/refund` 台账页（`next/src/lib/refunds-api.ts` + `next/src/app/admin/orders/refund/page.tsx`）——状态筛选 + 订单号搜索 + 通过/驳回弹窗（Modal FooterBar：驳回必填原因）；工单处理弹窗 refund 结果提示「需审核」；工单详情展示退款单状态徽章
+- **保留直退**：取消单自动退 / 客户端手动退款仍直退，不建单不审核；审核流只针对「运营判定性退款」（投诉处置）
+- **⚠️ 用户本地必做**：`pnpm --filter @laoma/shared build`（如未执行）+ `pnpm prisma migrate deploy` + 重跑 `pnpm prisma generate`（清沙箱中断的 DLL 残留）；`orders:refund` 权限已在 seed，无需新增
+- **未做**：Phase 2（运营主动发起退款 / 售后工作台聚合 / business 报表直读 Refund 表 / 退款失败对账）
 
 ---
 

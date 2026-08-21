@@ -7,12 +7,16 @@ import {
   Body,
   UseGuards,
   Req,
+  Query,
 } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { MerchantConfigStore, type MerchantConfig } from './merchant-config.store';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/roles.guard';
+import { PermGuard } from '../common/perm.guard';
 import { Roles } from '../common/roles.decorator';
+import { RequirePerm } from '../common/perm.decorator';
+import { Audit } from '../common/audit.decorator';
 import { Role } from '@laoma/shared';
 
 @Controller('payments')
@@ -92,6 +96,42 @@ export class PaymentsController {
   @Post(':id/confirm')
   confirm(@Param('id') id: string, @Req() req: any) {
     return this.payments.confirm(id, req.user.sub);
+  }
+
+  // ===== 退款台账（管理端「订单管理 → 退款/售后」，orders:refund） =====
+  // 审核流：投诉处置 result=refund 只创建退款申请（pending_review），
+  // 在本台账「通过 / 驳回」后才真正执行阶梯退款。详见 docs/refund-aftersale-design.md。
+
+  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
+  @Roles(Role.Admin)
+  @RequirePerm('orders:refund')
+  @Get('refunds')
+  listRefunds(@Query() q: any) {
+    return this.payments.listRefunds(q);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
+  @Roles(Role.Admin)
+  @RequirePerm('orders:refund')
+  @Audit('payments', 'orders:refund')
+  @Post('refunds/:id/approve')
+  approveRefund(@Req() req: any, @Param('id') id: string, @Body() dto: { note?: string }) {
+    return this.payments.reviewRefund(id, req.user.sub, {
+      action: 'approve',
+      note: dto?.note,
+    });
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
+  @Roles(Role.Admin)
+  @RequirePerm('orders:refund')
+  @Audit('payments', 'orders:refund')
+  @Post('refunds/:id/reject')
+  rejectRefund(@Req() req: any, @Param('id') id: string, @Body() dto: { note?: string }) {
+    return this.payments.reviewRefund(id, req.user.sub, {
+      action: 'reject',
+      note: dto?.note,
+    });
   }
 
   @UseGuards(JwtAuthGuard)

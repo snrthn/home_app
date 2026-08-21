@@ -110,6 +110,8 @@ model User {
   ticketsAsCustomer Ticket[] @relation("TicketCustomer")
   ticketsAsAssignee  Ticket[] @relation("TicketAssignee")
   ticketComments     TicketComment[] @relation("TicketCommentOperator")
+  refundsRequested   Refund[] @relation("RefundRequestedBy")
+  refundsReviewed    Refund[] @relation("RefundReviewedBy")
 
   // 管理端 RBAC：单角色，一个后台账号(role=admin)绑一个岗位角色；role≠admin 时恒为空
   staffRoleId String?
@@ -310,6 +312,7 @@ model Order {
   settlement  Settlement?
   review      Review?
   tickets     Ticket[]
+  refunds     Refund[]
 }
 
 model OrderLog {
@@ -380,6 +383,8 @@ model Settlement {
   createdAt    DateTime         @default(now())
 
   deletedAt    DateTime?
+
+  refund       Refund?          // 反向：该结算单由哪个退款单审核通过后生成（1:1）
 }
 
 // ---------------- 分账规则配置（2026-08-19 新增） ----------------
@@ -745,6 +750,7 @@ model Ticket {
 
   complaint      Complaint?
   comments       TicketComment[]
+  refunds        Refund[]
 
   @@index([status, priority])
   @@index([assigneeId, status])
@@ -764,6 +770,45 @@ model Complaint {
   refundSettlementId  String?                            // 关联 compensation 结算单（result=refund/compensate 时）
   handledAt           DateTime?
   createdAt           DateTime        @default(now())
+}
+
+// 退款单（2026-08-21 新增，详见 docs/refund-aftersale-design.md）
+// 审核流：投诉处置 result=refund 时仅创建申请（pending_review），运营在管理端「退款/售后」
+// （/admin/orders/refund）审核通过（approved，立即执行阶梯退款）或驳回（rejected）。
+// 取消单自动退 / 客户端手动退仍走直退，不建单。
+enum RefundStatus {
+  pending_review // 待审核
+  approved       // 已通过（退款已执行）
+  rejected       // 已驳回
+}
+
+model Refund {
+  id             String       @id @default(cuid())
+  refundNo       String       @unique            // RF + yyyyMMdd + 4位序列
+  orderId        String
+  order          Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  ticketId       String?                          // 来源工单（投诉处置 result=refund 时）
+  ticket         Ticket?      @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  amount         Decimal      @db.Decimal(10, 2)  // 申请退款金额（= 订单金额）
+  reason         String?      @db.VarChar(200)    // 申请原因（投诉 reason + 期望）
+  status         RefundStatus @default(pending_review)
+  requestedById  String?                          // 发起人（投诉处置的运营）
+  requestedBy    User?        @relation("RefundRequestedBy", fields: [requestedById], references: [id])
+  reviewedById   String?                          // 审核人
+  reviewedBy     User?        @relation("RefundReviewedBy", fields: [reviewedById], references: [id])
+  reviewedAt     DateTime?
+  reviewNote     String?      @db.VarChar(200)    // 驳回理由 / 审核备注
+  refundedAmount Decimal?     @db.Decimal(10, 2)  // 实际退用户金额（阶梯实退）
+  settlementId   String?      @unique             // 通过后生成的 compensation 结算单（师傅补偿，1:1）
+  settlement     Settlement?  @relation(fields: [settlementId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  deletedAt      DateTime?
+
+  @@index([status, createdAt])
+  @@index([orderId])
+  @@index([ticketId])
 }
 
 model TicketComment {

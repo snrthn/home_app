@@ -171,16 +171,29 @@ export class PaymentsService {
    *  Order.commissionSnapshot 决定（下单时固化，历史单实时解析兜底），不再硬编码比例。
    *  stageStatus：发起取消时的原始订单状态（orders.cancel 会先流转到 refunding，
    *  阶梯依据必须用流转前的状态，故由调用方显式传入）。
+   *  opts.allowCompleted：投诉处置审核通过场景放行已完单（reviewed/evaluated），
+   *  此时订单状态机出口（→ refunding）也已同步放行，见 docs/refund-aftersale-design.md 第 3 节。
+   *  opts.reason：退款原因（默认「订单取消退款」；投诉场景传投诉原因/期望）。
    */
-  async refund(customerId: string, orderId: string, stageStatus?: string) {
+  async refund(
+    customerId: string,
+    orderId: string,
+    stageStatus?: string,
+    opts?: { allowCompleted?: boolean; reason?: string },
+  ) {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order) throw new NotFoundException('订单不存在');
     if (order.customerId !== customerId)
       throw new ForbiddenException('无权操作该订单');
     // 允许：支付后托管阶段(pending_accept..pending_confirm) 主动退款；
-    // 也允许 orders.cancel 已先行流转到 refunding 的场景（幂等退款）
+    // 也允许 orders.cancel 已先行流转到 refunding 的场景（幂等退款）；
+    // allowCompleted=true 时额外放行已完单（reviewed/evaluated，仅投诉处置审核通过场景）
     const REFUNDABLE_STATES = [...POST_PAY_STATES, OrderStatus.Refunding];
-    if (!REFUNDABLE_STATES.includes(order.status as OrderStatus))
+    const COMPLETED_STATES = [OrderStatus.Reviewed, OrderStatus.Evaluated];
+    const refundable =
+      REFUNDABLE_STATES.includes(order.status as OrderStatus) ||
+      (!!opts?.allowCompleted && COMPLETED_STATES.includes(order.status as OrderStatus));
+    if (!refundable)
       throw new BadRequestException('该订单当前不可退款');
 
     // 按订单快照解析分账规则，一次算清三方金额
@@ -197,7 +210,7 @@ export class PaymentsService {
       tradeNo: pay?.id ?? orderId,
       amount: refundAmount,
       originalAmount: Number(order.amount),
-      reason: '订单取消退款',
+      reason: opts?.reason ?? '订单取消退款',
     });
 
     await this.prisma.payment.updateMany({
@@ -223,7 +236,7 @@ export class PaymentsService {
         orderId,
         OrderStatus.Refunding,
         customerId,
-        '取消（发起退款）｜退款流转',
+        (opts?.reason ?? '取消（发起退款）') + '｜退款流转',
         undefined,
         'refund',
       );
@@ -248,6 +261,135 @@ export class PaymentsService {
       );
     }
     return split;
+  }
+
+  // ===== 退款单（审核流，管理端「退款/售后」台账，orders:refund） =====
+  // 说明：取消单自动退 / 客户端手动退走 refund() 直退，不建单；
+  // 仅投诉处置 result=refund 创建退款申请单（pending_review），运营审核通过后执行退款。
+
+  private async nextRefundNo(): Promise<string> {
+    const d = new Date();
+    const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(
+      d.getDate(),
+    ).padStart(2, '0')}`;
+    const todayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const count = await this.prisma.refund.count({ where: { createdAt: { gte: todayStart } } });
+    return `RF${ymd}${String(count + 1).padStart(4, '0')}`;
+  }
+
+  /** 创建退款申请单（投诉处置 result=refund 调用）。同订单已有待审核/已通过单则拒绝重复申请。 */
+  async createRefundRequest(dto: {
+    ticketId: string;
+    orderId: string;
+    amount: number;
+    reason?: string;
+    requestedBy: string;
+  }) {
+    const order = await this.prisma.order.findUnique({ where: { id: dto.orderId } });
+    if (!order) throw new NotFoundException('订单不存在');
+    const dup = await this.prisma.refund.findFirst({
+      where: { orderId: dto.orderId, status: { in: ['pending_review', 'approved'] } },
+    });
+    if (dup) throw new BadRequestException('该订单已有退款申请（待审核或已通过）');
+    return this.prisma.refund.create({
+      data: {
+        refundNo: await this.nextRefundNo(),
+        orderId: dto.orderId,
+        ticketId: dto.ticketId ?? null,
+        amount: dto.amount,
+        reason: dto.reason ?? null,
+        status: 'pending_review',
+        requestedById: dto.requestedBy,
+      },
+    });
+  }
+
+  /** 退款台账（管理端）：状态 / 订单号筛选，关联订单、工单、发起人、审核人、结算单。 */
+  async listRefunds(filter: any) {
+    const where: any = {};
+    if (filter.status) where.status = filter.status;
+    if (filter.orderNo)
+      where.order = { orderNo: { contains: String(filter.orderNo).trim() } };
+    return this.prisma.refund.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        order: {
+          select: {
+            id: true,
+            orderNo: true,
+            amount: true,
+            status: true,
+            customer: { select: { phone: true, profile: { select: { nickname: true } } } },
+          },
+        },
+        ticket: { select: { id: true, ticketNo: true, title: true } },
+        requestedBy: { select: { id: true, phone: true } },
+        reviewedBy: { select: { id: true, phone: true } },
+        settlement: { select: { id: true, masterAmount: true, status: true } },
+      },
+    });
+  }
+
+  /** 审核退款单：approve → 执行阶梯退款（已完单放行）并回填实退金额 / 补偿结算单；
+   *  reject → 置驳回 + 工单内部备注。幂等：仅 pending_review 可审核。 */
+  async reviewRefund(
+    id: string,
+    actorId: string,
+    dto: { action: 'approve' | 'reject'; note?: string },
+  ) {
+    const r = await this.prisma.refund.findUnique({
+      where: { id },
+      include: { order: true },
+    });
+    if (!r) throw new NotFoundException('退款单不存在');
+    if (r.status !== 'pending_review') throw new BadRequestException('该退款单已审核');
+
+    if (dto.action === 'reject') {
+      const updated = await this.prisma.refund.update({
+        where: { id },
+        data: {
+          status: 'rejected',
+          reviewedById: actorId,
+          reviewedAt: new Date(),
+          reviewNote: dto.note ?? null,
+        },
+      });
+      // 工单追加内部备注，便于客服回溯（不广播：台账页与工单详情可见即可）
+      if (r.ticketId) {
+        await this.prisma.ticketComment.create({
+          data: {
+            ticketId: r.ticketId,
+            operatorId: actorId,
+            content: `退款申请被驳回${dto.note ? `：${dto.note}` : ''}`,
+            isInternal: true,
+            visibleTo: 'all',
+          },
+        });
+      }
+      return updated;
+    }
+
+    // approve：真正执行退款（已完单投诉场景 allowCompleted）。执行失败保持 pending_review 可重试。
+    const split = await this.refund(r.order.customerId, r.order.id, r.order.status, {
+      allowCompleted: true,
+      reason: r.reason ?? '投诉处置退款',
+    });
+    const comp = await this.prisma.settlement.findFirst({
+      where: { orderId: r.order.id, type: 'compensation' },
+      orderBy: { createdAt: 'desc' },
+    });
+    return this.prisma.refund.update({
+      where: { id },
+      data: {
+        status: 'approved',
+        reviewedById: actorId,
+        reviewedAt: new Date(),
+        reviewNote: dto.note ?? null,
+        refundedAmount: split.refundAmount,
+        settlementId: comp?.id ?? null,
+      },
+    });
   }
 
   // ===== 旧二维码凭证支付（保留，与前置支付并存） =====

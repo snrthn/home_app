@@ -116,6 +116,12 @@ export default function TicketProcess({
             </Field>
           )}
 
+          {ticket.type === 'complaint' && resolveResult === 'refund' && (
+            <div className="field-hint">
+              提交后生成退款申请单（RF 号），需在运营端「退款/售后」审核通过后才执行退款。
+            </div>
+          )}
+
           {msg && <div className="form-msg">{msg}</div>}
         </>
       )}

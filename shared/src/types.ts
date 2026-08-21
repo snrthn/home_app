@@ -70,6 +70,9 @@ export interface JwtPayload {
 //  → 待验收(pending_confirm) → 客户确认(reviewed，托管金释放给师傅)
 //  支付后任意阶段取消 → 退款中(refunding) → 已退款(refunded)
 //  仅「待支付」阶段取消 = 无退款(cancelled)
+//  已完单（reviewed/evaluated）→ refunding：仅投诉处置退款申请经运营审核通过后触发
+//  （见 docs/refund-aftersale-design.md 第 3 节：该出口只被 payments.reviewRefund 的
+//   allowCompleted 场景使用，客户/师傅侧无入口）。
 export const ORDER_STATUS_FLOW: Record<OrderStatus, OrderStatus[]> = {
   [OrderStatus.PendingPayment]: [OrderStatus.PendingAccept, OrderStatus.Cancelled],
   [OrderStatus.PendingAccept]: [OrderStatus.Accepted, OrderStatus.Refunding],
@@ -79,8 +82,8 @@ export const ORDER_STATUS_FLOW: Record<OrderStatus, OrderStatus[]> = {
   [OrderStatus.Servicing]: [OrderStatus.PendingConfirm, OrderStatus.Refunding],
   [OrderStatus.PendingConfirm]: [OrderStatus.Reviewed, OrderStatus.Refunding],
   // 评价流转：Reviewed(已完成/待评价) → Evaluated(已评价)。资金释放仍只走 confirm 单一入口。
-  [OrderStatus.Reviewed]: [OrderStatus.Evaluated],
-  [OrderStatus.Evaluated]: [],
+  [OrderStatus.Reviewed]: [OrderStatus.Evaluated, OrderStatus.Refunding],
+  [OrderStatus.Evaluated]: [OrderStatus.Refunding],
   [OrderStatus.Refunding]: [OrderStatus.Refunded],
   [OrderStatus.Refunded]: [],
   [OrderStatus.Cancelled]: [],

@@ -2472,6 +2472,14 @@ body {
   gap: 10px;
   margin-bottom: 14px;
 }
+/* filter-bar 内控件尺寸必须统一：与 .select/.btn-ghost 同高 34px、14px 字号 */
+.filter-bar .input {
+  height: 34px;
+  padding: 0 10px;
+  font-size: 14px;
+  width: auto;
+  min-width: 200px;
+}
 .select {
   height: 34px;
   padding: 0 10px;
