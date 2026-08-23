@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigModule as SystemConfigModule } from '../config/config.module';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
@@ -11,6 +12,8 @@ import { GatewayModule } from '../gateway/gateway.module';
 @Module({
   imports: [
     PassportModule,
+    // 全局配置（短信模式 / 阿里云参数）供 sendSmsCode 运行时读取
+    SystemConfigModule,
     // heartbeat 需要注入 OrdersGateway 通知工作台刷新
     GatewayModule,
     JwtModule.registerAsync({

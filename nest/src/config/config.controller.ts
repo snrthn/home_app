@@ -5,7 +5,7 @@ import {
   UseGuards,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsOptional, IsString, IsIn, MaxLength } from 'class-validator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/roles.guard';
 import { Roles } from '../common/roles.decorator';
@@ -32,6 +32,28 @@ export class UpdateSystemConfigDto {
   @IsString()
   @MaxLength(20)
   customerServicePhone?: string;
+
+  // 短信验证码模式：mock=开发/演示（验证码随响应回传前端）；real=真实阿里云短信下发
+  @IsOptional()
+  @IsIn(['mock', 'real'])
+  smsMode?: 'mock' | 'real';
+
+  // 阿里云短信网关参数（仅 real 模式生效）
+  @IsOptional()
+  @IsString()
+  smsAccessKeyId?: string;
+
+  @IsOptional()
+  @IsString()
+  smsAccessKeySecret?: string;
+
+  @IsOptional()
+  @IsString()
+  smsSignName?: string;
+
+  @IsOptional()
+  @IsString()
+  smsTemplateCode?: string;
 }
 
 @Controller('admin/config')

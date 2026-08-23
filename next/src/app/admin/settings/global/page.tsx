@@ -23,6 +23,12 @@ export default function GlobalConfigPage() {
   const [customerServicePhone, setPhone] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
   const [primaryColor, setPrimaryColor] = useState(DEFAULT_COLOR);
+  const [smsMode, setSmsMode] = useState<'mock' | 'real'>('mock');
+  const [smsAccessKeyId, setSmsAccessKeyId] = useState('');
+  const [smsAccessKeySecret, setSmsAccessKeySecret] = useState('');
+  const [smsSignName, setSmsSignName] = useState('');
+  const [smsTemplateCode, setSmsTemplateCode] = useState('');
+  const [smsSecretSet, setSmsSecretSet] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -33,6 +39,13 @@ export default function GlobalConfigPage() {
     setPhone(data.customerServicePhone ?? '');
     setLogoUrl(data.logoUrl ?? '');
     setPrimaryColor(data.primaryColor || DEFAULT_COLOR);
+    setSmsMode((data.smsMode as 'mock' | 'real') ?? 'mock');
+    setSmsAccessKeyId(data.smsAccessKeyId ?? '');
+    // 接口不再返回 secret 明文（统一掩码），输入框保持空，仅作「填写=更新」用途
+    setSmsAccessKeySecret('');
+    setSmsSignName(data.smsSignName ?? '');
+    setSmsTemplateCode(data.smsTemplateCode ?? '');
+    setSmsSecretSet(!!data.smsSecretSet);
   }, [data]);
 
   const save = async () => {
@@ -43,6 +56,11 @@ export default function GlobalConfigPage() {
         customerServicePhone: customerServicePhone || undefined,
         logoUrl: logoUrl || undefined,
         primaryColor: primaryColor || undefined,
+        smsMode,
+        smsAccessKeyId: smsAccessKeyId || undefined,
+        smsAccessKeySecret: smsAccessKeySecret || undefined,
+        smsSignName: smsSignName || undefined,
+        smsTemplateCode: smsTemplateCode || undefined,
       });
       qc.invalidateQueries({ queryKey: QK.globalConfig });
       applyThemeColor(primaryColor);
@@ -195,6 +213,77 @@ export default function GlobalConfigPage() {
                 />
               </div>
             </Field>
+
+            <Field
+              label="短信验证码模式"
+              hint="mock=开发/演示（验证码直接以 Toast 显示在页面，便于本地联调）；real=真实调用阿里云短信网关下发到手机。所有环境均可切换，生产环境请谨慎。"
+            >
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                  <input
+                    type="radio"
+                    name="smsMode"
+                    checked={smsMode === 'mock'}
+                    onChange={() => setSmsMode('mock')}
+                  />
+                  mock（演示）
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                  <input
+                    type="radio"
+                    name="smsMode"
+                    checked={smsMode === 'real'}
+                    onChange={() => setSmsMode('real')}
+                  />
+                  real（真实短信）
+                </label>
+              </div>
+            </Field>
+
+            {smsMode === 'real' && (
+              <>
+                <Field label="阿里云 AccessKeyId">
+                  <input
+                    className="input"
+                    value={smsAccessKeyId}
+                    placeholder="如 LTAI5t..."
+                    onChange={(e) => setSmsAccessKeyId(e.target.value)}
+                  />
+                </Field>
+                <Field
+                  label="阿里云 AccessKeySecret"
+                  hint={
+                    smsSecretSet
+                      ? '敏感凭证已加密存储；留空表示保留现有配置，仅填写时才更新'
+                      : '敏感凭证，建议仅在真实环境填写并妥善保管；提交后将以加密形式存储'
+                  }
+                >
+                  <input
+                    className="input"
+                    type="password"
+                    value={smsAccessKeySecret}
+                    placeholder={smsSecretSet ? '已配置（留空则不修改）' : 'AccessKey Secret'}
+                    onChange={(e) => setSmsAccessKeySecret(e.target.value)}
+                  />
+                </Field>
+                <Field label="短信签名 SignName">
+                  <input
+                    className="input"
+                    value={smsSignName}
+                    placeholder="如 老马家电"
+                    onChange={(e) => setSmsSignName(e.target.value)}
+                  />
+                </Field>
+                <Field label="模板 Code TemplateCode" hint="短信模板内需含 ${code} 变量，用于注入验证码">
+                  <input
+                    className="input"
+                    value={smsTemplateCode}
+                    placeholder="如 SMS_123456789"
+                    onChange={(e) => setSmsTemplateCode(e.target.value)}
+                  />
+                </Field>
+              </>
+            )}
 
             <div className="modal-actions" style={{ marginTop: 16 }}>
               <button

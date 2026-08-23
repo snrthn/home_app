@@ -598,6 +598,13 @@ model SystemConfig {
   logoUrl              String?  // 站点 Logo（选填，留空用默认）
   primaryColor         String?  // 主题主色（hex），前端动态推导整套品牌色
   customerServicePhone String?  // 客服热线，用户端「在线客服」拨号来源
+  // 短信验证码模式：mock=开发/演示（验证码随响应回传前端 Toast 提示）；real=真实调用阿里云短信网关下发
+  smsMode              String   @default("mock")
+  // 阿里云短信网关参数（仅 real 模式生效；缺失时发码接口返回明确错误提示）
+  smsAccessKeyId       String?
+  smsAccessKeySecret   String?
+  smsSignName          String?
+  smsTemplateCode      String?
   updatedAt            DateTime @updatedAt
 }
 

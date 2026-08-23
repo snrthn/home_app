@@ -11,6 +11,10 @@ export class ConfigPublicController {
   @Get('global')
   async getGlobal(@Res() res: Response) {
     const result = await this.s.getGlobal();
-    return res.status(200).json(result);
+    // 安全：AccessKeySecret 绝不外泄给浏览器。统一掩码为空串，并附带是否已配置标记供前端提示。
+    // 短信发送所需的真实密钥在服务端内部（auth.service 调用 getGlobal）解密后使用，不经过此接口。
+    return res
+      .status(200)
+      .json({ ...result, smsAccessKeySecret: '', smsSecretSet: !!result.smsAccessKeySecret });
   }
 }

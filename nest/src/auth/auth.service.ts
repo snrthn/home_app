@@ -13,6 +13,8 @@ import { blacklistToken } from './token-blacklist';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { SetPasswordDto } from './dto/set-password.dto';
 import { OrdersGateway } from '../gateway/orders.gateway';
+import { ConfigService as SystemConfigService } from '../config/config.service';
+import { sendAliyunSms, AliyunSmsError } from '../sms/aliyun-sms.provider';
 
 interface CodeRecord {
   code: string;
@@ -29,6 +31,7 @@ export class AuthService {
     private jwt: JwtService,
     private config: ConfigService,
     private gateway: OrdersGateway,
+    private sysConfig: SystemConfigService,
   ) {}
 
   async sendSmsCode(
@@ -36,14 +39,34 @@ export class AuthService {
   ): Promise<{ ok: boolean; code?: string; dev?: boolean }> {
     const code = String(Math.floor(100000 + Math.random() * 900000));
     this.codes.set(phone, { code, expires: Date.now() + 5 * 60 * 1000 });
-    // 开发模式（SMS_MOCK 非 false）下，把验证码随响应回传前端便于本地调试；
-    // 生产环境设 SMS_MOCK=false 即不返回 code，避免泄露。后端日志保留。
-    const mock = this.config.get('SMS_MOCK') !== 'false';
-    if (mock) {
-      // eslint-disable-next-line no-console
-      console.log(`[SMS-MOCK] 验证码 ${code} (phone=${phone})`);
+
+    // 读全局配置决定短信模式：mock=开发/演示（验证码回传前端 Toast）；real=真实阿里云下发
+    const sysCfg = await this.sysConfig.getGlobal();
+    if (sysCfg.smsMode === 'real') {
+      try {
+        await sendAliyunSms(
+          {
+            accessKeyId: sysCfg.smsAccessKeyId ?? '',
+            accessKeySecret: sysCfg.smsAccessKeySecret ?? '',
+            signName: sysCfg.smsSignName ?? '',
+            templateCode: sysCfg.smsTemplateCode ?? '',
+          },
+          phone,
+          code,
+        );
+      } catch (e: any) {
+        if (e instanceof AliyunSmsError) {
+          throw new BadRequestException(e.message);
+        }
+        throw e;
+      }
+      return { ok: true };
     }
-    return mock ? { ok: true, code, dev: true } : { ok: true };
+
+    // mock 模式：验证码随响应回传前端便于本地调试；后端日志保留
+    // eslint-disable-next-line no-console
+    console.log(`[SMS-MOCK] 验证码 ${code} (phone=${phone})`);
+    return { ok: true, code, dev: true };
   }
 
   private verifyCode(phone: string, code: string): boolean {
