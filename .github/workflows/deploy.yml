@@ -25,8 +25,8 @@ jobs:
       - run: pnpm typecheck
         continue-on-error: true
 
-  # 2) 部署：runner checkout → scp 推代码到 ECS → ssh 构建
-  #    push-based，避免 ECS 访问 GitHub 的网络问题
+  # 2) 部署：runner checkout → git archive 打包 → scp 推代码到 ECS → ssh 构建
+  #    push-based，避免 ECS 访问 GitHub 的网络问题（国内常 empty reply）
   deploy:
     needs: verify
     runs-on: ubuntu-latest
@@ -35,11 +35,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: 打包源码（排除重产物，避免覆盖服务器 node_modules/.env）
-        run: |
-          tar --exclude=node_modules --exclude=.next --exclude=dist \
-              --exclude=.git --exclude=deploy-src.tar.gz \
-              -czf deploy-src.tar.gz .
+      - name: 打包源码（git archive 只含 tracked 文件，自动排除 node_modules/.git/.env）
+        run: git archive --format=tar.gz HEAD -o deploy-src.tar.gz
       - name: 上传源码到 ECS
         uses: appleboy/scp-action@v0.1.7
         with:
