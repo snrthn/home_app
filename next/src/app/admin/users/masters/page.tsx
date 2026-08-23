@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getMasters,
@@ -12,7 +12,7 @@ import {
 import { QK } from '@/lib/query-keys';
 import DataTable, { StatusBadge, type Column } from '@/components/admin/DataTable';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import DetailModal, { DetailRow } from '@/components/admin/DetailModal';
+import DetailModal, { Descriptions, Tag } from '@/components/admin/DetailModal';
 import { formatDateTime } from '@/lib/format';
 
 const statusText: Record<string, { t: string; tone: 'green' | 'orange' | 'gray' | 'red' }> = {
@@ -79,6 +79,37 @@ function formatSkills(skills: unknown, tree: ServiceCategoryNode[]): string {
 
   if (leafIds.length === 0) return '-';
   return leafIds.map((id) => nameMap.get(id) ?? id).join(' / ');
+}
+
+/**
+ * 渲染师傅技能（标签形式）
+ */
+function renderSkillTags(skills: unknown, tree: ServiceCategoryNode[]): ReactNode {
+  if (!skills) return null;
+  const ids = Array.isArray(skills)
+    ? skills.filter((x): x is string => typeof x === 'string')
+    : [];
+  if (ids.length === 0) return null;
+
+  const { nameMap, getDescendants } = buildTreeMaps(tree);
+  const idSet = new Set(ids);
+
+  // 只保留叶子选中
+  const leafIds = ids.filter((id) => {
+    const descendants = getDescendants(id);
+    return !descendants.some((d) => idSet.has(d));
+  });
+
+  if (leafIds.length === 0) return null;
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+      {leafIds.map((id) => (
+        <Tag key={id} tone="blue">
+          {nameMap.get(id) ?? id}
+        </Tag>
+      ))}
+    </div>
+  );
 }
 
 type MasterToggleStatus = 'active' | 'disabled';
@@ -234,9 +265,9 @@ export default function MasterListPage() {
           onClose={() => setDetailItem(null)}
           size="md"
         >
-          <div style={{ display: 'flex', gap: 16, marginBottom: 8 }}>
-            <DetailRow label="真实姓名" value={detailItem.realName} />
-            <DetailRow label="状态">
+          <Descriptions title="基础信息">
+            <Descriptions.Item label="真实姓名">{detailItem.realName}</Descriptions.Item>
+            <Descriptions.Item label="状态">
               <StatusBadge
                 tone={
                   (statusText[detailItem.status]?.tone as 'green' | 'orange' | 'gray') ||
@@ -245,28 +276,31 @@ export default function MasterListPage() {
               >
                 {statusText[detailItem.status]?.t || detailItem.status}
               </StatusBadge>
-            </DetailRow>
-          </div>
-          <DetailRow label="手机号" value={detailItem.user?.phone || null} />
-          <DetailRow label="身份证号" value={detailItem.idCard || null} />
-          <div style={{ display: 'flex', gap: 16 }}>
-            <DetailRow label="服务城市" value={detailItem.city || null} />
-            <DetailRow label="实名认证">
+            </Descriptions.Item>
+            <Descriptions.Item label="手机号">{detailItem.user?.phone}</Descriptions.Item>
+            <Descriptions.Item label="身份证号">{detailItem.idCard}</Descriptions.Item>
+            <Descriptions.Item label="服务城市">{detailItem.city}</Descriptions.Item>
+            <Descriptions.Item label="实名认证">
               <StatusBadge tone={detailItem.idVerified ? 'green' : 'orange'}>
                 {detailItem.idVerified ? '已认证' : '未认证'}
               </StatusBadge>
-            </DetailRow>
-          </div>
-          <DetailRow label="技能">
-            <span style={{ color: 'var(--color-text-primary)' }}>
-              {formatSkills(detailItem.skills, catTree)}
-            </span>
-          </DetailRow>
-          <div style={{ display: 'flex', gap: 16 }}>
-            <DetailRow label="评分" value={Number(detailItem.rating).toFixed(1)} />
-            <DetailRow label="订单数" value={detailItem.orderCount} />
-          </div>
-          <DetailRow label="注册时间" value={formatDateTime(detailItem.createdAt)} />
+            </Descriptions.Item>
+          </Descriptions>
+
+          <Descriptions title="服务能力">
+            <Descriptions.Item label="评分">{Number(detailItem.rating).toFixed(1)}</Descriptions.Item>
+            <Descriptions.Item label="订单数">{detailItem.orderCount}</Descriptions.Item>
+          </Descriptions>
+
+          <Descriptions title="技能方向" column={1}>
+            <Descriptions.Item label="擅长服务">
+              {renderSkillTags(detailItem.skills, catTree)}
+            </Descriptions.Item>
+          </Descriptions>
+
+          <Descriptions title="其他信息" column={1}>
+            <Descriptions.Item label="注册时间">{formatDateTime(detailItem.createdAt)}</Descriptions.Item>
+          </Descriptions>
         </DetailModal>
       )}
     </div>

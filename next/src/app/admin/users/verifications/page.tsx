@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getPendingMasters,
@@ -15,6 +15,7 @@ import { formatDateTime } from '@/lib/format';
 import { useToast } from '@/components/Toast';
 import { useEscClose } from '@/lib/useEscClose';
 import { Textarea } from '@/components/form/Textarea';
+import { Descriptions, Tag } from '@/components/admin/DetailModal';
 
 // 把类目树拍平，得到 id->name 以及后代集合（与师傅列表页同逻辑）
 function buildTreeMaps(nodes: ServiceCategoryNode[]) {
@@ -64,6 +65,33 @@ function formatSkills(skills: unknown, tree: ServiceCategoryNode[]): string {
 }
 
 /**
+ * 渲染技能标签（审核弹窗详情区用）
+ */
+function renderSkillTags(skills: unknown, tree: ServiceCategoryNode[]): ReactNode {
+  if (!skills) return null;
+  const ids = Array.isArray(skills)
+    ? skills.filter((x): x is string => typeof x === 'string')
+    : [];
+  if (ids.length === 0) return null;
+  const { nameMap, getDescendants } = buildTreeMaps(tree);
+  const idSet = new Set(ids);
+  const leafIds = ids.filter((id) => {
+    const descendants = getDescendants(id);
+    return !descendants.some((d) => idSet.has(d));
+  });
+  if (leafIds.length === 0) return null;
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+      {leafIds.map((id) => (
+        <Tag key={id} tone="blue">
+          {nameMap.get(id) ?? id}
+        </Tag>
+      ))}
+    </div>
+  );
+}
+
+/**
  * 审核弹窗：上半部分展示师傅详情（只读），下半部分通过/拒绝操作。
  * - 默认为「待选择」状态，需点通过或拒绝按钮
  * - 拒绝时展开拒绝理由输入框
@@ -90,7 +118,7 @@ function ReviewModal({
     if (!loading) onClose();
   });
 
-  // 每次打开重置状态（通过/拒绝 选项 + 拒绝理由）
+  // 每次打开重置状态
   useEffect(() => {
     if (open) {
       setAction('none');
@@ -108,15 +136,6 @@ function ReviewModal({
     await onApprove(status, reasonValue);
   };
 
-  const infoRow = (label: string, value: string | null | undefined) => (
-    <div className="field" style={{ marginBottom: 4 }}>
-      <div className="field-label" style={{ marginBottom: 4 }}>{label}</div>
-      <div style={{ color: 'var(--color-text-primary)', fontSize: 14 }}>
-        {value || <span style={{ color: 'var(--color-text-soft)' }}>—</span>}
-      </div>
-    </div>
-  );
-
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
       <div className="modal-panel modal-md" onClick={(e) => e.stopPropagation()}>
@@ -127,72 +146,65 @@ function ReviewModal({
           </button>
         </div>
         <div className="modal-body">
-          {/* 详情区域 */}
-          <div
-            style={{
-              background: 'var(--color-bg-soft)',
-              borderRadius: 8,
-              padding: 14,
-              marginBottom: 8,
-            }}
-          >
-            <div style={{ fontWeight: 600, marginBottom: 10 }}>基本信息</div>
-            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-              <div style={{ flex: 1, minWidth: 120 }}>{infoRow('真实姓名', master.realName)}</div>
-              <div style={{ flex: 1, minWidth: 120 }}>{infoRow('手机号', master.user?.phone)}</div>
-            </div>
-            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-              <div style={{ flex: 1, minWidth: 120 }}>{infoRow('身份证号', master.idCard)}</div>
-              <div style={{ flex: 1, minWidth: 120 }}>{infoRow('服务城市', master.city)}</div>
-            </div>
-            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-              <div style={{ flex: 1, minWidth: 120 }}>
-                {infoRow('实名认证', master.idVerified ? '已认证' : '未认证')}
-              </div>
-              <div style={{ flex: 1, minWidth: 120 }}>
-                {infoRow('提交时间', formatDateTime(master.createdAt))}
-              </div>
-            </div>
-            {infoRow('技能', formatSkills(master.skills, catTree))}
-          </div>
+          {/* 详情区域：Descriptions 风格 */}
+          <Descriptions title="基本信息">
+            <Descriptions.Item label="真实姓名">{master.realName}</Descriptions.Item>
+            <Descriptions.Item label="手机号">{master.user?.phone}</Descriptions.Item>
+            <Descriptions.Item label="身份证号">{master.idCard}</Descriptions.Item>
+            <Descriptions.Item label="服务城市">{master.city}</Descriptions.Item>
+            <Descriptions.Item label="实名认证">
+              <StatusBadge tone={master.idVerified ? 'green' : 'orange'}>
+                {master.idVerified ? '已认证' : '未认证'}
+              </StatusBadge>
+            </Descriptions.Item>
+            <Descriptions.Item label="提交时间">{formatDateTime(master.createdAt)}</Descriptions.Item>
+          </Descriptions>
 
-          {/* 操作区域 */}
-          <div className="field">
-            <label className="field-label">审核结果</label>
-            <div style={{ display: 'flex', gap: 12 }}>
+          <Descriptions title="技能信息" column={1}>
+            <Descriptions.Item label="擅长服务">
+              {renderSkillTags(master.skills, catTree)}
+            </Descriptions.Item>
+          </Descriptions>
+
+          {/* 审核操作区 */}
+          <div style={{ marginTop: 20 }}>
+            <div className="field-label" style={{ marginBottom: 10, fontSize: 14, fontWeight: 600 }}>
+              审核结果
+            </div>
+            <div className="review-action-group">
               <button
                 type="button"
-                className={action === 'approve' ? 'btn-primary' : 'btn-secondary'}
+                className={`review-action-btn is-approve ${action === 'approve' ? 'is-active' : ''}`}
                 onClick={() => setAction('approve')}
                 disabled={loading}
-                style={{ flex: 1 }}
               >
-                通过
+                <span className="review-action-icon">✓</span>
+                <span>通过认证</span>
               </button>
               <button
                 type="button"
-                className={action === 'reject' ? 'btn-danger' : 'btn-secondary'}
+                className={`review-action-btn is-reject ${action === 'reject' ? 'is-active' : ''}`}
                 onClick={() => setAction('reject')}
                 disabled={loading}
-                style={{ flex: 1 }}
               >
-                拒绝
+                <span className="review-action-icon">✕</span>
+                <span>拒绝认证</span>
               </button>
             </div>
-          </div>
 
-          {action === 'reject' && (
-            <div className="field">
-              <label className="field-label">拒绝理由</label>
-              <Textarea
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="请输入拒绝原因，方便师傅修改后重新提交"
-                rows={3}
-                disabled={loading}
-              />
-            </div>
-          )}
+            {action === 'reject' && (
+              <div className="field" style={{ marginTop: 14, marginBottom: 0 }}>
+                <label className="field-label">拒绝理由</label>
+                <Textarea
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="请输入拒绝原因，方便师傅修改后重新提交"
+                  rows={3}
+                  disabled={loading}
+                />
+              </div>
+            )}
+          </div>
         </div>
         <div className="modal-actions">
           <button type="button" className="btn-secondary" onClick={onClose} disabled={loading}>

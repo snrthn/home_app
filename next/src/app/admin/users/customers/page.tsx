@@ -10,7 +10,7 @@ import {
 import { QK } from '@/lib/query-keys';
 import DataTable, { StatusBadge, type Column } from '@/components/admin/DataTable';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import DetailModal, { DetailRow } from '@/components/admin/DetailModal';
+import DetailModal, { Descriptions } from '@/components/admin/DetailModal';
 import { formatDateTime } from '@/lib/format';
 
 const genderText = (g?: string | null) =>
@@ -156,29 +156,31 @@ export default function CustomerListPage() {
           title={`客户详情 · ${detailItem.profile?.nickname || detailItem.phone}`}
           onClose={() => setDetailItem(null)}
         >
-          <div style={{ display: 'flex', gap: 16, marginBottom: 8 }}>
-            <DetailRow label="手机号" value={detailItem.phone} />
-            <DetailRow label="状态">
+          <Descriptions title="基础信息">
+            <Descriptions.Item label="手机号">{detailItem.phone}</Descriptions.Item>
+            <Descriptions.Item label="状态">
               <StatusBadge
                 tone={detailItem.status === 'active' ? 'green' : detailItem.status === 'frozen' ? 'red' : 'gray'}
               >
                 {detailItem.status === 'active' ? '正常' : detailItem.status === 'frozen' ? '冻结' : '禁用'}
               </StatusBadge>
-            </DetailRow>
-          </div>
-          <DetailRow label="昵称" value={detailItem.profile?.nickname || null} />
-          <DetailRow label="真实姓名" value={detailItem.profile?.realName || null} />
-          <div style={{ display: 'flex', gap: 16 }}>
-            <DetailRow label="性别" value={genderText(detailItem.profile?.gender)} />
-            <DetailRow label="所在城市" value={detailItem.profile?.city || null} />
-          </div>
-          <div style={{ display: 'flex', gap: 16 }}>
-            <DetailRow label="会员等级" value={`Lv.${detailItem.profile?.vipLevel ?? 0}`} />
-            <DetailRow label="积分" value={detailItem.profile?.points ?? 0} />
-            <DetailRow label="信用分" value={detailItem.profile?.creditScore ?? 100} />
-          </div>
-          <DetailRow label="订单数" value={detailItem._count?.customerOrders ?? 0} />
-          <DetailRow label="注册时间" value={formatDateTime(detailItem.createdAt)} />
+            </Descriptions.Item>
+            <Descriptions.Item label="昵称">{detailItem.profile?.nickname}</Descriptions.Item>
+            <Descriptions.Item label="真实姓名">{detailItem.profile?.realName}</Descriptions.Item>
+            <Descriptions.Item label="性别">{genderText(detailItem.profile?.gender)}</Descriptions.Item>
+            <Descriptions.Item label="所在城市">{detailItem.profile?.city}</Descriptions.Item>
+          </Descriptions>
+
+          <Descriptions title="账户资产">
+            <Descriptions.Item label="会员等级">Lv.{detailItem.profile?.vipLevel ?? 0}</Descriptions.Item>
+            <Descriptions.Item label="积分">{detailItem.profile?.points ?? 0}</Descriptions.Item>
+            <Descriptions.Item label="信用分">{detailItem.profile?.creditScore ?? 100}</Descriptions.Item>
+            <Descriptions.Item label="订单数">{detailItem._count?.customerOrders ?? 0}</Descriptions.Item>
+          </Descriptions>
+
+          <Descriptions title="其他信息" column={1}>
+            <Descriptions.Item label="注册时间">{formatDateTime(detailItem.createdAt)}</Descriptions.Item>
+          </Descriptions>
         </DetailModal>
       )}
     </div>
