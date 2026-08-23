@@ -227,7 +227,7 @@ async function upsertLevel(nodes, parentId, level) {
       },
     });
 
-    const data = {
+    const createData = {
       name: node.name,
       level,
       parentId,
@@ -236,18 +236,24 @@ async function upsertLevel(nodes, parentId, level) {
       sort: node.sort ?? 0,
       isActive: true,
     };
+    // 已存在时只更新描述/排序等元信息，不动 name/icon/isActive/父子关系。
+    // name/icon/isActive 由后台人工维护，seed 不覆盖，避免每次部署都把手动修改刷回去。
+    const updateData = {
+      description: node.description ?? null,
+      sort: node.sort ?? 0,
+    };
 
     let id;
     if (existing) {
-      // 已存在：只更新描述/icon/sort 等元信息，不动 id/父子关系
+      // 已存在：只更新描述/排序，不覆盖 name/icon/isActive（后台可能改过）
       await prisma.serviceCategory.update({
         where: { id: existing.id },
-        data,
+        data: updateData,
       });
       id = existing.id;
       updated++;
     } else {
-      const createdRec = await prisma.serviceCategory.create({ data });
+      const createdRec = await prisma.serviceCategory.create({ data: createData });
       id = createdRec.id;
       created++;
     }
