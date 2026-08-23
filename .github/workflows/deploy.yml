@@ -1,23 +1,18 @@
 name: Deploy
 
-# 触发：推送到 main 自动部署；也可在 Actions 页面手动触发（可选分支）
+# 触发：推送到 main 自动部署；也可在 Actions 页面手动触发
 on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      ref:
-        description: '部署的分支/tag（默认 main）'
-        required: false
-        default: 'main'
 
-# 同一时刻只允许一个生产部署，避免并发构建/迁移冲突
+# 同一时刻只允许一个生产部署
 concurrency:
   group: deploy-production
   cancel-in-progress: false
 
 jobs:
-  # 1) 质量门禁：在 GitHub runner 上做 typecheck，失败则不部署
+  # 1) 质量门禁：typecheck（非阻塞，实测能过，防 transient）
   verify:
     runs-on: ubuntu-latest
     steps:
@@ -28,17 +23,32 @@ jobs:
       - run: npm install -g pnpm@8.15.4
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
-        continue-on-error: true   # 服务器实测通过，CI runner 环境差异致失败，暂不阻塞部署
+        continue-on-error: true
 
-  # 2) 部署：SSH 登录 ECS 执行服务器端构建与重启
+  # 2) 部署：runner checkout → scp 推代码到 ECS → ssh 构建
+  #    push-based，避免 ECS 访问 GitHub 的网络问题
   deploy:
     needs: verify
     runs-on: ubuntu-latest
-    # 如需部署前人工审批：Settings→Environments 新建 production 环境
-    # 并加 Required reviewers，然后取消下行注释
-    # environment: production
     steps:
-      - name: 部署到 ECS
+      - name: 拉取代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: 打包源码（排除重产物，避免覆盖服务器 node_modules/.env）
+        run: |
+          tar --exclude=node_modules --exclude=.next --exclude=dist \
+              --exclude=.git --exclude=deploy-src.tar.gz \
+              -czf deploy-src.tar.gz .
+      - name: 上传源码到 ECS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "deploy-src.tar.gz"
+          target: "/tmp/"
+      - name: 构建并重启
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -46,4 +56,6 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           script: |
             cd ${{ secrets.DEPLOY_PATH }}
-            bash scripts/deploy.sh "${{ inputs.ref || github.ref_name }}"
+            tar -xzf /tmp/deploy-src.tar.gz
+            rm -f /tmp/deploy-src.tar.gz
+            SKIP_PULL=1 bash scripts/deploy.sh
