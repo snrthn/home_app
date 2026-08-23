@@ -19,7 +19,7 @@ const prisma = new PrismaClient();
 const TREE = [
   {
     name: '家电清洗',
-    icon: 'icon-clean',
+    icon: '🧹',
     sort: 10,
     description: '专业家电深度清洗、除菌除味，上门服务',
     children: [
@@ -85,7 +85,7 @@ const TREE = [
   },
   {
     name: '家电维修',
-    icon: 'icon-repair',
+    icon: '🔧',
     sort: 20,
     description: '常见家电故障检测与维修、配件更换',
     children: [
@@ -144,7 +144,7 @@ const TREE = [
   },
   {
     name: '家电安装',
-    icon: 'icon-install',
+    icon: '🛠️',
     sort: 30,
     description: '新机安装、拆机、移机，标准化作业',
     children: [
@@ -181,7 +181,7 @@ const TREE = [
   },
   {
     name: '商用设备服务',
-    icon: 'icon-commercial',
+    icon: '🏢',
     sort: 40,
     description: '商户/门店的中央空调、厨房设备维保',
     children: [

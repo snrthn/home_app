@@ -69,7 +69,7 @@ function collectSubtreeIds(flat: ServiceCategory[], rootId: string): Set<string>
 interface CategoryDraft {
   name: string;
   parentId: string | null;
-  // description/icon 不进表单，仅编辑时透传原值，避免保存时把已有内容清空；
+  // description/icon 可编辑（icon 支持 emoji 或自定义标识字符，直接展示）；
   // sort 进表单（可编辑排序权重）；启用状态改由列表操作栏维护，不在表单里
   description: string;
   icon: string;
@@ -94,6 +94,8 @@ function CategoryEditModal({
   const toast = useToast();
   const [name, setName] = useState(initial.name);
   const [parentId, setParentId] = useState<string>(initial.parentId ?? '');
+  const [icon, setIcon] = useState(initial.icon);
+  const [description, setDescription] = useState(initial.description);
   const [sort, setSort] = useState<string>(initial.sort);
   const [saving, setSaving] = useState(false);
 
@@ -130,12 +132,12 @@ function CategoryEditModal({
     }
     setSaving(true);
     try {
-      // 只改名称、上级与排序；description/icon 透传原值，不破坏已有数据
+      // 名称、上级、图标、描述、排序均可编辑
       await onSubmit({
         name: name.trim(),
         parentId: parentId || null,
-        description: initial.description,
-        icon: initial.icon,
+        description: description.trim() || '',
+        icon: icon.trim(),
         sort,
       });
       onClose();
@@ -179,6 +181,34 @@ function CategoryEditModal({
               onChange={(e) => setName(e.target.value)}
               placeholder="如：家电维修 / 家政保洁"
               autoFocus
+            />
+          </div>
+          <div className="field">
+            <label className="field-label">
+              图标（可选）
+              <span style={{ fontWeight: 400, color: '#6b7280', marginLeft: 6 }}>
+                填 emoji 或字符，如 🧹 🔧 🛠️ 🏢
+              </span>
+            </label>
+            <input
+              className="input"
+              value={icon}
+              onChange={(e) => setIcon(e.target.value)}
+              placeholder="如：🧹"
+              style={{ fontFamily: 'inherit' }}
+            />
+            <p className="field-hint" style={{ marginTop: 6 }}>
+              填 emoji 直接显示为小图标；也可以填文字（如 icon-clean），但前端会原样展示文字。
+            </p>
+          </div>
+          <div className="field">
+            <label className="field-label">描述（可选）</label>
+            <textarea
+              className="input"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="简短介绍该类目，用于列表说明或前端展示"
+              rows={2}
             />
           </div>
           <div className="field">
