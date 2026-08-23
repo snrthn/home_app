@@ -321,7 +321,7 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 
 ---
 
-## 13. 当前完成状态（截至 2026-08-21）
+## 13. 当前完成状态（截至 2026-08-23）
 
 ### 已完成 ✅
 
@@ -364,6 +364,10 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 - [x] 智能派单模块 Phase 1（详见第 20 节）：candidates 推荐查询（区域硬过滤 + 技能软加分 + 负载排序）+ 派单工作台 `/admin/dispatch/smart`（左右分栏 + 一键指派 + 全量兜底）+ 移除冗余抢单池页面/权限码/菜单
 - [x] 智能派单 Phase 1.5（推荐质量升级）：祖先链技能匹配（父类目覆盖子类目订单，前端「父类目覆盖」徽章）+ 预约时间冲突检测（同日 slot 重叠降权不排除，前端橙色「时段冲突」标签）
 - [x] 智能派单 Phase 2 看板 + 自动派单（详见第 20 节）：`GET /orders/dispatch/stats` 看板统计（待派/超时/在岗/今日已派/平均接单时长）+ `DispatchSchedulerService` 超时自动派单（推荐第一名，`actorId='system'`，预约单豁免，env 可配）+ 工作台接 WS `dashboard-refresh` 实时刷新 + 超时徽章
+- [x] 管理端登录 401 修复（admin passwordHash 空且未绑 super_admin → bcryptjs 补齐）+ updateAdmin UserProfile 嵌套 update 改 upsert（2026-08-23）
+- [x] 找回密码全链路（详见第 21 节）：`POST /api/auth/reset-password`（OTP 免旧密码）+ `/forgot-password` 独立页 + 登录页入口 + 路由守卫放行（2026-08-23）
+- [x] 短信验证码 mock/real 双模式 + 阿里云真实网关（详见第 21 节）：SystemConfig.smsMode 开关 + 原生 HTTP 阿里云 provider（零 SDK）+ 运营平台配置页网关参数表单（2026-08-23）
+- [x] AccessKeySecret 加密存储（详见第 21 节）：AES-256-GCM `enc:v1:` 格式 + API 掩码返回 + `SMS_SECRET_ENCRYPT_KEY`（2026-08-23）
 
 ### 待办 / 已知缺口
 
@@ -381,6 +385,9 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 | P3 | 阶梯退款真实渠道验证 | wechat provider refund/total 已分字段（**暂不处理 · 2026-08-21 虎哥决策**） |
 | P3 | assign() 管理员指派区域校验 | 暂不加（虎哥 2026-08-20 决策），如需可加「强制指派」开关（整体 P3 **暂不处理 · 2026-08-21 虎哥决策**） |
 | P3 | lastActiveAt 历史数据缺失 | 在线数判定字段 2026-08-20 才开始维护，历史在线趋势无法回溯；`Order.refundedAt` 缺失用 settledAt 近似（**暂不处理 · 2026-08-21 虎哥决策**） |
+| P2 | **短信真实发送验证** | 运营平台切 real + 填阿里云四参数（AccessKeyId/Secret/SignName/TemplateCode，模板需含 `${code}` 变量）后自验真发信；凭证缺失会返回 400 清晰错误（**2026-08-23 待虎哥填凭证**） |
+| P2 | **3721 重启加载新逻辑** | 短信开关/加密/找回密码均需重启 3721 生效（Prisma client dll 曾被锁未重新 generate，重启后自动就绪） |
+| P2 | **`SMS_SECRET_ENCRYPT_KEY` 环境同步** | `nest/.env` 已生成（gitignore 保护）；**换库/换环境部署必须同步该 key，否则旧密文解不开**（走明文兜底但 secret 失效） |
 
 ---
 
@@ -538,6 +545,50 @@ cd nest && PORT=3721 pnpm start:dev
 - **Phase 2 看板 + 自动派单**（2026-08-21）：① `GET /orders/dispatch/stats`（perm `dispatch:smart`）返回待派/超时/在岗师傅/今日已派/平均接单时长；② `DispatchSchedulerService`（`nest/src/orders/dispatch.scheduler.ts`，setInterval 模式）定时扫描超时未接订单 → `listCandidates` 第一名自动 `assign(orderId, masterId, 'system')`（orderLog `operatorId='system'` 可溯源，**预约单豁免**）；env 可配：`AUTO_DISPATCH_ENABLED`（默认 true）/ `AUTO_DISPATCH_SCAN_MS`（默认 60s）/ `AUTO_DISPATCH_TIMEOUT_MS`（默认 30 分钟）；③ 前端工作台接 `useOrderSocket` `dashboard-refresh` 实时刷新（不再依赖手动刷新）+ 顶部 5 张看板卡片 + 超时订单红色「已超时」徽章
 - **⚠️ 用户本地必做**：`pnpm seed`（刷新权限码：移除 `dispatch:pool`、`ops_lead` 绑定 `dispatch:smart`）；重启后端加载自动派单调度器与 stats 端点
 - **未做**：LBS 就近排序（需师傅表加坐标字段 + 坐标来源方案，待定）
+
+---
+
+## 21. 短信验证码体系 + 找回密码（2026-08-23 落地）
+
+> 覆盖：管理端登录修复、找回密码全链路、SMS mock/real 双模式、阿里云真实网关、AccessKeySecret 加密存储
+
+### 21.1 管理端登录修复
+- **根因**：`phone='admin'` 用户 `passwordHash` 为空且 `staffRoleId=null` → 登录 401「管理员未设置密码」；后续改账号信息又暴露 `UserProfile` 缺失（嵌套 update 要求子记录存在）
+- **修复**：补 `passwordHash=bcryptjs('admin123')` + 绑 `super_admin` + 建 UserProfile（nickname=超级管理员）；`users.service.ts` 的 `updateAdmin` 嵌套 `data.profile` 改 **upsert**（`create`+`update` 兜底，杜绝复发）
+- **⚠️ 鉴权用 bcryptjs（非原生 bcrypt）**，`auth.service.ts:10`
+
+### 21.2 找回密码全链路
+- **后端**：`POST /api/auth/reset-password`（公开无守卫，`reset-password.dto.ts`：phone+code+newPassword≥6）；`auth.service.resetPasswordByCode` OTP 校验后直接 bcrypt 写密码，**不校验旧密码**（旧 `setPassword` 强制 oldPassword 造成死循环）
+- **前端**：`/forgot-password` 独立页（手机号→获取验证码→6 位码→新密码确认→跳登录）；登录页密码 tab 加「忘记密码？」链接；发码逻辑换共享函数 `requestSmsCode`（mock 模式拿到 code 时 Toast+console.log）
+- **路由**：`route-guards.ts` PUBLIC_ROUTES + `middleware.ts` matcher 均加 `/forgot-password`
+
+### 21.3 SMS mock/real 双模式
+- **决策**（虎哥拍板）：所有环境均可切换（生产不锁死 real，风险发布时自行处理）；real 模式真接网关、参数在运营平台配置页自填
+- **数据层**：SystemConfig 加 `smsMode String @default("mock")` + `smsAccessKeyId/Secret/SignName/TemplateCode`（均 String?）；迁移 `20260823000000_add_sms_config`（手写 SQL，本地已 `migrate deploy`）
+- **后端**：`auth.service.sendSmsCode` 改读 `SystemConfig.smsMode` 分支——mock 返回 `{ok,code,dev}`（验证码随响应回传前端 Toast 提示）；real 调阿里云 provider 不返回 code，凭证缺失抛清晰错误转 400「短信网关未配置完整（缺少 …）」；注入 SystemConfigService（**别名避免与 Nest ConfigService 冲突**）
+- **provider**：`nest/src/sms/aliyun-sms.provider.ts`【新建】原生 `fetch`+`crypto` 调阿里云 RPC API（percentEncode + HMAC-SHA1 签名 + base64），**零外部 SDK**（沙箱 pnpm 装包崩溃逼出来的方案，功能等价）
+- **前端**：运营平台全局配置页加 smsMode 单选 + real 时显示阿里云四参数表单
+
+### 21.4 AccessKeySecret 加密存储（AES-256-GCM）
+- **架构原则**：**加解密只在服务端**——入库前加密、运行时解密传给 provider（HMAC 签名需明文）；对外（浏览器 GET）一律掩码
+- **实现**：`config.service.ts` 新增 `encryptSecret/decryptSecret`，密文格式 `enc:v1:<iv>.<tag>.<ciphertext>`（base64）；`updateGlobal` 写入先加密、**空串跳过（保留原值 =「留空不修改」语义）**；非 `enc:v1:` 格式按历史明文兼容
+- **密钥**：`nest/.env` 的 `SMS_SECRET_ENCRYPT_KEY`（32 字节 hex 已生成，gitignore 保护不入库）；**未配置/非法时降级明文 + console.warn，不炸运行**
+- **API 掩码**：`config.public.controller.ts` GET `global` 返回 `smsAccessKeySecret=''` + `smsSecretSet` 布尔；`getGlobal()` 内部仍返回解密真值供 auth.service 发短信用（不走 HTTP）
+- **前端语义**：secret 输入框只作「填写=更新」用途不回显；已配置时提示「已配置，留空则不修改」
+- **✅ 验证闭环**：加解密 round-trip（中文/长串/明文兼容/篡改兜底）全过；`tsc --noEmit` EXIT=0；3722 冒烟：PATCH 写入 200 → 公开 GET 掩码 + `smsSecretSet=true` → **mysql CLI 直查落库值为 `enc:v1:` 开头 73 字节密文**（非明文实锤）；3722 已退服
+
+### 21.5 部署链路（重要认知）
+- **`deploy.sh` 第 6 步用 `prisma db push`，不是 `migrate deploy`** → schema.prisma 是唯一真相来源；新增字段自动同步生产库无需手动迁移；**但删列会直接丢数据且无确认**（以后删字段务必谨慎，加密方案刻意走「加列/改值」避开此坑）
+- `prisma/migrations/` 目录在生产链路不执行（本地 dev 用迁移文件，两套并存）
+- 加密复用现有 `smsAccessKeySecret` 列仅值变密文 → schema 不变 → **deploy.sh 零改动**
+- GitHub Actions：`deploy.yml`（verify 质量门禁 → SSH 到 ECS 跑 `scripts/deploy.sh`）；2026-08-23 首次部署失败于第 1 步 `git fetch`——`Empty reply from server`（ECS 跨境访问 github.com 网络抖动，与代码无关；修复选项：Re-run / deploy.sh 加 git retry / gitee 镜像）
+
+### 21.6 2026-08-23 踩坑（下次复用）
+1. **admin 登录 API 必须带 `role:'admin'` 字段**，否则走验证码登录分支报 400「验证码错误」
+2. shell `set -a; . .env` 在沙箱传不进 node 子进程——脚本要自己读 .env 解析 DATABASE_URL
+3. 独立 node 脚本的 `@prisma/client` 可能与 dist 运行时 client 不同步（字段 undefined）——核验落库值用 **mysql CLI 直查**最干净
+4. C 盘满 0 字节 → Git Bash/Edit/Write 全 ENOSPC（Bash 根挂在 C:）；清 Temp 腾 ~50MB 够小文件编辑
+5. 阿里云 SDK（`@alicloud/dysmsapi20170525`）沙箱装不上 → 原生 HTTP 手写签名是可靠替代
 
 ---
 
