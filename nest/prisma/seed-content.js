@@ -414,7 +414,6 @@ async function seedAgreements() {
         contentHtml,
         status: 'published',
         isCurrent: true,
-        publishedAt: new Date(),
       },
     });
     versions++;
