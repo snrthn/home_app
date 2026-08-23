@@ -13,7 +13,8 @@
     "prisma:migrate": "prisma migrate dev",
     "seed": "node prisma/seed.js",
     "seed:categories": "node prisma/seed-categories.js",
-    "seed:items": "node prisma/seed-items.js"
+    "seed:items": "node prisma/seed-items.js",
+    "seed:content": "node prisma/seed-content.js"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
