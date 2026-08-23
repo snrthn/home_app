@@ -1,57 +1,258 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getPendingMasters,
   approveMaster,
+  getCategoryTree,
   type MasterUser,
+  type ServiceCategoryNode,
 } from '@/lib/admin-api';
 import { QK } from '@/lib/query-keys';
-import DataTable, { type Column } from '@/components/admin/DataTable';
-import { ConfirmDialog } from '@/components/ConfirmDialog';
+import DataTable, { StatusBadge, type Column } from '@/components/admin/DataTable';
 import { formatDateTime } from '@/lib/format';
 import { useToast } from '@/components/Toast';
+import { useEscClose } from '@/lib/useEscClose';
+import { Textarea } from '@/components/form/Textarea';
+
+// 把类目树拍平，得到 id->name 以及后代集合（与师傅列表页同逻辑）
+function buildTreeMaps(nodes: ServiceCategoryNode[]) {
+  const nameMap = new Map<string, string>();
+  const childrenMap = new Map<string, string[]>();
+  function walk(ns: ServiceCategoryNode[]) {
+    ns.forEach((n) => {
+      nameMap.set(n.id, n.name);
+      if (n.children?.length) {
+        childrenMap.set(
+          n.id,
+          n.children.map((c) => c.id),
+        );
+        walk(n.children);
+      }
+    });
+  }
+  walk(nodes);
+  const descendantCache = new Map<string, string[]>();
+  function getDescendants(id: string): string[] {
+    if (descendantCache.has(id)) return descendantCache.get(id)!;
+    const children = childrenMap.get(id) ?? [];
+    const result = [...children];
+    children.forEach((childId) => {
+      result.push(...getDescendants(childId));
+    });
+    descendantCache.set(id, result);
+    return result;
+  }
+  return { nameMap, getDescendants };
+}
+
+function formatSkills(skills: unknown, tree: ServiceCategoryNode[]): string {
+  if (!skills) return '-';
+  const ids = Array.isArray(skills)
+    ? skills.filter((x): x is string => typeof x === 'string')
+    : [];
+  if (ids.length === 0) return '-';
+  const { nameMap, getDescendants } = buildTreeMaps(tree);
+  const idSet = new Set(ids);
+  const leafIds = ids.filter((id) => {
+    const descendants = getDescendants(id);
+    return !descendants.some((d) => idSet.has(d));
+  });
+  if (leafIds.length === 0) return '-';
+  return leafIds.map((id) => nameMap.get(id) ?? id).join(' / ');
+}
+
+/**
+ * 审核弹窗：上半部分展示师傅详情（只读），下半部分通过/拒绝操作。
+ * - 默认为「待选择」状态，需点通过或拒绝按钮
+ * - 拒绝时展开拒绝理由输入框
+ */
+function ReviewModal({
+  open,
+  master,
+  catTree,
+  loading,
+  onClose,
+  onApprove,
+}: {
+  open: boolean;
+  master: MasterUser | null;
+  catTree: ServiceCategoryNode[];
+  loading: boolean;
+  onClose: () => void;
+  onApprove: (status: 'active' | 'disabled', reason?: string) => Promise<void> | void;
+}) {
+  const [action, setAction] = useState<'none' | 'approve' | 'reject'>('none');
+  const [reason, setReason] = useState('');
+
+  useEscClose(() => {
+    if (!loading) onClose();
+  });
+
+  // 每次打开重置状态（通过/拒绝 选项 + 拒绝理由）
+  useEffect(() => {
+    if (open) {
+      setAction('none');
+      setReason('');
+    }
+  }, [open]);
+
+  if (!open || !master) return null;
+
+  const submit = async () => {
+    if (action === 'none') return;
+    const status = action === 'approve' ? 'active' : 'disabled';
+    const reasonValue = action === 'reject' ? reason.trim() : undefined;
+    if (action === 'reject' && !reasonValue) return;
+    await onApprove(status, reasonValue);
+  };
+
+  const infoRow = (label: string, value: string | null | undefined) => (
+    <div className="field" style={{ marginBottom: 4 }}>
+      <div className="field-label" style={{ marginBottom: 4 }}>{label}</div>
+      <div style={{ color: 'var(--color-text-primary)', fontSize: 14 }}>
+        {value || <span style={{ color: 'var(--color-text-soft)' }}>—</span>}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="modal-panel modal-md" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <span>审核认证 · {master.realName}</span>
+          <button type="button" className="modal-close" onClick={onClose} aria-label="关闭">
+            ×
+          </button>
+        </div>
+        <div className="modal-body">
+          {/* 详情区域 */}
+          <div
+            style={{
+              background: 'var(--color-bg-soft)',
+              borderRadius: 8,
+              padding: 14,
+              marginBottom: 8,
+            }}
+          >
+            <div style={{ fontWeight: 600, marginBottom: 10 }}>基本信息</div>
+            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 120 }}>{infoRow('真实姓名', master.realName)}</div>
+              <div style={{ flex: 1, minWidth: 120 }}>{infoRow('手机号', master.user?.phone)}</div>
+            </div>
+            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 120 }}>{infoRow('身份证号', master.idCard)}</div>
+              <div style={{ flex: 1, minWidth: 120 }}>{infoRow('服务城市', master.city)}</div>
+            </div>
+            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 120 }}>
+                {infoRow('实名认证', master.idVerified ? '已认证' : '未认证')}
+              </div>
+              <div style={{ flex: 1, minWidth: 120 }}>
+                {infoRow('提交时间', formatDateTime(master.createdAt))}
+              </div>
+            </div>
+            {infoRow('技能', formatSkills(master.skills, catTree))}
+          </div>
+
+          {/* 操作区域 */}
+          <div className="field">
+            <label className="field-label">审核结果</label>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button
+                type="button"
+                className={action === 'approve' ? 'btn-primary' : 'btn-secondary'}
+                onClick={() => setAction('approve')}
+                disabled={loading}
+                style={{ flex: 1 }}
+              >
+                通过
+              </button>
+              <button
+                type="button"
+                className={action === 'reject' ? 'btn-danger' : 'btn-secondary'}
+                onClick={() => setAction('reject')}
+                disabled={loading}
+                style={{ flex: 1 }}
+              >
+                拒绝
+              </button>
+            </div>
+          </div>
+
+          {action === 'reject' && (
+            <div className="field">
+              <label className="field-label">拒绝理由</label>
+              <Textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="请输入拒绝原因，方便师傅修改后重新提交"
+                rows={3}
+                disabled={loading}
+              />
+            </div>
+          )}
+        </div>
+        <div className="modal-actions">
+          <button type="button" className="btn-secondary" onClick={onClose} disabled={loading}>
+            取消
+          </button>
+          <button
+            type="button"
+            className={action === 'reject' ? 'btn-danger' : 'btn-primary'}
+            onClick={submit}
+            disabled={
+              loading ||
+              action === 'none' ||
+              (action === 'reject' && !reason.trim())
+            }
+          >
+            {loading
+              ? '提交中…'
+              : action === 'approve'
+                ? '确认通过'
+                : action === 'reject'
+                  ? '确认拒绝'
+                  : '请选择审核结果'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function VerificationPage() {
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [dialog, setDialog] = useState<
-    | { open: true; id: string; status: 'active' | 'disabled'; realName: string }
-    | { open: false }
-  >({ open: false });
+  const [busy, setBusy] = useState(false);
+  const [reviewItem, setReviewItem] = useState<MasterUser | null>(null);
   const toast = useToast();
   const qc = useQueryClient();
 
-  // react-query 取数：同一 queryKey 的在途请求会被合并，避免初始化重复请求。
   const { data: rows = [], isLoading: loading } = useQuery<MasterUser[]>({
     queryKey: QK.adminPendingMasters,
     queryFn: getPendingMasters,
   });
+  const { data: catTree = [], isLoading: catLoading } = useQuery({
+    queryKey: ['categoryTree'],
+    queryFn: getCategoryTree,
+  });
 
-  const openConfirm = (id: string, status: 'active' | 'disabled', realName: string) => {
-    setDialog({ open: true, id, status, realName });
-  };
-
-  const closeDialog = () => setDialog({ open: false });
-
-  const handleConfirm = async (reason?: string) => {
-    if (!dialog.open) return;
-    const { id, status } = dialog;
-    setBusyId(id);
+  const handleApprove = async (status: 'active' | 'disabled', reason?: string) => {
+    if (!reviewItem) return;
+    setBusy(true);
     try {
-      await approveMaster(id, status, reason);
+      await approveMaster(reviewItem.id, status, reason);
       toast.success(status === 'active' ? '已通过认证' : '已拒绝');
-      // 审核后该师傅不再处于「待审核」列表，直接从缓存里移除（无需重新请求）
+      // 审核后从列表移除
       qc.setQueryData<MasterUser[]>(QK.adminPendingMasters, (prev) =>
-        (prev ?? []).filter((r) => r.id !== id),
+        (prev ?? []).filter((r) => r.id !== reviewItem.id),
       );
-      // 师傅列表的状态也变了，标记为过期，下次进入自动刷新
       qc.invalidateQueries({ queryKey: QK.adminMasters });
+      setReviewItem(null);
     } catch {
       toast.error('操作失败，请重试');
     } finally {
-      setBusyId(null);
-      closeDialog();
+      setBusy(false);
     }
   };
 
@@ -65,24 +266,16 @@ export default function VerificationPage() {
       key: 'action',
       title: '操作',
       align: 'center',
-      width: '130px',
+      width: '100px',
       render: (r) => (
-        <div className="row-actions">
-          <button
-            className="btn-link"
-            disabled={busyId === r.id}
-            onClick={() => openConfirm(r.id, 'active', r.realName)}
-          >
-            通过
-          </button>
-          <button
-            className="btn-link btn-link-danger"
-            disabled={busyId === r.id}
-            onClick={() => openConfirm(r.id, 'disabled', r.realName)}
-          >
-            拒绝
-          </button>
-        </div>
+        <button
+          type="button"
+          className="btn-link"
+          disabled={busy}
+          onClick={() => setReviewItem(r)}
+        >
+          审核
+        </button>
       ),
     },
   ];
@@ -98,28 +291,18 @@ export default function VerificationPage() {
           columns={columns}
           rows={rows}
           rowKey={(r) => r.id}
-          loading={loading}
+          loading={loading || catLoading}
           emptyText="暂无待审核的师傅"
         />
       </div>
 
-      <ConfirmDialog
-        open={dialog.open}
-        title={dialog.open && dialog.status === 'active' ? '确认通过认证？' : '确认拒绝认证？'}
-        message={
-          dialog.open
-            ? `将对「${dialog.realName}」的师傅认证申请进行${
-                dialog.status === 'active' ? '通过' : '拒绝'
-              }操作，确认后不可撤销。`
-            : undefined
-        }
-        confirmLabel={dialog.open && dialog.status === 'active' ? '确认通过' : '确认拒绝'}
-        requireReason={dialog.open && dialog.status === 'disabled'}
-        reasonLabel="拒绝理由"
-        reasonPlaceholder="请输入拒绝原因，方便师傅修改后重新提交"
-        loading={busyId !== null}
-        onConfirm={handleConfirm}
-        onCancel={closeDialog}
+      <ReviewModal
+        open={!!reviewItem}
+        master={reviewItem}
+        catTree={catTree}
+        loading={busy}
+        onClose={() => !busy && setReviewItem(null)}
+        onApprove={handleApprove}
       />
     </div>
   );

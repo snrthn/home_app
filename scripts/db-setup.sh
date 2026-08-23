@@ -39,6 +39,7 @@ echo "==> [2/4] 应用 Prisma 迁移"
 echo "==> [3/4] 种子：权限码与岗位角色（幂等）"
 node nest/prisma/seed.js
 node nest/prisma/seed-categories.js
+node nest/prisma/seed-items.js
 
 echo "==> [4/4] 初始化管理员账号（幂等）"
 ADMIN_PHONE="$ADMIN_PHONE" \

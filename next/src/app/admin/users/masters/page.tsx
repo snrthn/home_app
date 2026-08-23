@@ -12,6 +12,7 @@ import {
 import { QK } from '@/lib/query-keys';
 import DataTable, { StatusBadge, type Column } from '@/components/admin/DataTable';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import DetailModal, { DetailRow } from '@/components/admin/DetailModal';
 import { formatDateTime } from '@/lib/format';
 
 const statusText: Record<string, { t: string; tone: 'green' | 'orange' | 'gray' | 'red' }> = {
@@ -118,6 +119,9 @@ export default function MasterListPage() {
     message: string;
   } | null>(null);
 
+  // 详情弹窗
+  const [detailItem, setDetailItem] = useState<MasterUser | null>(null);
+
   // 启 / 停（pending 走审核流程，不在本处操作）
   const statusMut = useMutation({
     mutationFn: (v: { id: string; status: MasterToggleStatus }) =>
@@ -168,22 +172,27 @@ export default function MasterListPage() {
     {
       key: 'op',
       title: '操作',
-      width: '90px',
+      width: '130px',
       render: (r) => {
         if (r.status === 'pending') {
           return <span style={{ color: 'var(--color-text-soft)' }}>待审核</span>;
         }
         return (
-          <button
-            type="button"
-            className={
-              r.status === 'active' ? 'btn-link btn-link-danger' : 'btn-link'
-            }
-            onClick={() => toggleStatus(r)}
-            disabled={statusMut.isPending}
-          >
-            {r.status === 'active' ? '停用' : '启用'}
-          </button>
+          <div className="row-actions">
+            <button type="button" className="btn-link" onClick={() => setDetailItem(r)}>
+              详情
+            </button>
+            <button
+              type="button"
+              className={
+                r.status === 'active' ? 'btn-link btn-link-danger' : 'btn-link'
+              }
+              onClick={() => toggleStatus(r)}
+              disabled={statusMut.isPending}
+            >
+              {r.status === 'active' ? '停用' : '启用'}
+            </button>
+          </div>
         );
       },
     },
@@ -217,6 +226,49 @@ export default function MasterListPage() {
         }}
         onCancel={() => setPending(null)}
       />
+
+      {detailItem && (
+        <DetailModal
+          open={!!detailItem}
+          title={`师傅详情 · ${detailItem.realName}`}
+          onClose={() => setDetailItem(null)}
+          size="md"
+        >
+          <div style={{ display: 'flex', gap: 16, marginBottom: 8 }}>
+            <DetailRow label="真实姓名" value={detailItem.realName} />
+            <DetailRow label="状态">
+              <StatusBadge
+                tone={
+                  (statusText[detailItem.status]?.tone as 'green' | 'orange' | 'gray') ||
+                  'gray'
+                }
+              >
+                {statusText[detailItem.status]?.t || detailItem.status}
+              </StatusBadge>
+            </DetailRow>
+          </div>
+          <DetailRow label="手机号" value={detailItem.user?.phone || null} />
+          <DetailRow label="身份证号" value={detailItem.idCard || null} />
+          <div style={{ display: 'flex', gap: 16 }}>
+            <DetailRow label="服务城市" value={detailItem.city || null} />
+            <DetailRow label="实名认证">
+              <StatusBadge tone={detailItem.idVerified ? 'green' : 'orange'}>
+                {detailItem.idVerified ? '已认证' : '未认证'}
+              </StatusBadge>
+            </DetailRow>
+          </div>
+          <DetailRow label="技能">
+            <span style={{ color: 'var(--color-text-primary)' }}>
+              {formatSkills(detailItem.skills, catTree)}
+            </span>
+          </DetailRow>
+          <div style={{ display: 'flex', gap: 16 }}>
+            <DetailRow label="评分" value={Number(detailItem.rating).toFixed(1)} />
+            <DetailRow label="订单数" value={detailItem.orderCount} />
+          </div>
+          <DetailRow label="注册时间" value={formatDateTime(detailItem.createdAt)} />
+        </DetailModal>
+      )}
     </div>
   );
 }

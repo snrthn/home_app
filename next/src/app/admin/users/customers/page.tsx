@@ -10,6 +10,7 @@ import {
 import { QK } from '@/lib/query-keys';
 import DataTable, { StatusBadge, type Column } from '@/components/admin/DataTable';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import DetailModal, { DetailRow } from '@/components/admin/DetailModal';
 import { formatDateTime } from '@/lib/format';
 
 const genderText = (g?: string | null) =>
@@ -48,6 +49,9 @@ export default function CustomerListPage() {
     label: string;
     message: string;
   } | null>(null);
+
+  // 详情弹窗
+  const [detailItem, setDetailItem] = useState<CustomerUser | null>(null);
 
   // 启 / 停（冻结也归到「启用」恢复为正常态）
   const statusMut = useMutation({
@@ -96,18 +100,23 @@ export default function CustomerListPage() {
     {
       key: 'op',
       title: '操作',
-      width: '90px',
+      width: '120px',
       render: (r) => (
-        <button
-          type="button"
-          className={
-            r.status === 'active' ? 'btn-link btn-link-danger' : 'btn-link'
-          }
-          onClick={() => toggleStatus(r)}
-          disabled={statusMut.isPending}
-        >
-          {r.status === 'active' ? '停用' : '启用'}
-        </button>
+        <div className="row-actions">
+          <button type="button" className="btn-link" onClick={() => setDetailItem(r)}>
+            详情
+          </button>
+          <button
+            type="button"
+            className={
+              r.status === 'active' ? 'btn-link btn-link-danger' : 'btn-link'
+            }
+            onClick={() => toggleStatus(r)}
+            disabled={statusMut.isPending}
+          >
+            {r.status === 'active' ? '停用' : '启用'}
+          </button>
+        </div>
       ),
     },
   ];
@@ -140,6 +149,38 @@ export default function CustomerListPage() {
         }}
         onCancel={() => setPending(null)}
       />
+
+      {detailItem && (
+        <DetailModal
+          open={!!detailItem}
+          title={`客户详情 · ${detailItem.profile?.nickname || detailItem.phone}`}
+          onClose={() => setDetailItem(null)}
+        >
+          <div style={{ display: 'flex', gap: 16, marginBottom: 8 }}>
+            <DetailRow label="手机号" value={detailItem.phone} />
+            <DetailRow label="状态">
+              <StatusBadge
+                tone={detailItem.status === 'active' ? 'green' : detailItem.status === 'frozen' ? 'red' : 'gray'}
+              >
+                {detailItem.status === 'active' ? '正常' : detailItem.status === 'frozen' ? '冻结' : '禁用'}
+              </StatusBadge>
+            </DetailRow>
+          </div>
+          <DetailRow label="昵称" value={detailItem.profile?.nickname || null} />
+          <DetailRow label="真实姓名" value={detailItem.profile?.realName || null} />
+          <div style={{ display: 'flex', gap: 16 }}>
+            <DetailRow label="性别" value={genderText(detailItem.profile?.gender)} />
+            <DetailRow label="所在城市" value={detailItem.profile?.city || null} />
+          </div>
+          <div style={{ display: 'flex', gap: 16 }}>
+            <DetailRow label="会员等级" value={`Lv.${detailItem.profile?.vipLevel ?? 0}`} />
+            <DetailRow label="积分" value={detailItem.profile?.points ?? 0} />
+            <DetailRow label="信用分" value={detailItem.profile?.creditScore ?? 100} />
+          </div>
+          <DetailRow label="订单数" value={detailItem._count?.customerOrders ?? 0} />
+          <DetailRow label="注册时间" value={formatDateTime(detailItem.createdAt)} />
+        </DetailModal>
+      )}
     </div>
   );
 }
