@@ -114,6 +114,24 @@
 - **建议**：`phone` 加 `@IsMobilePhone('zh-CN')`（class-validator 内置）；需确认 mock 模式测试假号（如 `13800000000`）仍合法——合法格式内假号不受影响；若存在故意用非手机号串的场景再单独评估
 - **状态**：📋 待处理（低风险快改，1 行 DTO；待虎哥确认 mock 假号兼容后动手）
 
+#### E-13　Git 提交信息无规范
+
+> **规范文档**：[`docs/commit-convention.md`](commit-convention.md)（格式定义、示例、工具链说明）
+
+- **证据**：近 50 条提交中仅 ~30% 遵循 Conventional Commits（`fix:`/`feat:`/`ci:` 前缀），其余为纯中文裸描述；无 commitlint / husky / commitizen / .gitmessage / CONTRIBUTING.md；全部提交无 body；无 scope 标注；无 Breaking Change 标识；CI 无提交信息校验
+- **影响**：提交历史不可机器解析，无法自动生成 changelog；不合规提交可直达生产部署
+- **建议**：接入 commitlint（Conventional Commits）+ husky（commit-msg hook 本地拦截）+ .gitmessage 模板 + CI 校验步骤；详见规范文档
+- **状态**：✅ 已完成（2026-08-24）
+- **验证**：
+  - `commitlint.config.js`【新建】：基于 `@commitlint/config-conventional`，自定义 12 种 type（feat/fix/refactor/perf/style/test/docs/ci/build/deploy/chore/revert），subject 限 72 字，header 限 100 字，中文 subject 不做大小写校验
+  - `.husky/commit-msg`【新建】：`npx --no -- commitlint --edit "$1"`，本地提交时自动校验格式，不合规即拒绝
+  - `.husky/pre-commit`【新建】：`pnpm lint`，提交前跑 lint 门禁
+  - `.gitmessage`【新建】：`git commit` 模板，提示 type/scope/subject 格式 + 示例；`git config commit.template .gitmessage` 已设
+  - `package.json`：加 `@commitlint/cli` + `@commitlint/config-conventional` + `husky` devDependencies + `prepare: husky` + `commitlint` script
+  - `.github/workflows/deploy.yml`：`verify` job 追加 `commitlint --from=before --to=sha` 校验步骤，CI 层阻断不合规提交
+  - `docs/commit-convention.md`【新建】：完整规范文档（格式定义、type/scope 对照表、示例、工具链说明、快速修复指南）
+  - **实测**：`npx commitlint --from=HEAD~1 --to=HEAD --verbose` 对最近一条提交 `feat: 补齐提交规范工具链` → PASS
+
 ### P2 — 工程化完善（可排期）
 
 #### E-06　缺少 `.env.example`
@@ -166,6 +184,7 @@
 | E-10 | 依赖安全审计                              | P3  | 📋 待处理 | pnpm audit / Dependabot                                |
 | E-11 | 前端性能/可访问性                           | P3  | 📋 待处理 | 排期后续                                                   |
 | E-12 | 短信验证码 DTO 校验不严（`phone` 仅 `IsString`） | P1  | 📋 待处理 | `POST /api/auth/send-code` 传 `phone:"123"` 可通过校验并真发码；建议 `IsMobilePhone`，需确认 mock 假号测试兼容性（见 §1 P1） |
+| E-13 | Git 提交信息无规范                       | P1  | ✅ 已完成 | commitlint + husky + .gitmessage 模板 + CI 校验步骤；详见 [`docs/commit-convention.md`](commit-convention.md) |
 
 
 
