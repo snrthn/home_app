@@ -58,6 +58,11 @@ export function rejectRefund(id: string, note?: string): Promise<RefundItem> {
   return api.post(`/payments/refunds/${id}/reject`, { note }).then((r) => r.data);
 }
 
+// 运营主动发起退款（非投诉来源，进审核流）：按订单号解析
+export function createRefund(orderNo: string, amount?: number, reason?: string): Promise<RefundItem> {
+  return api.post('/payments/refunds', { orderNo, amount, reason }).then((r) => r.data);
+}
+
 // 中文枚举映射
 export const REFUND_STATUS_LABEL: Record<RefundStatus, string> = {
   pending_review: '待审核',

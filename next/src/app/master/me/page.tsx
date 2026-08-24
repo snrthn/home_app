@@ -63,6 +63,15 @@ function IconWallet() {
     </svg>
   );
 }
+function IconTicket() {
+  return (
+    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4 7h16v10H4z" />
+      <path d="M4 9.5h16" />
+      <path d="M9 7v10" />
+    </svg>
+  );
+}
 function DefaultAvatar() {
   return (
     <svg viewBox="0 0 48 48" width="56" height="56" aria-hidden>
@@ -128,6 +137,7 @@ export default function MasterMe() {
         {/* 快速入口（保持不变） */}
         <div className="me-grid">
           <MeEntry label="我的订单" icon={<IconOrder />} href="/master/orders/mine" />
+          <MeEntry label="我的工单" icon={<IconTicket />} href="/master/tickets" />
           <MeEntry label="平台公告" icon={<IconNotice />} href="/master/notices" />
           <MeEntry label="接单设置" icon={<IconGear />} href="/master/me/accept-settings" />
           <MeEntry label="收入提现" icon={<IconWallet />} href="/master/me/income" />

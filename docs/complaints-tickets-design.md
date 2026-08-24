@@ -19,7 +19,7 @@
 | WS | ✅ `tickets-pool` 房间 + `ticket-update` 事件（`orders.gateway.ts`），管理端两页实时刷新 |
 | 管理端两页 | ✅ `/admin/reviews/tickets` + `/admin/reviews/complaints`；交互为**操作列【详情/处理/改派】三入口 + 三独立弹窗**（`TicketDetail` 纯只读 / `TicketProcess` 处理·结案 / `TicketAssign` 改派），确认按钮走 Modal FooterBar 规范 |
 | 客户端 | ✅ 入口为个人中心「我的投诉」→ 独立页 `/client/complaints`（提交表单）+ `/client/complaints/history`（投诉记录），历史入口在表单底部文本链接 + headerBar 菜单 |
-| Phase 2（师傅端我的工单 / 工作台指标卡 / SLA 倒计时展示） | ❌ 未做 |
+| Phase 2（师傅端我的工单 / 工作台指标卡 / SLA 倒计时展示 / 订单详情投诉按钮 / 评价引导） | ✅ 已落地（2026-08-21） |
 | 端到端联调 | ❌ 未做（沙箱无 DB/不能起服务）；迁移已应用，剩 `pnpm seed` 后由用户本地验证 |
 | 类型坑 | `@prisma/client` re-export 在本项目破损，Prisma 类型一律走相对路径 `../../node_modules/.prisma/client`（与 PrismaService 一致） |
 
@@ -268,8 +268,8 @@ model TicketComment {
 
 | 端 | 入口 | 页面 | 权限 |
 |---|---|---|---|
-| 客户端 | 个人中心「我的投诉」→ 独立提交页 `/client/complaints`（底部+headerBar 双入口进 `/client/complaints/history` 投诉记录）；订单详情「投诉」按钮与评价 1-2 星引导**均未接** | 提交表单 + 投诉记录列表 | 登录即可提交 |
-| 师傅端 | 被投诉时 WS 公告 + 我的工单入口 | 我的 → 我的工单（查看 + 申诉回复） | **Phase 2 未实现** |
+| 客户端 | 个人中心「我的投诉」→ 独立提交页 `/client/complaints`（底部+headerBar 双入口进 `/client/complaints/history` 投诉记录）；订单详情「投诉」按钮与评价 1-2 星引导（**本期 Phase 2 目标**） | 提交表单 + 投诉记录列表 | 登录即可提交 |
+| 师傅端 | 被投诉时 WS 公告 + 我的工单入口 | 我的 → 我的工单（查看 + 申诉回复） | **本期 Phase 2 目标** |
 | 管理端 | 侧边栏「评价客服」下挂两页 | `/admin/reviews/tickets`（工单池：操作列【详情/处理/改派】三弹窗）；`/admin/reviews/complaints`（投诉处置：对齐 `complaints:handle` 路由，同款三弹窗） | `tickets:manage` / `complaints:handle` |
 | 管理端 | 工作台「待处理工单」指标卡 | 复用现有 dashboard 数据卡 | `reports:view` / `tickets:manage` |
 
@@ -300,10 +300,37 @@ model TicketComment {
 6. ✅ **管理端两页**：工单池 + 投诉处置（操作列三入口 + 三独立弹窗，见 0.5 节）。
 7. ✅ **客户端**：投诉提交（校验已完成订单）+ 投诉记录查看（`/client/complaints` + `/history`）。
 
-### Phase 2
-- 师傅端「我的工单」查看 + 申诉回复。
-- 工作台待处理工单指标卡。
-- SLA 倒计时前端展示（超时标红）。
+### Phase 2（已落地，2026-08-21）
+
+#### 2.1 师傅端「我的工单」查看 + 申诉
+- **后端**：`GET /tickets/mine` 当前仅按 `customerId` 过滤（客户端视角）。改造为按角色分支：`tickets.controller.ts` 的 `mine` 将 `req.user.role` 传入 `listMine(actorId, role)`；`service.listMine` 当 `role==='master'` 时 `where: { masterId: actorId }`，否则 `customerId: actorId`。前端 `master/tickets` 复用同一端点。
+- **申诉端点**：新增 `POST /tickets/:id/appeal`（@Audit），service 复用 `addComment(actorId, id, { content, isInternal:false, visibleTo:'master' })`——语义为师傅对外申诉（客服可见），**零迁移**。
+- **前端**：新建 `master/tickets` 页，复用 `getMyTickets()` + `DataTable` + `TicketListItem`；列表列：工单号 / 类型 / 状态 / 关联订单 / 优先级 / 创建时间；行内「申诉」按钮弹 Modal 调 `appealTicket`；`master` 侧边栏加「我的工单」入口。
+
+#### 2.2 工作台「待处理工单」指标卡
+- **后端**：`reports.service.dashboard()` 增加 `pendingTickets = prisma.ticket.count({ where: { status: 'open' } })`（待受理即待处理）。
+- **前端**：`admin/page.tsx` 的 `stats` 数组追加 `{ label:'待处理工单', value: pendingTickets }`。
+
+#### 2.3 SLA 倒计时前端展示（超时标红）
+- **前端**：`admin/reviews/tickets` 列表新增「SLA」列，取 `firstResponseDeadline` / `resolveDeadline` 中尚未到达的较小者计算剩余时间；均已过期则显示「已超时」标红。纯前端，无新端点（截止时间字段已落库）。
+
+#### 2.4 订单详情「投诉」按钮（客户端）
+- **前端**：`client/orders/[id]` 当 `order.status ∈ { reviewed, evaluated }` 时显示「投诉」按钮，跳转 `/client/complaints?orderId=...&againstMasterId=...`。强校验在后端 `createTicket` 已做。
+
+#### 2.5 评价 1-2 星引导投诉
+- **前端**：客户端评价提交页，当 `rating <= 2` 时提交成功提示「评价较低，是否需要投诉？」并提供跳转投诉页链接；评价页底部常驻引导入口。
+
+### Phase 2 实施清单（本期）
+- [x] 后端 `listMine` 加角色分支（masterId / customerId）
+- [x] 后端 `POST /tickets/:id/appeal` 端点 + service 复用 `addComment(visibleTo:'master')`
+- [x] 前端 `tickets-api.ts` 加 `appealTicket()`
+- [x] 前端 `master/tickets` 页（列表 + 申诉 Modal）
+- [x] `master` 菜单加「我的工单」入口
+- [x] 后端 `dashboard()` 加 `pendingTickets`
+- [x] 前端 `admin/page.tsx` 加待处理工单指标卡
+- [x] 前端 `admin/reviews/tickets` 加 SLA 倒计时列（每 30s 实时刷新）
+- [x] 前端 `client/orders/[id]` 加投诉按钮（reviewed/evaluated）
+- [x] 前端 评价页 1-2 星引导投诉（低分提示 + 订单详情投诉按钮预填 orderId/againstMasterId）
 
 ### Phase 3
 - 师傅违规记录累计（admin 师傅详情可见）。

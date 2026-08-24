@@ -39,6 +39,30 @@ function overdue(deadline?: string | null, closed?: boolean) {
   return new Date(deadline).getTime() < Date.now();
 }
 
+// SLA 倒计时：取 firstResponseDeadline / resolveDeadline 中尚未到达的较小者
+function fmtRemaining(ms: number): string {
+  if (ms <= 0) return '已超时';
+  const totalMin = Math.floor(ms / 60000);
+  const d = Math.floor(totalMin / 1440);
+  const h = Math.floor((totalMin % 1440) / 60);
+  const m = totalMin % 60;
+  if (d > 0) return `剩 ${d}天${h}小时`;
+  if (h > 0) return `剩 ${h}小时${m}分`;
+  return `剩 ${m}分`;
+}
+
+function slaInfo(t: TicketListItem, now: number) {
+  const closed = t.status === 'closed' || t.status === 'resolved';
+  if (closed) return { text: '已完结', overdue: false, done: true };
+  const fr = t.firstResponseDeadline ? new Date(t.firstResponseDeadline).getTime() : null;
+  const rs = t.resolveDeadline ? new Date(t.resolveDeadline).getTime() : null;
+  // 无 SLA 截止时间（如咨询类工单）：中性展示，不标红
+  if (fr == null && rs == null) return { text: '-', overdue: false, done: false };
+  const valid = [fr, rs].filter((x): x is number => x != null && x >= now);
+  if (valid.length === 0) return { text: '已超时', overdue: true, done: false };
+  return { text: fmtRemaining(Math.min(...valid) - now), overdue: false, done: false };
+}
+
 export default function AdminTicketsPage() {
   const qc = useQueryClient();
   const [status, setStatus] = useState<TicketStatus | ''>('');
@@ -46,6 +70,12 @@ export default function AdminTicketsPage() {
   const [priority, setPriority] = useState<TicketPriority | ''>('');
   const [activeOnly, setActiveOnly] = useState(true);
   const [view, setView] = useState<{ id: string; type: 'detail' | 'process' | 'assign' } | null>(null);
+  // SLA 实时倒计时：每 30s 刷新一次 now，驱动倒计时列重新计算
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   const queryKey = ['admin-tickets', status, type, priority, activeOnly];
   const { data: list = [], isLoading, refetch } = useQuery<TicketListItem[]>({
@@ -150,6 +180,16 @@ export default function AdminTicketsPage() {
           ),
       },
       {
+        key: 'sla',
+        title: 'SLA 倒计时',
+        width: '130px',
+        render: (t) => {
+          const info = slaInfo(t, now);
+          if (info.done) return <span className="field-hint">已完结</span>;
+          return <span className={info.overdue ? 'text-overdue' : ''}>{info.text}</span>;
+        },
+      },
+      {
         key: 'createdAt',
         title: '创建时间',
         width: '160px',
@@ -168,7 +208,7 @@ export default function AdminTicketsPage() {
         ),
       },
     ],
-    [],
+    [now],
   );
 
   return (

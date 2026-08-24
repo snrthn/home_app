@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getMyOrders, type OrderLite } from '@/lib/orders-api';
@@ -28,11 +28,24 @@ export default function ClientComplaintsPage() {
     expectation: '',
   });
   const [msg, setMsg] = useState('');
+  // 订单详情「投诉」按钮带入的预填参数
+  const [prefillAgainst, setPrefillAgainst] = useState<string | null>(null);
 
   const { data: orders = [] } = useQuery<OrderLite[]>({
     queryKey: ['my-orders-all'],
     queryFn: getMyOrders,
   });
+
+  // 读取 ?orderId= / ?againstMasterId= 并清理地址栏，避免刷新重复预填
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const sp = new URLSearchParams(window.location.search);
+    const oid = sp.get('orderId');
+    const am = sp.get('againstMasterId');
+    if (oid) setForm((f) => ({ ...f, orderId: oid }));
+    if (am) setPrefillAgainst(am);
+    if (oid || am) window.history.replaceState({}, '', '/client/complaints');
+  }, []);
 
   const completedOrders = useMemo(
     () => orders.filter((o) => COMPLAINTABLE.includes(o.status)),
@@ -60,6 +73,7 @@ export default function ClientComplaintsPage() {
       title: form.title,
       content: form.content,
       expectation: form.expectation || undefined,
+      againstMasterId: prefillAgainst ?? undefined,
     });
   };
 

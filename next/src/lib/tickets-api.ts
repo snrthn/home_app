@@ -131,9 +131,14 @@ export function createComplaint(dto: CreateComplaintDto): Promise<TicketDetail> 
   return api.post('/tickets', { ...dto, type: 'complaint' }).then((r) => r.data);
 }
 
-// 我的工单 / 反馈（客户视角的历史记录）
+// 我的工单 / 反馈（客户端 / 师傅端共用，后端按角色分支过滤）
 export function getMyTickets(): Promise<TicketListItem[]> {
   return api.get('/tickets/mine').then((r) => r.data ?? []);
+}
+
+// 师傅申诉（对外留言，客服可见）
+export function appealTicket(id: string, content: string): Promise<TicketComment> {
+  return api.post(`/tickets/${id}/appeal`, { content }).then((r) => r.data);
 }
 
 // 中文枚举映射

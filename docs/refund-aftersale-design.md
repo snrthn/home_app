@@ -115,12 +115,28 @@ model Refund {
 - [x] 工单处理弹窗 refund 结果提示「需审核」；工单详情展示退款单状态
 - [ ] **用户本地剩项**：重跑 `pnpm seed`（`orders:refund` 权限已在 seed，无需新增；迁移 `20260821010000_add_refund` 已于 2026-08-21 14:00 应用）
 
-## 5. 后续扩展（Phase 2，未排期）
+## 5. Phase 2 实施设计（已落地，2026-08-21）
 
-1. **运营主动发起退款**：台账页「发起退款」入口（选择订单 → 金额 → 原因 → 进审核流）；
-2. **售后工作台聚合**：退款 / 补偿 / 投诉一屏看，赔付策略与批量操作；
-3. **报表口径直读**：`business` 报表退款指标改直读 `Refund` 表（当前由 compensation 反推）；
-4. **退款失败对账**：渠道退款失败重试、退款单与支付单对账。
+### 5.1 运营主动发起退款
+- **后端**：`createRefundRequest` 的 `ticketId` 类型由必填改为可选（`ticketId?: string`），支持非工单来源的退款申请。新增 `POST /payments/refunds`（@RequirePerm `orders:refund`，@Audit），入参 `{ orderNo: string, amount?: number, reason?: string }`：按 `orderNo` 解析订单 → 调 `createRefundRequest({ ticketId: null, orderId, amount: amount ?? order.amount, reason, requestedBy })`；同订单已有待审核/已通过单仍拒重复（复用现有幂等校验）。
+- **前端**：`refunds-api.ts` 加 `createRefund(orderNo, amount?, reason?)`；`admin/orders/refund` 页加「发起退款」按钮 → Modal（输入订单号 / 金额 / 原因）→ 提交进审核流。
+- **路由顺序**：新增 `POST('refunds')` 与既有 `GET('refunds')` 同路径不同方法、与 `POST('refunds/:id/approve')` 不同路径，无冲突。
+
+### 5.2 售后工作台聚合
+- **后端**：无新端点，复用 `GET /tickets`（active 筛选）+ `GET /payments/refunds`（pending_review 筛选）。
+- **前端**：新建 `admin/aftersale` 页，顶部指标卡（待审核退款 / 进行中工单 / 待处理工单）+ 两区块（工单列表 + 退款台账）；`admin` 菜单加「售后工作台」入口（perm 复用 `orders:refund`）。
+
+### 5.3 报表口径直读 Refund 表
+- **后端**：`reports.service.business()` 将退款口径由「补偿单反推（`orderAmount - platformFee - masterAmount`）」改为直读 `Refund` 表（`status='approved'`，累加 `refundedAmount ?? amount`），`settledAt` 近似退款时间。前端 `admin/reports/business` 展示字段不变，自动生效。
+
+### Phase 2 实施清单（本期）
+- [x] 后端 `createRefundRequest` 的 `ticketId` 改可选
+- [x] 后端 `POST /payments/refunds`（主动发起，orders:refund + @Audit）
+- [x] 前端 `refunds-api.ts` 加 `createRefund()`
+- [x] 前端 `admin/orders/refund` 加「发起退款」Modal（按订单号主动建单）
+- [x] 前端 `admin/aftersale` 页（指标卡 + 工单/退款两区块）
+- [x] `admin` 菜单加「售后工作台」入口
+- [x] 后端 `business()` 退款口径直读 `Refund` 表
 
 ## 6. 约定与约束
 

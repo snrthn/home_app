@@ -54,7 +54,7 @@ export class ReportsService {
     );
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
 
-    const [todayOrders, pendingOrders, onlineMasters, gmvResult, revenueResult] =
+    const [todayOrders, pendingOrders, onlineMasters, gmvResult, revenueResult, pendingTickets] =
       await Promise.all([
         // 1. 今日订单（已支付）
         this.prisma.order.count({
@@ -99,6 +99,10 @@ export class ReportsService {
           },
           _sum: { platformFee: true },
         }),
+        // 6. 待处理工单（待受理 open）
+        this.prisma.ticket.count({
+          where: { status: 'open', deletedAt: null },
+        }),
       ]);
 
     return {
@@ -107,6 +111,7 @@ export class ReportsService {
       onlineMasters,
       monthlyGMV: Number(gmvResult._sum.amount ?? 0),
       monthlyPlatformRevenue: Number(revenueResult._sum.platformFee ?? 0),
+      pendingTickets,
     };
   }
 
@@ -130,19 +135,19 @@ export class ReportsService {
         },
         select: { orderId: true, amount: true, paidAt: true },
       }),
-      // 退款补偿单：反推退用户金额（入账时间近似退款时间）
-      this.prisma.settlement.findMany({
+      // 退款：直读 Refund 表（status=approved，refundedAmount 近似实退；reviewedAt 近似退款时间）
+      this.prisma.refund.findMany({
         where: {
-          type: SettlementType.Compensation,
+          status: 'approved',
           deletedAt: null,
-          settledAt: { gte: start, lte: end },
+          reviewedAt: { gte: start, lte: end },
         },
         select: {
+          id: true,
           orderId: true,
-          orderAmount: true,
-          platformFee: true,
-          masterAmount: true,
-          settledAt: true,
+          amount: true,
+          refundedAmount: true,
+          reviewedAt: true,
         },
       }),
       // 范围内创建的订单：完成率分母/分子
@@ -164,12 +169,11 @@ export class ReportsService {
       }
     }
     for (const r of refunds) {
-      if (!r.settledAt) continue;
-      const s = seriesMap.get(this.bucketOf(dim, r.settledAt).getTime());
+      if (!r.reviewedAt) continue;
+      const s = seriesMap.get(this.bucketOf(dim, r.reviewedAt).getTime());
       if (!s) continue;
       s.refundOrders += 1;
-      s.refundAmount +=
-        Number(r.orderAmount) - Number(r.platformFee) - Number(r.masterAmount);
+      s.refundAmount += Number(r.refundedAmount ?? r.amount);
     }
     for (const o of orders) {
       const s = seriesMap.get(this.bucketOf(dim, o.createdAt).getTime());

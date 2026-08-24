@@ -41,7 +41,7 @@ export class TicketsController {
   @UseGuards(JwtAuthGuard)
   @Get('mine')
   mine(@Req() req: any) {
-    return this.s.listMine(req.user.sub);
+    return this.s.listMine(req.user.sub, req.user.role);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -54,6 +54,14 @@ export class TicketsController {
   @Post(':id/comments')
   addComment(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
     return this.s.addComment(req.user.sub, id, dto);
+  }
+
+  // 师傅申诉（对外留言，客服可见）
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/appeal')
+  @Audit('tickets', 'appeal')
+  appeal(@Req() req: any, @Param('id') id: string, @Body() dto: any) {
+    return this.s.appeal(req.user.sub, id, dto);
   }
 
   // 改派受理人（管理端）

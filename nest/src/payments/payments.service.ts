@@ -280,7 +280,7 @@ export class PaymentsService {
 
   /** 创建退款申请单（投诉处置 result=refund 调用）。同订单已有待审核/已通过单则拒绝重复申请。 */
   async createRefundRequest(dto: {
-    ticketId: string;
+    ticketId?: string;
     orderId: string;
     amount: number;
     reason?: string;
@@ -302,6 +302,26 @@ export class PaymentsService {
         status: 'pending_review',
         requestedById: dto.requestedBy,
       },
+    });
+  }
+
+  /** 运营主动发起退款：按订单号解析订单，创建退款申请（ticketId 为空，非投诉来源）。 */
+  async createRefundByOrderNo(dto: {
+    orderNo: string;
+    amount?: number;
+    reason?: string;
+    requestedBy: string;
+  }) {
+    const order = await this.prisma.order.findFirst({
+      where: { orderNo: String(dto.orderNo).trim() },
+    });
+    if (!order) throw new NotFoundException('订单不存在');
+    return this.createRefundRequest({
+      ticketId: undefined,
+      orderId: order.id,
+      amount: dto.amount ?? Number(order.amount),
+      reason: dto.reason,
+      requestedBy: dto.requestedBy,
     });
   }
 

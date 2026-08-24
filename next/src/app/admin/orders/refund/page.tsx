@@ -12,6 +12,7 @@ import {
   getRefunds,
   approveRefund,
   rejectRefund,
+  createRefund,
   type RefundItem,
   type RefundStatus,
   REFUND_STATUS_LABEL,
@@ -34,6 +35,13 @@ export default function AdminRefundPage() {
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  // 运营主动发起退款（Phase 2.1）：按订单号创建待审核退款单
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createOrderNo, setCreateOrderNo] = useState('');
+  const [createAmount, setCreateAmount] = useState('');
+  const [createReason, setCreateReason] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [createErr, setCreateErr] = useState('');
 
   const { data: list = [], isLoading } = useQuery<RefundItem[]>({
     queryKey: ['admin-refunds', status, orderNo],
@@ -75,6 +83,39 @@ export default function AdminRefundPage() {
     } catch (e: any) {
       setErr(getApiErrorMsg(e));
       setBusy(false);
+    }
+  };
+
+  const openCreate = () => {
+    setCreateOrderNo('');
+    setCreateAmount('');
+    setCreateReason('');
+    setCreateErr('');
+    setCreateOpen(true);
+  };
+  const doCreate = async () => {
+    const o = createOrderNo.trim();
+    if (!o) {
+      setCreateErr('请填写订单号');
+      return;
+    }
+    const amtRaw = createAmount.trim();
+    const amt = amtRaw ? Number(amtRaw) : undefined;
+    if (amtRaw && (amt == null || Number.isNaN(amt))) {
+      setCreateErr('退款金额须为数字');
+      return;
+    }
+    setCreating(true);
+    setCreateErr('');
+    try {
+      await createRefund(o, amt, createReason.trim() || undefined);
+      toast.success('退款申请已创建，等待审核');
+      setCreateOpen(false);
+      qc.invalidateQueries({ queryKey: ['admin-refunds'] });
+    } catch (e: any) {
+      setCreateErr(getApiErrorMsg(e));
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -204,6 +245,9 @@ export default function AdminRefundPage() {
         <span className="field-hint">
           投诉处置退款申请台账 · 待审核 {pendingCount} 条，通过后执行阶梯退款
         </span>
+        <button type="button" className="btn-primary" style={{ marginLeft: 'auto' }} onClick={openCreate}>
+          发起退款
+        </button>
       </div>
 
       <div className="filter-bar">
@@ -287,6 +331,54 @@ export default function AdminRefundPage() {
             <div className="field-hint">通过后将执行阶梯退款（已完单投诉订单同样放行），并回填实退金额。</div>
           )}
           {err && <div className="form-msg">{err}</div>}
+        </Modal>
+      )}
+
+      {createOpen && (
+        <Modal
+          open
+          onClose={() => !creating && setCreateOpen(false)}
+          title="主动发起退款"
+          width="md"
+          footer={
+            <>
+              <button className="btn-secondary" disabled={creating} onClick={() => setCreateOpen(false)}>
+                取消
+              </button>
+              <button className="btn-primary" disabled={creating} onClick={doCreate}>
+                {creating ? '提交中…' : '发起退款'}
+              </button>
+            </>
+          }
+        >
+          <Field label="订单号">
+            <input
+              className="input"
+              placeholder="请输入订单号（如 SO2026...）"
+              value={createOrderNo}
+              onChange={(e) => setCreateOrderNo(e.target.value)}
+            />
+          </Field>
+          <Field label="退款金额（选填，默认退订单全额）">
+            <input
+              className="input"
+              placeholder="留空则退订单全额"
+              value={createAmount}
+              onChange={(e) => setCreateAmount(e.target.value)}
+              inputMode="decimal"
+            />
+          </Field>
+          <Field label="退款原因（选填）">
+            <textarea
+              className="textarea"
+              rows={3}
+              placeholder="运营主动发起的退款说明…"
+              value={createReason}
+              onChange={(e) => setCreateReason(e.target.value)}
+            />
+          </Field>
+          {createErr && <div className="form-msg">{createErr}</div>}
+          <div className="field-hint">提交后生成待审核退款单，审核通过才执行实际退款。</div>
         </Modal>
       )}
     </>

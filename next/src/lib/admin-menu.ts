@@ -77,6 +77,7 @@ export const ADMIN_MENU: AdminMenuItem[] = [
       { key: 'pending', label: '待接订单', path: '/admin/orders/pending', perm: 'orders:read' },
       { key: 'active', label: '正在服务', path: '/admin/orders/active', perm: 'orders:read' },
       { key: 'refund', label: '退款/售后', path: '/admin/orders/refund', perm: 'orders:refund' },
+      { key: 'aftersale', label: '售后工作台', path: '/admin/aftersale', perm: 'orders:refund' },
     ],
   },
   {

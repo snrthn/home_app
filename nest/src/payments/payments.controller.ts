@@ -110,6 +110,24 @@ export class PaymentsController {
     return this.payments.listRefunds(q);
   }
 
+  // 运营主动发起退款（非投诉来源，进审核流）
+  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
+  @Roles(Role.Admin)
+  @RequirePerm('orders:refund')
+  @Audit('payments', 'orders:refund')
+  @Post('refunds')
+  createRefund(
+    @Req() req: any,
+    @Body() dto: { orderNo: string; amount?: number; reason?: string },
+  ) {
+    return this.payments.createRefundByOrderNo({
+      orderNo: dto.orderNo,
+      amount: dto.amount,
+      reason: dto.reason,
+      requestedBy: req.user.sub,
+    });
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
   @Roles(Role.Admin)
   @RequirePerm('orders:refund')

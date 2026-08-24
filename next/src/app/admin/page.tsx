@@ -34,6 +34,7 @@ export default function AdminHome() {
   const stats = [
     { label: '今日订单', value: isLoading ? '加载中' : fmt(data?.todayOrders) },
     { label: '待接订单', value: isLoading ? '加载中' : fmt(data?.pendingOrders) },
+    { label: '待处理工单', value: isLoading ? '加载中' : fmt(data?.pendingTickets) },
     { label: '在线师傅', value: isLoading ? '加载中' : fmt(data?.onlineMasters) },
     { label: '本月 GMV', value: isLoading ? '加载中' : fmtMoney(data?.monthlyGMV) },
     { label: '平台净收入', value: isLoading ? '加载中' : fmtMoney(data?.monthlyPlatformRevenue) },

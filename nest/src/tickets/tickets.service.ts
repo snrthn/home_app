@@ -119,10 +119,11 @@ export class TicketsService {
     });
   }
 
-  // 我的工单/反馈（客户端：customerId=本人）
-  async listMine(actorId: string) {
+  // 我的工单/反馈：客户端按 customerId、师傅端按 masterId（role 区分）
+  async listMine(actorId: string, role?: string) {
+    const where: any = role === 'master' ? { masterId: actorId } : { customerId: actorId };
     return this.prisma.ticket.findMany({
-      where: { customerId: actorId },
+      where,
       orderBy: { createdAt: 'desc' },
       include: {
         complaint: true,
@@ -184,6 +185,15 @@ export class TicketsService {
       this.gateway.broadcastTicketUpdate(updated);
     }
     return c;
+  }
+
+  // 师傅申诉（对外留言，客服可见）：复用 addComment，visibleTo=master
+  async appeal(actorId: string, id: string, dto: { content: string }) {
+    return this.addComment(actorId, id, {
+      content: dto.content,
+      isInternal: false,
+      visibleTo: 'master',
+    });
   }
 
   // 改派受理人

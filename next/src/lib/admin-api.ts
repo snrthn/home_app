@@ -700,6 +700,7 @@ export interface DashboardStats {
   onlineMasters: number;
   monthlyGMV: number;
   monthlyPlatformRevenue: number;
+  pendingTickets: number;
 }
 
 export function getDashboard(): Promise<DashboardStats> {

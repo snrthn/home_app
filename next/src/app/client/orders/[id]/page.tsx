@@ -48,6 +48,7 @@ export default function ClientOrderDetailPage() {
   const [reviewComment, setReviewComment] = useState('');
   const [reviewAnonymous, setReviewAnonymous] = useState(false);
   const [reviewing, setReviewing] = useState(false);
+  const [lowRatePrompt, setLowRatePrompt] = useState(false);
 
   const { data: orders = [], isLoading } = useQuery({
     queryKey: QK.orderMine,
@@ -154,6 +155,8 @@ export default function ClientOrderDetailPage() {
       toast.success('评价成功，感谢您的反馈');
       setReviewOpen(false);
       refresh();
+      // 1-2 星低分：引导用户发起投诉（强校验在后端 createTicket 已做）
+      if (reviewRating <= 2) setLowRatePrompt(true);
     } catch (e: any) {
       toast.error(getApiErrorMsg(e));
     } finally {
@@ -454,6 +457,19 @@ export default function ClientOrderDetailPage() {
               去评价
             </button>
           )}
+          {(order.status === 'reviewed' || order.status === 'evaluated') && (
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() =>
+                router.push(
+                  `/client/complaints?orderId=${order.id}${order.master?.id ? `&againstMasterId=${order.master.id}` : ''}`,
+                )
+              }
+            >
+              投诉
+            </button>
+          )}
           {order.status === 'evaluated' && order.serviceItem?.id && (
             <button
               type="button"
@@ -478,6 +494,31 @@ export default function ClientOrderDetailPage() {
             </button>
           )}
         </div>
+
+        {lowRatePrompt && (
+          <div className="card" style={{ marginTop: 14, borderColor: 'var(--color-warning, #f5a623)', background: '#fff8ef' }}>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>评价较低，若服务存在问题可发起投诉</div>
+            <p className="field-hint" style={{ marginTop: 4 }}>
+              平台将在 SLA 内跟进处理，投诉成立可申请退款 / 补偿。
+            </p>
+            <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+              <button
+                type="button"
+                className="btn-danger"
+                onClick={() =>
+                  router.push(
+                    `/client/complaints?orderId=${order.id}${order.master?.id ? `&againstMasterId=${order.master.id}` : ''}`,
+                  )
+                }
+              >
+                去投诉
+              </button>
+              <button type="button" className="btn-ghost" onClick={() => setLowRatePrompt(false)}>
+                暂不
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <Modal
