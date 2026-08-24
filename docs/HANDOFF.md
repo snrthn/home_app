@@ -41,6 +41,7 @@
 | **退款/售后设计** | 价值分析 + 最小闭环（Refund 表审核流），Phase 1 已落地（先读其实施清单节） | `docs/refund-aftersale-design.md` |
 | **智能派单设计** | 价值分析 + candidates 匹配算法 + 派单工作台 + 看板/自动派单，Phase 1/1.5/2 已落地（先读第 0 节） | `docs/dispatch-design.md` |
 | **WS 订阅改造方案** | JWT 握手鉴权 + 房间定向（已实施并验证） | `docs/WS_SUBSCRIPTION_PLAN.md` |
+| **服务类目设计** | 三级树形模型基线数据（4 板块/16 二级/37 三级），seed 脚本幂等策略 | `docs/service-category-tree.md` |
 | **项目计划** | 品牌定位、技术栈选型、数据库设计、路线图、决策清单（历史快照，支付模型已被后续迭代取代） | `docs/plan.md` |
 | **管理员初始化 SQL** | super_admin 种子账号 | `docs/sql/init-admin.sql` |
 | **MySQL 修复脚本** | MySQL 服务启动/修复 bat | `docs/shell/fix-mysql-service.bat` |
@@ -368,6 +369,13 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 - [x] 找回密码全链路（详见第 21 节）：`POST /api/auth/reset-password`（OTP 免旧密码）+ `/forgot-password` 独立页 + 登录页入口 + 路由守卫放行（2026-08-23）
 - [x] 短信验证码 mock/real 双模式 + 阿里云真实网关（详见第 21 节）：SystemConfig.smsMode 开关 + 原生 HTTP 阿里云 provider（零 SDK）+ 运营平台配置页网关参数表单（2026-08-23）
 - [x] AccessKeySecret 加密存储（详见第 21 节）：AES-256-GCM `enc:v1:` 格式 + API 掩码返回 + `SMS_SECRET_ENCRYPT_KEY`（2026-08-23）
+- [x] 三级服务类目种子数据（详见第 22 节）：`seed-categories.js` 预置 4 板块/16 二级/37 三级类目 + 设计文档 `docs/service-category-tree.md`（2026-08-24）
+- [x] 一级类目 icon 改 emoji + 后台类目编辑支持图标/描述输入（2026-08-24）
+- [x] 类目 seed 幂等修正：只更新 description/sort，不覆盖后台手动改的 icon/name/isActive（2026-08-24）
+- [x] 服务项目种子数据（详见第 22 节）：`seed-items.js` 为三级类目预置示例服务项目（价格/时长/封面图/富文本介绍，幂等不覆盖管理员修改）（2026-08-24）
+- [x] DetailModal 组件 + 用户/师傅详情弹窗 + 认证审核合并优化（详见第 22 节）：Descriptions 风格 + Tag 标签 + 分段操作按钮，customers/masters/verifications 三页统一（2026-08-24）
+- [x] 内容种子脚本 `seed-content.js`：三端关于我们（SiteContent）+ 三端协议（AgreementTemplate+Version 已发布）+ 平台上线公告（Notice），幂等不覆盖运营修改（2026-08-24）
+- [x] 师傅端首页布局优化（详见第 22 节）：Hero 渐变头区（头像+昵称+状态+评分+三指标条）+ 可提现余额大卡（含提现中副文案+立即提现）+ 快捷4宫格（SVG图标+角标）+ 进行中订单卡片（SVG替代emoji）+ WS实时刷新；头像 resolveAsset 修复 + 收入明细跳转修复（2026-08-24）
 
 ### 待办 / 已知缺口
 
@@ -589,6 +597,74 @@ cd nest && PORT=3721 pnpm start:dev
 3. 独立 node 脚本的 `@prisma/client` 可能与 dist 运行时 client 不同步（字段 undefined）——核验落库值用 **mysql CLI 直查**最干净
 4. C 盘满 0 字节 → Git Bash/Edit/Write 全 ENOSPC（Bash 根挂在 C:）；清 Temp 腾 ~50MB 够小文件编辑
 5. 阿里云 SDK（`@alicloud/dysmsapi20170525`）沙箱装不上 → 原生 HTTP 手写签名是可靠替代
+
+---
+
+## 22. 种子数据 + 详情弹窗 + 师傅端首页优化（2026-08-24 落地）
+
+> 覆盖：三级服务类目/服务项目/内容种子、DetailModal 组件与三页详情弹窗统一、师傅端首页 v2 布局重做
+
+### 22.1 三级服务类目种子
+
+- **设计文档**：`docs/service-category-tree.md` — 三级树形模型（一级=业务板块/二级=设备品类/三级=具体场景），ServiceItem 挂三级叶子
+- **种子脚本**：`nest/prisma/seed-categories.js`（`pnpm seed:categories`）— 预置 4 板块（家电清洗/家电维修/家电安装/商用设备）/16 二级/37 三级类目
+- **幂等策略**：按 `id` upsert，**只更新 description/sort**，不覆盖后台手动改的 `icon`/`name`/`isActive`（早期版本会覆盖，已修正）
+- **一级类目 icon 改 emoji**：`ServiceCategory.icon` 字段存 emoji 字符串（如 🧹🔧⚙️🏢），后台类目编辑页加 icon/描述输入框
+- **前置依赖**：无（独立于 `seed.js`，可单独跑）
+
+### 22.2 服务项目种子
+
+- **脚本**：`nest/prisma/seed-items.js`（`pnpm seed:items`）— 为三级类目预置示例服务项目（含价格/时长/封面图/富文本介绍模板：服务流程+亮点+注意事项）
+- **幂等策略**：用「类目 id + 项目名称」定位，已存在只更新 price/unit/estimatedDuration/coverImage/description/sort/isActive，不覆盖管理员后台改过的字段；不删除管理员自建项目
+- **前置**：需先跑 `seed-categories.js`（类目存在才能挂项目）
+
+### 22.3 内容种子
+
+- **脚本**：`nest/prisma/seed-content.js`（`pnpm seed:content`）— 预置三端运营内容：
+  - **关于我们**（`SiteContent`）：三端各一篇富文本（品牌介绍+服务承诺+联系方式）
+  - **协议模板**（`AgreementTemplate` + `AgreementVersion`）：注册协议 + 隐私政策，三端各两份，已发布 v1
+  - **公告**（`Notice`）：三端「平台一期上线」庆祝公告，已发布、全范围
+- **幂等策略**：关于我们按 key upsert 只在内容为空时写入；协议按 code upsert 只在无已发布版本时创建；公告按 scope+title 去重
+- **⚠️ publishedAt 字段**：`AgreementVersion` 无 `publishedAt` 列，早期脚本误写已修正（commit `e77881e`）
+
+### 22.4 DetailModal 组件 + 详情弹窗统一
+
+- **新建组件**：`next/src/components/admin/DetailModal.tsx` — 与 ConfirmModal/EditModal 同风格的只读详情弹窗
+  - 导出 `Descriptions`（标题分段 + 网格布局）、`Descriptions.Item`（label+value）、`Tag`（状态标签）、`DetailRow`（旧版兼容）
+  - 支持 `size` prop（sm/md/lg）、`useEscClose` 键盘关闭
+- **应用页面**：
+  - `admin/users/customers/page.tsx` — 客户详情弹窗（Descriptions 风格）
+  - `admin/users/masters/page.tsx` — 师傅详情弹窗（Descriptions 风格）
+  - `admin/users/verifications/page.tsx` — 认证审核合并优化：详情与审核弹窗合并为一个，基本信息/技能信息分段 Descriptions + Tag 标签 + 通过/驳回分段操作按钮（减少弹窗层级，操作更直接）
+- **globals.css**：新增 `.detail-modal-*` / `.descriptions-*` / `.tag-*` 系列样式（148 行）
+
+### 22.5 师傅端首页 v2 布局
+
+- **重写文件**：`next/src/app/master/page.tsx` + `next/src/app/globals.css`（新增 `.master-home-*` 系列样式）
+- **区块结构**（从上到下）：
+  1. **Hero 渐变头区**（冷蓝渐变）：圆形头像（`resolveAsset` 修复相对路径）+ 昵称 + 审核状态 Tag + 评分星星 + 累计接单数；底部三指标条（接单池新单/进行中/待验收，flex space-around 单行分散对齐，字号统一 16px/11px）
+  2. **可提现余额大卡**：超大金额 + 「提现中 ¥X」副文案 + 圆角「立即提现」主按钮（跳 `/master/me/income`）
+  3. **快捷功能 4 宫格**：接单池（未读角标）/我的订单/收入明细（跳 `/master/me/income/details`）/平台公告，全部内联 SVG 图标替代 emoji
+  4. **进行中订单卡片**：服务名+状态标签 / 预约时间+金额 / 地址（pin SVG）+ 右箭头
+- **修复记录**：
+  - 头像不显示 → `resolveAsset(p.avatar)` 拼后端 `API_ORIGIN` 前缀（个人中心已用，首页之前裸用相对路径 404）
+  - 收入明细跳转错误 → href 从 `/master/me/income`（提现页）改为 `/master/me/income/details`（明细页）
+  - 今日数据条留白/重复 → 删除独立卡片，三指标合并到 Hero 底部；本月入账/提现中移到余额大卡副文案
+- **数据逻辑不变**：rating/orderCount/avatar 从 profile；pool/ongoing/pendingConfirm/monthCredited/available/withdrawing 沿用现有接口，WS `useOrderSocket` 实时刷新保留
+
+### 22.6 新增 npm scripts（nest/package.json）
+
+| 命令 | 作用 |
+|---|---|
+| `pnpm seed:categories` | `node prisma/seed-categories.js` — 三级类目种子 |
+| `pnpm seed:items` | `node prisma/seed-items.js` — 服务项目种子 |
+| `pnpm seed:content` | `node prisma/seed-content.js` — 内容种子 |
+
+> 三个种子脚本相互独立，可按需单独执行。`pnpm seed`（seed.js）仍为权限/角色种子，不受影响。
+
+### 22.7 部署脚本同步
+
+- `scripts/deploy.sh` + `scripts/db-setup.sh` 新增三个 seed 命令调用（部署时自动跑种子，保证生产环境有基线数据）
 
 ---
 
