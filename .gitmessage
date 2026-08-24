@@ -1,0 +1,20 @@
+# <type>(<scope>): <subject>
+#
+# type:     feat | fix | refactor | perf | style | test | docs | ci | build | deploy | chore | revert
+# scope:    nest | next | shared | docs | ci | deps | root（可选）
+# subject:  简短描述，72 字以内，中文，不加句号
+#
+# ---------- 示例 ----------
+# feat(nest): 订单退款阶梯分账实现
+# fix(next): TabBar 警告修复
+# test(nest): 售后链 e2e 补充补偿流程
+# docs: 提交规范文档
+#
+# 正文（可选）：
+# - 改了什么
+# - 为什么改
+# - 影响范围
+#
+# 脚注（可选）：
+# BREAKING CHANGE: <破坏性变更说明>
+# Closes #<issue>
