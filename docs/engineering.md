@@ -63,12 +63,30 @@
 - **证据**：`nest/package.json`、`next/package.json`、`package.json` 均无 `test` 脚本；无 jest/vitest 配置；无 `*.spec.ts` / `*.test.ts`
 - **影响**：支付/退款状态机、派单 candidates 算法、分账 `resolveTierRatio` 等核心逻辑**无回归保护**，任何重构即裸奔。
 - **建议**：先补最高价值单测（分账阶梯计算、退款阶梯、派单评分排序），再补 1 条 e2e smoke（登录 → 下单 → 支付确认 → 退款审核）。框架用 vitest + supertest（nest）即可，不引入重量级依赖。
-- **状态**：🔄 部分完成（2026-08-24：基础设施 + 首条核心单测；退款阶梯/派单排序待补）
+- **状态**：🔄 进行中（2026-08-24：基础设施 + P0 纯函数层 + P1 金额守卫完成；P2 e2e 待补）
 - **验证**：
   - **基础设施**：`nest/jest.config.js` + `nest/tsconfig.spec.json`【新建】——jest + ts-jest + `testRegex .*\.spec\.ts$`，`@laoma/shared` 经 `moduleNameMapper` 映射到 `shared/dist/index.js`（避免 pnpm 双副本解析漂移）；`nest/package.json` 加 `test` script
-  - **首条单测**：`nest/src/commission/tier.util.spec.ts`【新建】——把 `commission.service.ts` 内联的 `CANCELLABLE_LIFECYCLE/resolveTierRatio/clamp01` 抽到 `tier.util.ts`【新建】（纯函数可测），单测覆盖区间继承/最近断点优先/空 tiers 兜底/clamp01 越界 4 组语义，**8/8 PASS**（`pnpm --filter @laoma/backend test`）；重构为纯抽取，service 行为零变更（diff 仅删除内联实现 + import）
-  - **剩余**：退款阶梯（`payments.service` 退款比例分支）、派单评分排序（`orders.service.listCandidates` 排序键）两条单测未补；e2e smoke 未做——留待后续迭代
+  - **P0 纯函数层完成（2026-08-24）**：5 suites / 107 tests PASS，双端 `tsc --noEmit` EXIT=0
+    - `order-status.spec.ts`：`canTransition` 合法/非法流转、未知状态、终态无出口（18 tests）
+    - `region-match.spec.ts`：`regionMatches` 空/省/市/区分级、多规则、名称不参与、null 透传 + `serviceAreasToRules` level 1/2/3（25 tests）
+    - `split.util.spec.ts`：`splitNormal` 费率 0/0.1/0.5/1 + 金额边界 + 精度 + `splitRefund` full/tiered/keep_commission 三策略 + 阶梯继承 + 边界（22 tests）——从 `commission.service.ts` 提纯到 `split.util.ts`，service 改薄封装，行为零变更
+    - `master.util.spec.ts`：`masterCoversOrder` 所在地∪接单范围并集语义 + 空数据 + `slotsOverlap` 区间相交/边界相接/自由文本/空值（29 tests）——从 `orders.service.ts` 提纯到 `master.util.ts`，service 改导入调用，行为零变更
+    - `tier.util.spec.ts`（前批次）：`resolveTierRatio` 区间继承 + `clamp01`（8 tests）
+    - 被测文件语句覆盖 96-100%；整体覆盖率 2.55%（从 0.45% 提升 5.7 倍）
+  - **P1 金额守卫完成（2026-08-24）**：5 个目标全部覆盖，10 suites / 195 tests PASS，双端 `tsc --noEmit` EXIT=0
+    - `payments.service.spec.ts`：`refund` 三策略守卫 + 前置校验(NotFound/Forbidden/BadRequest) + allowCompleted 分支 + 两段式 transition + createCompensation 条件 + reason 透传（19 tests）
+    - `orders.cancel.spec.ts`：`cancel` 支付前/后分叉 + 权限验证(客户/师傅/管理员) + stageStatus 保留 + cancelReason 透传（12 tests）
+    - `settlements.service.spec.ts`：`releaseToMaster` 幂等 + `createCompensation` 条件守卫 + `credit`/`reject` 状态机（21 tests）
+    - `withdrawals.service.spec.ts`：`create` 防超提(事务内聚合 credited−paid−pending) + `markPaid`/`reject` 乐观锁（17 tests）
+    - `commission.resolve.spec.ts`：`resolve` 三级降级(service→category→global→default) + 类目链限深 10 + `toSnapshot` 规整 + `snapshotFromOrder` 快照优先（19 tests）
+    - 共享 mock 工厂 `src/test/mocks.ts`：createMockPrisma/Commission/Orders/Settlements/Gateway/Provider
+    - 整体覆盖率 ~8%（mock 了 prisma 层，controller/repository 行数未覆盖，~18% 为乐观估计）
+  - **剩余**：P2 e2e 链路（正向全链 + 售后链）——留待后续迭代
 - **框架说明**：实际选用 jest（非 vitest）——nest 官方默认 + 沙箱安装链已验证
+- **覆盖规划（2026-08-24 定稿）**：核心业务链路已梳理（下单→托管→接单→履约→验收→结算 / 逆向退款 / 售后投诉 / 师傅提现），按「改错会赔钱」优先级分三批次推进，详见 `docs/test-plan.md`：
+  - **P0 纯函数层** ✅：`canTransition`、`regionMatches`、`serviceAreasToRules`、`resolveTierRatio`、`splitNormal`、`splitRefund`、`masterCoversOrder`（提纯）、`slotsOverlap`（提纯）——无 DB，纯输入输出，一批 spec，覆盖率 0.45% → 2.55%
+  - **P1 金额守卫** ✅：`payments.refund` 三策略、`orders.cancel` 分叉、`settlements.releaseToMaster` 幂等、`withdrawals.create` 防超提、`commission.resolve` 三级降级——mock prisma + mock provider，service 级，10 suites / 195 tests PASS，覆盖率 → ~8%
+  - **P2 链路 e2e**：正向全链（下单→支付→抢单→履约→验收→结算）+ 售后链（投诉→审核→退款）——supertest 打真服务，→ ~22%+
 
 #### E-05　无 Lint / 格式化
 

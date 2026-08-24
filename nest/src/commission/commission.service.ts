@@ -2,23 +2,15 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { OrderStatus } from '@laoma/shared';
 import { CANCELLABLE_LIFECYCLE, clamp01, resolveTierRatio } from './tier.util';
+import {
+  type CommissionSnapshot,
+  type RefundPolicy,
+  round2,
+  splitNormal,
+  splitRefund,
+} from './split.util';
 
-/** 退款佣金策略（与 schema.prisma RefundPolicy 对齐） */
-export type RefundPolicy = 'full' | 'tiered' | 'keep_commission';
-
-/** 分账规则解析结果 / 订单快照结构（固化进 Order.commissionSnapshot） */
-export interface CommissionSnapshot {
-  /** 平台抽佣率 0~1（师傅得 1 - platformRate） */
-  platformRate: number;
-  /** 退款佣金策略 */
-  refundPolicy: RefundPolicy;
-  /** 阶梯退款比例：键为订单状态，值为退给用户的比例 0~1；缺省状态退全额 */
-  refundTiers: Record<string, number>;
-  /** 规则来源，便于审计与排查：service:<id> / category:<id> / global / default */
-  source: string;
-  /** 解析时间（ISO） */
-  resolvedAt: string;
-}
+export type { CommissionSnapshot, RefundPolicy };
 
 /** 兜底默认值 —— 必须与改造前的硬编码行为完全一致（platformRate=0 不抽佣、
  *  departing 退 80% / arrived 退 50%），保证未配置任何规则时零行为变更。 */
@@ -33,8 +25,6 @@ export const DEFAULT_SNAPSHOT: Omit<CommissionSnapshot, 'resolvedAt'> = {
   refundTiers: DEFAULT_TIERS,
   source: 'default',
 };
-
-const round2 = (n: number) => Math.round(n * 100) / 100;
 
 @Injectable()
 export class CommissionService {
@@ -150,42 +140,12 @@ export class CommissionService {
 
   /** 常规结算分账（订单验收后）：平台佣金 + 师傅所得 */
   splitNormal(amount: number, snap: CommissionSnapshot) {
-    const amt = round2(Number(amount) || 0);
-    const platformFee = round2(amt * snap.platformRate);
-    return { platformFee, masterAmount: round2(amt - platformFee) };
+    return splitNormal(amount, snap);
   }
 
-  /** 退款分账（异常场景，悖论#2 的落地）：一次算清「退用户 / 平台留成 / 师傅补偿」三方。
-   *  - full            ：忽略阶梯，退用户 100%，平台与师傅均无留成
-   *  - tiered（默认）   ：按 refundTiers 留成，留成再按 platformRate 拆平台/师傅
-   *  - keep_commission ：平台佣金始终不退，平台先保住佣金，余下留成给师傅
-   */
+  /** 退款分账（异常场景）：一次算清「退用户 / 平台留成 / 师傅补偿」三方。 */
   splitRefund(amount: number, status: string, snap: CommissionSnapshot) {
-    const amt = round2(Number(amount) || 0);
-    // 区间语义：沿生命周期向前找最近断点，而非按状态直接查（缺省≠100%）
-    const tierRatio = resolveTierRatio(status, snap.refundTiers ?? {});
-
-    let refundRatio = tierRatio;
-    if (snap.refundPolicy === 'full') refundRatio = 1;
-    else if (snap.refundPolicy === 'keep_commission')
-      refundRatio = clamp01(Math.min(tierRatio, 1 - snap.platformRate));
-
-    const refundAmount = round2(amt * refundRatio);
-    const keep = round2(amt - refundAmount); // 未退给用户的部分，由平台与师傅分
-    const fullCommission = round2(amt * snap.platformRate);
-
-    // keep_commission 下平台优先保住佣金；tiered 下留成按比例拆
-    const platformKeep =
-      snap.refundPolicy === 'keep_commission'
-        ? round2(Math.min(keep, fullCommission))
-        : round2(keep * snap.platformRate);
-
-    return {
-      refundRatio,
-      refundAmount,
-      platformKeep,
-      masterCompensation: round2(keep - platformKeep),
-    };
+    return splitRefund(amount, status, snap);
   }
 
   // ===================== 管理端 CRUD =====================
