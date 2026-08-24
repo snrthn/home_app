@@ -47,7 +47,7 @@ export default function AcceptSettingsPage() {
     queryKey: QK.profile('master'),
     queryFn: fetchProfile,
   });
-  const profile = data as any;
+  const profile = data;
   const master = profile?.master ?? {};
 
   const [skills, setSkills] = useState<string[]>([]);

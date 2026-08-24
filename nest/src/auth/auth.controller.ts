@@ -9,8 +9,11 @@ import {
   Patch,
   Headers,
 } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { CurrentUser } from './current-user.decorator';
+import type { AuthUser } from './auth-user.interface';
 import { SendCodeDto } from './dto/send-code.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -51,8 +54,8 @@ export class AuthController {
   @Post('register')
   async register(
     @Body() dto: RegisterDto,
-    @Req() req: any,
-    @Res({ passthrough: true }) res: any,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
   ) {
     const result =
       dto.role === Role.Master
@@ -70,8 +73,8 @@ export class AuthController {
   @Post('login')
   async login(
     @Body() dto: LoginDto,
-    @Req() req: any,
-    @Res({ passthrough: true }) res: any,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
   ) {
     const mode = dto.mode ?? (dto.role === Role.Admin ? 'admin' : 'code');
     let result;
@@ -90,8 +93,8 @@ export class AuthController {
   @Post('refresh')
   async refresh(
     @Body() dto: RefreshDto,
-    @Req() req: any,
-    @Res({ passthrough: true }) res: any,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
   ) {
     const result = await this.auth.refreshToken(dto.refreshToken);
     setRoleTokenCookie(res, req, result.role, result.accessToken);
@@ -100,21 +103,21 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('profile')
-  profile(@Req() req: any) {
-    return this.auth.profile(req.user.sub);
+  profile(@CurrentUser() user: AuthUser) {
+    return this.auth.profile(user.sub);
   }
 
   @UseGuards(JwtAuthGuard)
   @Patch('profile')
-  updateProfile(@Req() req: any, @Body() dto: UpdateProfileDto) {
-    return this.auth.updateProfile(req.user.sub, dto);
+  updateProfile(@CurrentUser() user: AuthUser, @Body() dto: UpdateProfileDto) {
+    return this.auth.updateProfile(user.sub, dto);
   }
 
   // 设置 / 重置登录密码（需登录态）。已有密码时须传 oldPassword 校验。
   @UseGuards(JwtAuthGuard)
   @Post('password')
-  setPassword(@Req() req: any, @Body() dto: SetPasswordDto) {
-    return this.auth.setPassword(req.user.sub, dto);
+  setPassword(@CurrentUser() user: AuthUser, @Body() dto: SetPasswordDto) {
+    return this.auth.setPassword(user.sub, dto);
   }
 
   // 找回密码（公开，无需登录态）：手机号 + 验证码 + 新密码，OTP 即身份凭证。
@@ -126,15 +129,15 @@ export class AuthController {
   // 登录心跳：刷新 lastActiveAt 保活「在线」状态，供工作台在线师傅统计。
   @UseGuards(JwtAuthGuard)
   @Post('heartbeat')
-  heartbeat(@Req() req: any) {
-    return this.auth.heartbeat(req.user.sub);
+  heartbeat(@CurrentUser() user: AuthUser) {
+    return this.auth.heartbeat(user.sub);
   }
 
   // 退出登录：幂等（token 已失效/缺失也返回成功）；同时清除该角色的服务端 cookie
   @Post('logout')
   logout(
-    @Req() req: any,
-    @Res({ passthrough: true }) res: any,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
     @Headers('authorization') authorization?: string,
   ) {
     this.auth.logoutFromHeader(authorization);

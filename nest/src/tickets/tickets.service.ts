@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { OrdersGateway } from '../gateway/orders.gateway';
 import { PaymentsService } from '../payments/payments.service';
 import { SettlementsService } from '../settlements/settlements.service';
+import type { CreateTicketDto, AppealDto, ResolveComplaintDto } from './tickets.dto';
 
 // SLA 档位（分钟）：首响 / 处理完结
 const SLA_FIRST_MIN = { urgent: 30, high: 120, normal: 1440, low: 4320 };
@@ -15,6 +16,21 @@ const SLA_RESOLVE_MIN = { urgent: 480, high: 1440, normal: 4320, low: 10080 };
 
 // 仅已完成订单可投诉
 const COMPLAINTABLE = ['reviewed', 'evaluated'];
+
+export interface TicketListFilter {
+  status?: string;
+  type?: string;
+  priority?: string;
+  assignee?: string;
+  my?: string;
+  active?: string;
+}
+
+interface AddCommentInput {
+  content: string;
+  isInternal?: boolean;
+  visibleTo?: string;
+}
 
 @Injectable()
 export class TicketsService {
@@ -46,7 +62,7 @@ export class TicketsService {
   }
 
   // 提交工单（客户/师傅/系统均可；投诉强校验已完成订单）
-  async createTicket(actorId: string, dto: any) {
+  async createTicket(actorId: string, dto: CreateTicketDto) {
     const type = dto.type ?? 'consult';
     if (type === 'complaint') {
       if (!dto.orderId) throw new BadRequestException('投诉必须关联订单');
@@ -66,13 +82,13 @@ export class TicketsService {
     const ticket = await this.prisma.ticket.create({
       data: {
         ticketNo: await this.nextTicketNo(),
-        type,
+        type: type as never,
         source: dto.source ?? 'client',
         title: dto.title,
         content: dto.content,
-        images: dto.images ?? null,
+        images: dto.images ?? undefined,
         status: 'open',
-        priority,
+        priority: priority as never,
         orderId: dto.orderId ?? null,
         reviewId: dto.reviewId ?? null,
         customerId: type === 'complaint' ? actorId : dto.customerId ?? null,
@@ -84,7 +100,7 @@ export class TicketsService {
             ? {
                 create: {
                   againstMasterId: dto.againstMasterId ?? null,
-                  reason: dto.reason,
+                  reason: dto.reason as never,
                   expectation: dto.expectation ?? null,
                   handledAt: new Date(),
                 },
@@ -98,14 +114,14 @@ export class TicketsService {
   }
 
   // 工单池列表（管理端过滤）
-  async list(filter: any) {
-    const where: any = {};
-    if (filter.status) where.status = filter.status;
-    if (filter.type) where.type = filter.type;
-    if (filter.priority) where.priority = filter.priority;
+  async list(filter: TicketListFilter) {
+    const where: Record<string, unknown> = {};
+    if (filter.status) where.status = filter.status as never;
+    if (filter.type) where.type = filter.type as never;
+    if (filter.priority) where.priority = filter.priority as never;
     if (filter.assignee) where.assigneeId = filter.assignee;
     if (filter.my) where.assigneeId = filter.my;
-    if (filter.active) where.status = { in: ['open', 'processing', 'pendingUser'] };
+    if (filter.active) where.status = { in: ['open', 'processing', 'pendingUser'] } as never;
     return this.prisma.ticket.findMany({
       where,
       orderBy: [{ escalationLevel: 'desc' }, { priority: 'desc' }, { createdAt: 'desc' }],
@@ -121,7 +137,7 @@ export class TicketsService {
 
   // 我的工单/反馈：客户端按 customerId、师傅端按 masterId（role 区分）
   async listMine(actorId: string, role?: string) {
-    const where: any = role === 'master' ? { masterId: actorId } : { customerId: actorId };
+    const where = role === 'master' ? { masterId: actorId } : { customerId: actorId };
     return this.prisma.ticket.findMany({
       where,
       orderBy: { createdAt: 'desc' },
@@ -165,7 +181,7 @@ export class TicketsService {
   }
 
   // 添加留言（isInternal=内部备注，仅客服可见）
-  async addComment(actorId: string, id: string, dto: any) {
+  async addComment(actorId: string, id: string, dto: AddCommentInput) {
     await this.getById(id);
     const c = await this.prisma.ticketComment.create({
       data: {
@@ -188,7 +204,7 @@ export class TicketsService {
   }
 
   // 师傅申诉（对外留言，客服可见）：复用 addComment，visibleTo=master
-  async appeal(actorId: string, id: string, dto: { content: string }) {
+  async appeal(actorId: string, id: string, dto: AppealDto) {
     return this.addComment(actorId, id, {
       content: dto.content,
       isInternal: false,
@@ -210,15 +226,15 @@ export class TicketsService {
   async changeStatus(id: string, to: string) {
     const allowed = ['open', 'processing', 'pendingUser', 'resolved', 'rejected', 'closed'];
     if (!allowed.includes(to)) throw new BadRequestException('非法状态');
-    const data: any = { status: to };
+    const data: { status: string; closedAt?: Date } = { status: to };
     if (to === 'resolved' || to === 'closed') data.closedAt = new Date();
-    const t = await this.prisma.ticket.update({ where: { id }, data });
+    const t = await this.prisma.ticket.update({ where: { id }, data: data as never });
     this.gateway.broadcastTicketUpdate(t);
     return t;
   }
 
   // 投诉处置（complaints:handle）：结果四选一，联动退款/补偿
-  async resolveComplaint(actorId: string, id: string, dto: any) {
+  async resolveComplaint(actorId: string, id: string, dto: ResolveComplaintDto) {
     const t = await this.getById(id);
     if (t.type !== 'complaint') throw new BadRequestException('仅投诉工单可处置');
     if (!t.complaint) throw new BadRequestException('投诉数据缺失');
@@ -226,9 +242,9 @@ export class TicketsService {
     const ALLOWED_RESULTS = ['refund', 'compensate', 'redispatch', 'no_fault'];
     if (!ALLOWED_RESULTS.includes(dto.result))
       throw new BadRequestException('处置结果非法');
-    const result = dto.result as any;
+    const result = dto.result;
     let refundSettlementId: string | null = null;
-    const order = t.order as any;
+    const order = t.order;
     if (result === 'refund' && order) {
       // 审核流：仅创建退款申请（pending_review），不直接退款。
       // 已完单（reviewed/evaluated）直接调 payments.refund 会被状态机双重拦截，
@@ -260,7 +276,7 @@ export class TicketsService {
     });
     await this.prisma.complaint.update({
       where: { ticketId: id },
-      data: { result, handledById: actorId, handledAt: new Date(), refundSettlementId },
+      data: { result: result as never, handledById: actorId, handledAt: new Date(), refundSettlementId },
     });
     this.gateway.broadcastTicketUpdate(updated);
     return updated;
@@ -271,9 +287,9 @@ export class TicketsService {
     const active = await this.prisma.ticket.findMany({
       where: { status: { in: ['open', 'processing', 'pendingUser'] } },
     });
-    const due: any[] = [];
+    const due: Awaited<ReturnType<typeof this.prisma.ticket.update>>[] = [];
     for (const t of active) {
-      const data: any = {};
+      const data: Record<string, unknown> = {};
       let changed = false;
       if (!t.escalatedFirstResponse && t.firstResponseDeadline && t.firstResponseDeadline < now && t.status === 'open') {
         data.priority = this.bumpPriority(t.priority);
@@ -289,7 +305,7 @@ export class TicketsService {
         changed = true;
       }
       if (changed) {
-        const u = await this.prisma.ticket.update({ where: { id: t.id }, data });
+        const u = await this.prisma.ticket.update({ where: { id: t.id }, data: data as never });
         await this.prisma.ticketComment.create({
           data: {
             ticketId: t.id,

@@ -30,8 +30,8 @@ export class AgreementsService {
     if (exist) throw new BadRequestException('该端该类型的协议已存在');
     return this.prisma.agreementTemplate.create({
       data: {
-        scope: dto.scope as any,
-        type: dto.type as any,
+        scope: dto.scope as never,
+        type: dto.type as never,
         code,
         title: dto.title,
       },
@@ -150,7 +150,7 @@ export class AgreementsService {
   async getDefault(scope: string, type: string) {
     this.assertScopeType(scope, type);
     const tpl = await this.prisma.agreementTemplate.findFirst({
-      where: { scope: scope as any, type: type as any, deletedAt: null },
+      where: { scope: scope as never, type: type as never, deletedAt: null },
     });
     if (!tpl) return null;
     const v = await this.prisma.agreementVersion.findFirst({

@@ -32,6 +32,11 @@ const POST_PAY_STATES = [
   OrderStatus.PendingConfirm,
 ];
 
+export interface RefundListFilter {
+  status?: string;
+  orderNo?: string;
+}
+
 @Injectable()
 export class PaymentsService {
   private store = new MerchantConfigStore();
@@ -326,8 +331,8 @@ export class PaymentsService {
   }
 
   /** 退款台账（管理端）：状态 / 订单号筛选，关联订单、工单、发起人、审核人、结算单。 */
-  async listRefunds(filter: any) {
-    const where: any = {};
+  async listRefunds(filter: RefundListFilter) {
+    const where: Record<string, unknown> = {};
     if (filter.status) where.status = filter.status;
     if (filter.orderNo)
       where.order = { orderNo: { contains: String(filter.orderNo).trim() } };

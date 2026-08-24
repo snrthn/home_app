@@ -115,7 +115,7 @@ export class MastersService {
     }
     // 接单范围（多值数组，每条都要命中已开通区域）
     if (data.serviceAreas !== undefined) {
-      const submitted = data.serviceAreas as any[];
+      const submitted = data.serviceAreas as Array<{ provinceCode?: string | null; cityCode?: string | null; districtCode?: string | null; province?: string | null; city?: string | null; district?: string | null }>;
       if (Array.isArray(submitted)) {
         for (const r of submitted) {
           if (

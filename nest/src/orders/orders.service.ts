@@ -16,6 +16,7 @@ import { OrdersGateway } from '../gateway/orders.gateway';
 import { SettlementsService } from '../settlements/settlements.service';
 import { PaymentsService } from '../payments/payments.service';
 import { CommissionService } from '../commission/commission.service';
+import type { CreateOrderDto } from './orders.dto';
 
 function genOrderNo() {
   return (
@@ -59,7 +60,7 @@ export class OrdersService {
     return m?.id ?? null;
   }
 
-  async create(customerId: string, dto: any) {
+  async create(customerId: string, dto: CreateOrderDto) {
     const item = await this.prisma.serviceItem.findUnique({
       where: { id: dto.serviceItemId },
     });

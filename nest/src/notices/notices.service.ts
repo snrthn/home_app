@@ -77,7 +77,7 @@ export class NoticesService {
         pinned: !!dto.pinned,
         startAt: dto.startAt ? new Date(dto.startAt) : null,
         endAt: dto.endAt ? new Date(dto.endAt) : null,
-        targetRegions: (dto.targetRegions as any) ?? null,
+        targetRegions: (dto.targetRegions ?? undefined) as never,
         createdBy,
         status: 'draft',
       },

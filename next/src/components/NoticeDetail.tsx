@@ -45,7 +45,7 @@ export default function NoticeDetail({ scope }: { scope: Exclude<NoticeScope, 'a
       });
     }
     if (role === 'master') {
-      const sa = (profile as any).master?.serviceAreas;
+      const sa = profile.master?.serviceAreas;
       if (Array.isArray(sa)) {
         for (const r of sa) {
           if (r?.provinceCode) {

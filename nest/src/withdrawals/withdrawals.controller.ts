@@ -6,10 +6,11 @@ import {
   Body,
   Query,
   UseGuards,
-  Req,
 } from '@nestjs/common';
 import { WithdrawalsService } from './withdrawals.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthUser } from '../auth/auth-user.interface';
 import { RolesGuard } from '../common/roles.guard';
 import { PermGuard } from '../common/perm.guard';
 import { Roles } from '../common/roles.decorator';
@@ -27,15 +28,15 @@ export class WithdrawalsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.Master)
   @Post()
-  create(@Req() req: any, @Body() dto: CreateWithdrawalDto) {
-    return this.s.create(req.user.sub, dto);
+  create(@CurrentUser() user: AuthUser, @Body() dto: CreateWithdrawalDto) {
+    return this.s.create(user.sub, dto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.Master)
   @Get('mine')
-  mine(@Req() req: any) {
-    return this.s.mine(req.user.sub);
+  mine(@CurrentUser() user: AuthUser) {
+    return this.s.mine(user.sub);
   }
 
   // ===== 管理端 =====
@@ -54,8 +55,8 @@ export class WithdrawalsController {
   @Audit('finance', 'finance:manage')
   @RequirePerm('finance:manage')
   @Post(':id/pay')
-  pay(@Param('id') id: string, @Req() req: any) {
-    return this.s.markPaid(id, req.user.sub);
+  pay(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.s.markPaid(id, user.sub);
   }
 
   /** 驳回（解冻退回余额），必填原因 */
@@ -64,7 +65,7 @@ export class WithdrawalsController {
   @Audit('finance', 'finance:manage')
   @RequirePerm('finance:manage')
   @Post(':id/reject')
-  reject(@Param('id') id: string, @Body() dto: RejectWithdrawalDto, @Req() req: any) {
-    return this.s.reject(id, req.user.sub, dto.reason);
+  reject(@Param('id') id: string, @Body() dto: RejectWithdrawalDto, @CurrentUser() user: AuthUser) {
+    return this.s.reject(id, user.sub, dto.reason);
   }
 }

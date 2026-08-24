@@ -47,7 +47,7 @@ export default function ClientMeEdit() {
 
   useEffect(() => {
     if (!data) return;
-    const p = data as any;
+    const p = data;
     setNickname(p.nickname ?? '');
     setAvatar(p.avatar ?? '');
     setRealName(p.realName ?? '');

@@ -217,7 +217,7 @@ export class CommissionService {
     const data = {
       platformRate: rate,
       refundPolicy: dto.refundPolicy ?? 'tiered',
-      refundTiers: tiers as any,
+      refundTiers: tiers,
       isActive: dto.isActive ?? true,
       note: dto.note?.trim() || null,
       deletedAt: null, // 命中软删旧行时一并复活，避免唯一键冲突

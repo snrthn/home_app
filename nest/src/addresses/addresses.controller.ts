@@ -7,10 +7,11 @@ import {
   Param,
   Body,
   UseGuards,
-  Req,
 } from '@nestjs/common';
 import { AddressesService, type AddressInput } from './addresses.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthUser } from '../auth/auth-user.interface';
 import { RolesGuard } from '../common/roles.guard';
 import { Roles } from '../common/roles.decorator';
 import { Role } from '@laoma/shared';
@@ -22,35 +23,35 @@ export class AddressesController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.Customer)
   @Get()
-  list(@Req() req: any) {
-    return this.addresses.listMine(req.user.sub);
+  list(@CurrentUser() user: AuthUser) {
+    return this.addresses.listMine(user.sub);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.Customer)
   @Post()
-  create(@Req() req: any, @Body() dto: AddressInput) {
-    return this.addresses.create(req.user.sub, dto);
+  create(@CurrentUser() user: AuthUser, @Body() dto: AddressInput) {
+    return this.addresses.create(user.sub, dto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.Customer)
   @Patch(':id')
-  update(@Req() req: any, @Param('id') id: string, @Body() dto: Partial<AddressInput>) {
-    return this.addresses.update(req.user.sub, id, dto);
+  update(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: Partial<AddressInput>) {
+    return this.addresses.update(user.sub, id, dto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.Customer)
   @Delete(':id')
-  remove(@Req() req: any, @Param('id') id: string) {
-    return this.addresses.remove(req.user.sub, id);
+  remove(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.addresses.remove(user.sub, id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.Customer)
   @Post(':id/default')
-  setDefault(@Req() req: any, @Param('id') id: string) {
-    return this.addresses.setDefault(req.user.sub, id);
+  setDefault(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.addresses.setDefault(user.sub, id);
   }
 }

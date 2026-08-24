@@ -6,18 +6,24 @@ import {
   Param,
   Body,
   UseGuards,
-  Req,
   Query,
 } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { MerchantConfigStore, type MerchantConfig } from './merchant-config.store';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthUser } from '../auth/auth-user.interface';
 import { RolesGuard } from '../common/roles.guard';
 import { PermGuard } from '../common/perm.guard';
 import { Roles } from '../common/roles.decorator';
 import { RequirePerm } from '../common/perm.decorator';
 import { Audit } from '../common/audit.decorator';
 import { Role } from '@laoma/shared';
+
+interface RefundListQuery {
+  status?: string;
+  orderNo?: string;
+}
 
 @Controller('payments')
 export class PaymentsController {
@@ -29,15 +35,15 @@ export class PaymentsController {
   @UseGuards(JwtAuthGuard)
   @Roles(Role.Customer)
   @Post('charge')
-  charge(@Req() req: any, @Body() dto: { orderId: string }) {
-    return this.payments.charge(req.user.sub, dto.orderId);
+  charge(@CurrentUser() user: AuthUser, @Body() dto: { orderId: string }) {
+    return this.payments.charge(user.sub, dto.orderId);
   }
 
   // 模拟支付成功回调（等价于真实通道的异步 notify）
   @UseGuards(JwtAuthGuard)
   @Roles(Role.Customer)
   @Post('mock/notify')
-  mockNotify(@Req() req: any, @Body() dto: { orderId: string; token: string }) {
+  mockNotify(@Body() dto: { orderId: string; token: string }) {
     return this.payments.mockNotify(dto.orderId, dto.token);
   }
 
@@ -45,18 +51,20 @@ export class PaymentsController {
   @UseGuards(JwtAuthGuard)
   @Roles(Role.Customer)
   @Post('refund')
-  refund(@Req() req: any, @Body() dto: { orderId: string }) {
-    return this.payments.refund(req.user.sub, dto.orderId);
+  refund(@CurrentUser() user: AuthUser, @Body() dto: { orderId: string }) {
+    return this.payments.refund(user.sub, dto.orderId);
   }
 
   // 真实通道异步回调（公开，无鉴权）：微信/支付宝服务器主动推送
   @Post('notify/wechat')
+  // 第三方支付回调，格式由支付通道决定
   async wechatNotify(@Body() body: any) {
     await this.payments.handleNotify('wechat', { raw: body });
     return { code: 'SUCCESS', message: '成功' };
   }
 
   @Post('notify/alipay')
+  // 第三方支付回调，格式由支付通道决定
   async alipayNotify(@Body() body: any) {
     await this.payments.handleNotify('alipay', body);
     return 'success';
@@ -74,7 +82,7 @@ export class PaymentsController {
   @UseGuards(JwtAuthGuard)
   @Roles(Role.Admin)
   @Put('config')
-  saveConfig(@Req() req: any, @Body() dto: MerchantConfig) {
+  saveConfig(@Body() dto: MerchantConfig) {
     return this.payments.saveConfig(dto);
   }
 
@@ -84,18 +92,18 @@ export class PaymentsController {
   @Roles(Role.Customer)
   @Post()
   create(
-    @Req() req: any,
+    @CurrentUser() user: AuthUser,
     @Body()
     dto: { orderId: string; qrType: string; proofUrl?: string },
   ) {
-    return this.payments.create(req.user.sub, dto);
+    return this.payments.create(user.sub, dto);
   }
 
   @UseGuards(JwtAuthGuard)
   @Roles(Role.Admin)
   @Post(':id/confirm')
-  confirm(@Param('id') id: string, @Req() req: any) {
-    return this.payments.confirm(id, req.user.sub);
+  confirm(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.payments.confirm(id, user.sub);
   }
 
   // ===== 退款台账（管理端「订单管理 → 退款/售后」，orders:refund） =====
@@ -106,7 +114,7 @@ export class PaymentsController {
   @Roles(Role.Admin)
   @RequirePerm('orders:refund')
   @Get('refunds')
-  listRefunds(@Query() q: any) {
+  listRefunds(@Query() q: RefundListQuery) {
     return this.payments.listRefunds(q);
   }
 
@@ -117,14 +125,14 @@ export class PaymentsController {
   @Audit('payments', 'orders:refund')
   @Post('refunds')
   createRefund(
-    @Req() req: any,
+    @CurrentUser() user: AuthUser,
     @Body() dto: { orderNo: string; amount?: number; reason?: string },
   ) {
     return this.payments.createRefundByOrderNo({
       orderNo: dto.orderNo,
       amount: dto.amount,
       reason: dto.reason,
-      requestedBy: req.user.sub,
+      requestedBy: user.sub,
     });
   }
 
@@ -133,8 +141,8 @@ export class PaymentsController {
   @RequirePerm('orders:refund')
   @Audit('payments', 'orders:refund')
   @Post('refunds/:id/approve')
-  approveRefund(@Req() req: any, @Param('id') id: string, @Body() dto: { note?: string }) {
-    return this.payments.reviewRefund(id, req.user.sub, {
+  approveRefund(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: { note?: string }) {
+    return this.payments.reviewRefund(id, user.sub, {
       action: 'approve',
       note: dto?.note,
     });
@@ -145,8 +153,8 @@ export class PaymentsController {
   @RequirePerm('orders:refund')
   @Audit('payments', 'orders:refund')
   @Post('refunds/:id/reject')
-  rejectRefund(@Req() req: any, @Param('id') id: string, @Body() dto: { note?: string }) {
-    return this.payments.reviewRefund(id, req.user.sub, {
+  rejectRefund(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: { note?: string }) {
+    return this.payments.reviewRefund(id, user.sub, {
       action: 'reject',
       note: dto?.note,
     });

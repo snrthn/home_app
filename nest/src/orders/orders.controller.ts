@@ -6,10 +6,11 @@ import {
   Body,
   Query,
   UseGuards,
-  Req,
 } from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthUser } from '../auth/auth-user.interface';
 import { RolesGuard } from '../common/roles.guard';
 import { PermGuard } from '../common/perm.guard';
 import { Roles } from '../common/roles.decorator';
@@ -25,29 +26,29 @@ export class OrdersController {
   @UseGuards(JwtAuthGuard)
   @Roles(Role.Customer)
   @Post()
-  create(@Req() req: any, @Body() dto: CreateOrderDto) {
-    return this.orders.create(req.user.sub, dto);
+  create(@CurrentUser() user: AuthUser, @Body() dto: CreateOrderDto) {
+    return this.orders.create(user.sub, dto);
   }
 
   @UseGuards(JwtAuthGuard)
   @Roles(Role.Customer)
   @Get('mine')
-  mine(@Req() req: any) {
-    return this.orders.listForCustomer(req.user.sub);
+  mine(@CurrentUser() user: AuthUser) {
+    return this.orders.listForCustomer(user.sub);
   }
 
   @UseGuards(JwtAuthGuard)
   @Roles(Role.Master)
   @Get('pool')
-  pool(@Req() req: any) {
-    return this.orders.pool(req.user.sub);
+  pool(@CurrentUser() user: AuthUser) {
+    return this.orders.pool(user.sub);
   }
 
   @UseGuards(JwtAuthGuard)
   @Roles(Role.Master)
   @Get('master')
-  masterOrders(@Req() req: any, @Query('city') city?: string) {
-    return this.orders.listForMaster(req.user.sub, city);
+  masterOrders(@CurrentUser() user: AuthUser, @Query('city') city?: string) {
+    return this.orders.listForMaster(user.sub, city);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -69,8 +70,8 @@ export class OrdersController {
   @UseGuards(JwtAuthGuard)
   @Roles(Role.Master)
   @Post(':id/grab')
-  grab(@Param('id') id: string, @Req() req: any) {
-    return this.orders.grab(id, req.user.sub);
+  grab(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.orders.grab(id, user.sub);
   }
 
   @UseGuards(JwtAuthGuard, PermGuard)
@@ -81,9 +82,9 @@ export class OrdersController {
   assign(
     @Param('id') id: string,
     @Body() dto: AssignDto,
-    @Req() req: any,
+    @CurrentUser() user: AuthUser,
   ) {
-    return this.orders.assign(id, dto.masterId, req.user.sub);
+    return this.orders.assign(id, dto.masterId, user.sub);
   }
 
   @UseGuards(JwtAuthGuard, PermGuard)
@@ -97,15 +98,15 @@ export class OrdersController {
   @UseGuards(JwtAuthGuard)
   @Roles(Role.Master)
   @Post(':id/depart')
-  depart(@Param('id') id: string, @Req() req: any) {
-    return this.orders.depart(id, req.user.sub);
+  depart(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.orders.depart(id, user.sub);
   }
 
   @UseGuards(JwtAuthGuard)
   @Roles(Role.Customer)
   @Post(':id/generate-arrive-code')
-  generateArriveCode(@Param('id') id: string, @Req() req: any) {
-    return this.orders.generateArriveCode(id, req.user.sub);
+  generateArriveCode(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.orders.generateArriveCode(id, user.sub);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -114,44 +115,44 @@ export class OrdersController {
   arrive(
     @Param('id') id: string,
     @Body() dto: ArriveDto,
-    @Req() req: any,
+    @CurrentUser() user: AuthUser,
   ) {
-    return this.orders.arrive(id, req.user.sub, dto.code);
+    return this.orders.arrive(id, user.sub, dto.code);
   }
 
   @UseGuards(JwtAuthGuard)
   @Roles(Role.Master)
   @Post(':id/start')
-  start(@Param('id') id: string, @Req() req: any) {
-    return this.orders.startService(id, req.user.sub);
+  start(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.orders.startService(id, user.sub);
   }
 
   @UseGuards(JwtAuthGuard)
   @Roles(Role.Master)
   @Post(':id/complete')
-  complete(@Param('id') id: string, @Req() req: any) {
-    return this.orders.complete(id, req.user.sub);
+  complete(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.orders.complete(id, user.sub);
   }
 
   // 客户验收：待验收 → 已评价（释放托管金），替代旧「评价即终态」
   @UseGuards(JwtAuthGuard)
   @Roles(Role.Customer)
   @Post(':id/confirm')
-  confirm(@Param('id') id: string, @Req() req: any) {
-    return this.orders.confirm(id, req.user.sub);
+  confirm(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.orders.confirm(id, user.sub);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post(':id/cancel')
   cancel(
     @Param('id') id: string,
-    @Req() req: any,
+    @CurrentUser() user: AuthUser,
     @Body() dto: CancelOrderDto,
   ) {
     return this.orders.cancel(
       id,
-      req.user.sub,
-      req.user.role === 'admin',
+      user.sub,
+      user.role === 'admin',
       dto.reason,
     );
   }
