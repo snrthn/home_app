@@ -45,6 +45,7 @@
 | **项目计划** | 品牌定位、技术栈选型、数据库设计、路线图、决策清单（历史快照，支付模型已被后续迭代取代） | `docs/plan.md` |
 | **管理员初始化 SQL** | super_admin 种子账号 | `docs/sql/init-admin.sql` |
 | **MySQL 修复脚本** | MySQL 服务启动/修复 bat | `docs/shell/fix-mysql-service.bat` |
+| **工程化专项** | 工程化问题清单（E-01~E-11）、优先级与处理跟踪，与业务设计解耦 | `docs/engineering.md` |
 
 ### 1.3 会话注入的记忆（自动）
 
@@ -379,13 +380,14 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 - [x] 投诉/工单 Phase 2（详见第 18 节）：师傅端「我的工单」+ 申诉（`POST /tickets/:id/appeal` 复用 TicketComment，零迁移）、管理端工作台「待处理工单」指标卡（`dashboard().pendingTickets`）、`admin/reviews/tickets` SLA 倒计时列（超时标红）、订单详情（reviewed/evaluated）投诉按钮 + 评价 1-2 星引导投诉、客户端投诉页支持 `?orderId=&againstMasterId=` 预填（2026-08-21~24 落地）
 - [x] 退款/售后 Phase 2（详见第 19 节）：运营主动发起退款（`POST /payments/refunds` + `createRefundByOrderNo`，复用 `createRefundRequest` 的 `ticketId` 可空）+ 管理端「售后工作台」聚合页（`/admin/aftersale`）+ `reports.business()` 直读 Refund 表 + 退款台账页「发起退款」Modal（2026-08-21~24 落地）
 - [x] 分账规则「退款区间断点」新增交互优化：`+ 添加断点` 改为末尾追加未选空行（用户显式选阶段，杜绝自动插入生命周期中间飘走）；`changeTierKey` 去重护栏 + 保存过滤未选行；已选行灰字「继承自：XXX」显性化区间继承（2026-08-24）
+- [x] 工程化专项第一批（详见 `docs/engineering.md`）：E-01 CORS 改读 `CORS_ORIGIN` env、E-02 CI typecheck 门禁阻塞化 + 串 lint、E-03 全局异常过滤器 `AllExceptionsFilter`（404/400/500 统一响应体，3722 冒烟实测）、E-04 jest 单测基础设施 + 分账阶梯 `tier.util` 单测 8/8、E-05 eslint 9 flat config 打通（0 error 接入 CI）+ prettier 配置就位（存量 55 文件格式债未统一，留待后续）；新增发现 E-12（send-code DTO 校验不严）（2026-08-24）
 
 ### 待办 / 已知缺口
 
 | 优先级 | 事项 | 说明 |
 |---|---|---|
 | ~~**P1**~~ | 投诉/工单 + 退款审核端到端联调 | ✅ 迁移已应用（2026-08-21 14:00 用户授权后本机 `migrate resolve --applied 20260821000000_add_tickets_module` + `migrate deploy`，14 迁移全绿，工单带 refunds 关联查询实测通过）。**2026-08-21 脚本端到端验证 PASS（`nest/scripts/verify-p1-runtime.cjs` 10/10）**；（2026-08-24 收敛待办：剩 Playwright 浏览器冒烟并入下行，不再单列） |
-| ~~**P1**~~ | 浏览器跑通 mock 全流程 | 用户重启 3721 后 Playwright 打 3824 验证 departing/arrived → evaluated + WS（2026-08-24 收敛待办，执行动作仍有效） |
+| ~~**P1**~~ | 浏览器跑通 mock 全流程 | 3721 已重启；Playwright 打 3824 验证 departing/arrived → evaluated + WS（验证动作，非代码缺口） |
 | ~~**P1**~~ | 订单内 IM 聊天 | 独立工程；会话锚点用 `Conversation.orderId`（非手机号 Hash）；验证码切勿走 IM 发送（2026-08-24 收敛待办，未立项） |
 | ~~**P2**~~ | 投诉入口补全 | 订单详情（reviewed/evaluated）「投诉」按钮 + 评价 1-2 星引导投诉——**已并入「投诉/工单 Phase 2」**（2026-08-24 虎哥决策合并，见上行） |
 | ~~**P2**~~ ✅ | WS 新单广播按区域过滤 | `orders.gateway.ts` `join-pool` 握手按 `Master.serviceAreas` 加入 `zone:<省>:<市>:<区>` 房间（空段通配）；`broadcastNewOrder`/`broadcastPoolUpdate` 按 `dispatchZones(order)` 定向投递；`verify-ws-zone-e2e.cjs` 9/9 + `verify-zone-match.cjs` 9/9 PASS（2026-08-21） |
@@ -396,7 +398,7 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 | ~~**P3**~~ | assign() 管理员指派区域校验 | 暂不加（虎哥 2026-08-20 决策），如需可加「强制指派」开关（2026-08-24 收敛待办） |
 | ~~**P3**~~ | lastActiveAt 历史数据缺失 | 在线数判定字段 2026-08-20 才开始维护，历史在线趋势无法回溯；`Order.refundedAt` 缺失用 settledAt 近似（2026-08-24 收敛待办） |
 | ~~**P2**~~ | 短信真实发送验证 | 运营平台切 real + 填阿里云四参数（AccessKeyId/Secret/SignName/TemplateCode，模板需含 `${code}` 变量）后自验真发信（2026-08-24 收敛待办，仍需填凭证才能验证） |
-| ~~**P2**~~ | 3721 重启加载新逻辑 | 短信开关/加密/找回密码/派单调度器均需重启 3721 生效（2026-08-24 收敛待办，执行动作仍有效） |
+| ~~**P2**~~ | ~~3721 重启加载新逻辑~~ | 已随 3721 重启生效（2026-08-24 虎哥决策：重启属顺手操作，不再单列待办） |
 | ~~**P2**~~ | `SMS_SECRET_ENCRYPT_KEY` 环境同步 | `nest/.env` 已生成（gitignore 保护）；换库/换环境部署必须同步该 key，否则旧密文解不开（2026-08-24 收敛待办，运维动作仍有效） |
 
 ---

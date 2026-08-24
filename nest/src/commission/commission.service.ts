@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrderStatus } from '@laoma/shared';
+import { CANCELLABLE_LIFECYCLE, clamp01, resolveTierRatio } from './tier.util';
 
 /** 退款佣金策略（与 schema.prisma RefundPolicy 对齐） */
 export type RefundPolicy = 'full' | 'tiered' | 'keep_commission';
@@ -26,30 +27,6 @@ const DEFAULT_TIERS: Record<string, number> = {
   [OrderStatus.Arrived]: 0.5,
 };
 
-/** 可取消状态的生命周期顺序（支付后 → 终态前），用于区间解析：
- *  refundTiers 的语义是「从该状态起，退 X%」，后续未定义状态继承上一个断点的值，
- *  直到遇到下一个断点。这样运营只需配 3~4 个断点而非每个状态都设。 */
-const CANCELLABLE_LIFECYCLE = [
-  OrderStatus.PendingAccept,
-  OrderStatus.Accepted,
-  OrderStatus.Departing,
-  OrderStatus.Arrived,
-  OrderStatus.Servicing,
-  OrderStatus.PendingConfirm,
-];
-
-/** 区间解析：给定当前状态，沿生命周期向前找最近一个已定义的退款断点；
- *  找不到则默认全额退（1）。 */
-function resolveTierRatio(status: string, tiers: Record<string, number>): number {
-  const idx = CANCELLABLE_LIFECYCLE.indexOf(status as OrderStatus);
-  if (idx < 0) return 1; // 非可取消状态，兜底全额
-  for (let i = idx; i >= 0; i--) {
-    const key = CANCELLABLE_LIFECYCLE[i];
-    if (key in tiers) return clamp01(tiers[key]);
-  }
-  return 1; // 该状态之前无断点 → 全额退
-}
-
 export const DEFAULT_SNAPSHOT: Omit<CommissionSnapshot, 'resolvedAt'> = {
   platformRate: 0,
   refundPolicy: 'tiered',
@@ -58,7 +35,6 @@ export const DEFAULT_SNAPSHOT: Omit<CommissionSnapshot, 'resolvedAt'> = {
 };
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
-const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 
 @Injectable()
 export class CommissionService {

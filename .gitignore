@@ -10,3 +10,4 @@ out
 uploads
 coverage
 .DS_Store
+*.tsbuildinfo

@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # 1) 质量门禁：typecheck（非阻塞，实测能过，防 transient）
+  # 1) 质量门禁：typecheck（阻塞；失败即终止部署，不允许带类型错误上线）
   verify:
     runs-on: ubuntu-latest
     steps:
@@ -23,7 +23,7 @@ jobs:
       - run: npm install -g pnpm@8.15.4
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
-        continue-on-error: true
+      - run: pnpm lint
 
   # 2) 部署：runner checkout → git archive 打包 → scp 推代码到 ECS → ssh 构建
   #    push-based，避免 ECS 访问 GitHub 的网络问题（国内常 empty reply）
