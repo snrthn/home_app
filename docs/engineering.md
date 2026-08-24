@@ -63,7 +63,7 @@
 - **证据**：`nest/package.json`、`next/package.json`、`package.json` 均无 `test` 脚本；无 jest/vitest 配置；无 `*.spec.ts` / `*.test.ts`
 - **影响**：支付/退款状态机、派单 candidates 算法、分账 `resolveTierRatio` 等核心逻辑**无回归保护**，任何重构即裸奔。
 - **建议**：先补最高价值单测（分账阶梯计算、退款阶梯、派单评分排序），再补 1 条 e2e smoke（登录 → 下单 → 支付确认 → 退款审核）。框架用 vitest + supertest（nest）即可，不引入重量级依赖。
-- **状态**：🔄 进行中（2026-08-24：基础设施 + P0 纯函数层 + P1 金额守卫完成；P2 e2e 待补）
+- **状态**：✅ 已完成（2026-08-24：基础设施 + P0 纯函数层 + P1 金额守卫 + P2 e2e 链路全部完成）
 - **验证**：
   - **基础设施**：`nest/jest.config.js` + `nest/tsconfig.spec.json`【新建】——jest + ts-jest + `testRegex .*\.spec\.ts$`，`@laoma/shared` 经 `moduleNameMapper` 映射到 `shared/dist/index.js`（避免 pnpm 双副本解析漂移）；`nest/package.json` 加 `test` script
   - **P0 纯函数层完成（2026-08-24）**：5 suites / 107 tests PASS，双端 `tsc --noEmit` EXIT=0
@@ -81,12 +81,17 @@
     - `commission.resolve.spec.ts`：`resolve` 三级降级(service→category→global→default) + 类目链限深 10 + `toSnapshot` 规整 + `snapshotFromOrder` 快照优先（19 tests）
     - 共享 mock 工厂 `src/test/mocks.ts`：createMockPrisma/Commission/Orders/Settlements/Gateway/Provider
     - 整体覆盖率 ~8%（mock 了 prisma 层，controller/repository 行数未覆盖，~18% 为乐观估计）
-  - **剩余**：P2 e2e 链路（正向全链 + 售后链）——留待后续迭代
+  - **P2 e2e 链路完成（2026-08-24）**：2 suites / 16 tests PASS，双端 `tsc --noEmit` EXIT=0
+    - `positive-chain.e2e.spec.ts`：下单→支付→mock 回调→抢单→出发→到达码→到达→开始→完成→验收→结算单自动生成（11 tests）
+    - `after-sales.e2e.spec.ts`：投诉→退款处置→退款审核→全额退款（reviewed 不在阶梯断点→无补偿单）+ 投诉→compensate 处置→工单 resolved（5 tests）
+    - E2E 基建 `src/e2e/setup.ts`：`bootstrapApp`（NestJS 测试模块）、`createE2EContext`（创建测试用户/师傅/地址/服务区域/佣金规则，登录获取 token）、`cleanupE2EContext`（逆序清理测试数据）、`createAndCompleteOrder`（走完正向全链辅助函数）
+    - 配置 `jest.e2e.config.js`：`testRegex .*\.e2e\.spec\.ts$`，testTimeout 30s
+    - 设计发现：`compensate` 处置时 `createCompensation(compensation=0)` 返回 null（comp<=0 守卫），且 Settlement.orderId @unique 约束阻止同订单第二张结算单——compensate 流程不创建补偿单，仅记录 complaint.result=compensate
 - **框架说明**：实际选用 jest（非 vitest）——nest 官方默认 + 沙箱安装链已验证
 - **覆盖规划（2026-08-24 定稿）**：核心业务链路已梳理（下单→托管→接单→履约→验收→结算 / 逆向退款 / 售后投诉 / 师傅提现），按「改错会赔钱」优先级分三批次推进，详见 `docs/test-plan.md`：
   - **P0 纯函数层** ✅：`canTransition`、`regionMatches`、`serviceAreasToRules`、`resolveTierRatio`、`splitNormal`、`splitRefund`、`masterCoversOrder`（提纯）、`slotsOverlap`（提纯）——无 DB，纯输入输出，一批 spec，覆盖率 0.45% → 2.55%
   - **P1 金额守卫** ✅：`payments.refund` 三策略、`orders.cancel` 分叉、`settlements.releaseToMaster` 幂等、`withdrawals.create` 防超提、`commission.resolve` 三级降级——mock prisma + mock provider，service 级，10 suites / 195 tests PASS，覆盖率 → ~8%
-  - **P2 链路 e2e**：正向全链（下单→支付→抢单→履约→验收→结算）+ 售后链（投诉→审核→退款）——supertest 打真服务，→ ~22%+
+  - **P2 链路 e2e** ✅：正向全链（下单→支付→抢单→履约→验收→结算）+ 售后链（投诉→审核→退款）——supertest 打真服务，2 suites / 16 tests PASS
 
 #### E-05　无 Lint / 格式化
 
@@ -152,7 +157,7 @@
 | E-01 | CORS 写死 `origin:true` 带入生产          | P0  | ✅ 已解决  | 改读 `CORS_ORIGIN` env；未设回落 true，设则白名单锁死；tsc 通过，已重启 3721 |
 | E-02 | CI typecheck 门禁 `continue-on-error` | P0  | ✅ 已解决  | 删除 `continue-on-error`，verify job 现阻塞部署；同批追加 `pnpm lint` |
 | E-03 | 无统一异常处理                             | P1  | ✅ 已解决  | `AllExceptionsFilter` 已接线 + 3722 冒烟 404/400/200 全过；错误码枚举与结构化日志留待 E-07 |
-| E-04 | 零自动化测试                              | P1  | 🔄 部分完成 | jest 基础设施 + 分账阶梯单测 8/8；退款阶梯/派单排序单测与 e2e smoke 待补 |
+| E-04 | 零自动化测试                              | P1  | ✅ 已完成   | jest 基础设施 + P0 纯函数(5 suites/107 tests) + P1 金额守卫(10 suites/195 tests) + P2 e2e 链路(2 suites/16 tests)，共 17 suites / 318 tests PASS，双端 tsc EXIT=0 |
 | E-05 | 无 lint / 格式化                        | P1  | 🔄 部分完成 | eslint 0 error 接入 CI；prettier 配置就位但存量 55 文件格式债未统一；next 端 lint 未配 |
 | E-06 | 缺 `.env.example`                    | P2  | 📋 待处理 | nest/next 各补样例                                         |
 | E-07 | 日志无结构化                              | P2  | 📋 待处理 | 引 pino，关键路径结构化；顺带承接 E-03 错误码枚举                |

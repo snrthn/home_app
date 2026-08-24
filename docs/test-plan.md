@@ -80,5 +80,7 @@
 
 - [x] P0：全部 spec 绿，`pnpm --filter @laoma/backend test` EXIT=0，双端 `tsc --noEmit` EXIT=0（5 suites / 107 tests PASS；被测文件 96-100% 语句覆盖；整体 2.55% — 因 util 文件行数占比小，~6% 为乐观估计）
 - [x] P1：5 个目标 service 级守卫全测，10 suites / 195 tests PASS，双端 tsc EXIT=0（覆盖率整体 ~8%，因 mock 了 prisma 层未覆盖 controller/repository 行数，~18% 为乐观估计）
-- [ ] P2：两条链路 e2e 绿，覆盖率 ~22%+
-- [ ] 每批次完成回填 engineering.md E-04 状态 + 本文件勾选
+- [x] P2：两条链路 e2e 绿（2 suites / 16 tests PASS），双端 tsc EXIT=0
+  - 正向全链（11 tests）：下单→支付→抢单→出发→到达→开始→完成→验收→结算单生成
+  - 售后链（5 tests）：投诉→退款处置→退款审核→全额退款（reviewed 不在阶梯断点→无补偿单）；投诉→compensate 处置→工单 resolved
+- [x] 每批次完成回填 engineering.md E-04 状态 + 本文件勾选
