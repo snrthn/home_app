@@ -49,7 +49,7 @@ export default function MasterMeEdit() {
 
   useEffect(() => {
     if (!data) return;
-    const p = data as any;
+    const p = data;
     setNickname(p.nickname ?? '');
     setAvatar(p.avatar ?? '');
     setGender(p.gender ?? '');

@@ -6,14 +6,16 @@
 
 ---
 
-## 0. 现状体检快照（2026-08-24 实测；E-03/E-04/E-05 处理后）
+## 0. 现状体检快照（2026-08-24 实测；E-03/E-04/E-05/E-13/E-14 处理后）
 
 | 维度         | 现状                                                                                        | 结论            |
 | ---------- | ----------------------------------------------------------------------------------------- | ------------- |
 | 类型检查       | `nest` / `next` 均 `tsc --noEmit` EXIT=0                                                   | ✅ 通过          |
-| 单元测试       | jest + ts-jest 就位；`tier.util.spec.ts` 8/8 PASS（`pnpm --filter @laoma/backend test`）      | 🟡 起步（覆盖不足）  |
-| Lint / 格式化 | eslint 9 flat config 打通，`pnpm lint` 0 error / 188 warn；prettier 配置就位，存量 55 文件格式债未统一 | 🟡 部分完成       |
-| CI 门禁      | `.github/workflows/deploy.yml` 现跑 `pnpm typecheck` + `pnpm lint`，失败即阻断部署             | ✅ 门禁生效       |
+| `any` 类型安全 | 三端共 139 处 `any`（nest 58 / next 81 / shared 0），较修复前 288 处减少 149 处（52%）；零 `@ts-ignore`/`@ts-nocheck` | 🟡 大幅改善，剩余为合理保留 |
+| 单元测试       | jest + ts-jest 就位；P0 纯函数 5 suites/107 tests + P1 金额守卫 10 suites/195 tests，共 195 tests PASS | ✅ 已完成 |
+| E2E 测试     | 2 suites / 16 tests PASS（正向全链 + 售后链）                                                       | ✅ 已完成 |
+| Lint / 格式化 | eslint 9 flat config 打通，`pnpm lint` 0 error / 90 warn（原 188 warn，any 清理后降 98）；prettier 配置就位，存量 55 文件格式债未统一 | 🟡 部分完成       |
+| CI 门禁      | `.github/workflows/deploy.yml` 现跑 `pnpm typecheck` + `pnpm lint` + commitlint，失败即阻断部署             | ✅ 门禁生效       |
 | CORS       | `main.ts` 读 `CORS_ORIGIN` env（逗号白名单），未设回落 true；生产设白名单即锁死                  | ✅ 已收敛        |
 | 统一异常       | `AllExceptionsFilter` 全局注册，404/400/500 统一 `{code,message,data,path,timestamp}`        | ✅ 已收敛        |
 | 日志         | nest 2 处 + next 4 处 `console.log` 散落，无 pino/winston                                       | ⚠️ 无结构化       |
@@ -103,7 +105,7 @@
   - `nest/eslint.config.mjs`【新建】：eslint 9 flat config（`@eslint/js` + `typescript-eslint` recommended）——TS 源码关 `no-undef`（tsc 兜底，官方推荐）；`no-explicit-any`/`no-unused-vars` 降 warn 不阻断；**Node CommonJS 脚本**（`prisma/seed-*.js`、`jest.config.js`、`scripts/*.cjs`）声明运行时 globals + 放行 `require`；`.mjs`（config 自身）按 ESM 处理
   - `nest/.prettierrc.json`（semi/singleQuote/trailingComma/printWidth 100）+ `.prettierignore`（dist/node_modules/coverage）【新建】；`nest/package.json` 加 `lint`/`format` script；根 `package.json` + `turbo.json` 加 `lint` task（`pnpm lint` 全仓入口）
   - `.github/workflows/deploy.yml`：`verify` job 在 typecheck 后追加 `pnpm lint`（与 E-02 同批改）
-  - **实测**：`pnpm --filter @laoma/backend lint` **0 error / 188 warning**（存量 any/未用变量债，warn 级）；`scripts/verify-p1-runtime.cjs` 一处未用变量顺手修掉
+  - **实测**：`pnpm --filter @laoma/backend lint` **0 error / 90 warning**（原 188 warn，E-14 any 清理后降 98）；`scripts/verify-p1-runtime.cjs` 一处未用变量顺手修掉
   - **存量格式债**：`npx prettier --check src/**/*.ts` → 55 文件不合规（历史无 prettier 约束）。**决策：本轮不跑 `--write` 全量格式化**——大 diff 混入工程提交风险高，且与用户编辑器正在改的文件冲突；`format` 脚本留作按需执行，后续单独开一轮「prettier 全量统一 + 接 CI」
   - **未做**：next 端 lint（`eslint-config-next`）未配——`pnpm lint`（turbo）当前仅 nest 生效，next 无 lint script 自动跳过；建议下轮补
 
@@ -131,6 +133,48 @@
   - `.github/workflows/deploy.yml`：`verify` job 追加 `commitlint --from=before --to=sha` 校验步骤，CI 层阻断不合规提交
   - `docs/commit-convention.md`【新建】：完整规范文档（格式定义、type/scope 对照表、示例、工具链说明、快速修复指南）
   - **实测**：`npx commitlint --from=HEAD~1 --to=HEAD --verbose` 对最近一条提交 `feat: 补齐提交规范工具链` → PASS
+
+#### E-14　TypeScript `any` 类型安全治理（2026-08-24）
+
+> **范围**：三端（nest / next / shared）源码中 `any` 关键字使用量治理，不含测试文件和 mock。
+
+- **证据**：修复前三端共 288 处 `any`（nest 197 / next 91 / shared 0）；零 `@ts-ignore`/`@ts-nocheck`（已合规）；ESLint `no-explicit-any` 为 `warn` 不阻断，`any` 持续累积
+- **影响**：`any` 绕过类型检查，调用方看不到契约，重构时无编译期保护；`as any` 断言可掩盖运行时类型不匹配
+- **治理策略**：按安全度分两批——可安全修复的批量处理，合理保留的加注释说明
+- **修复内容**（共 149 处）：
+
+| 修复项 | 处数 | 关键改动 |
+|---|---|---|
+| Controller `@Req() req: any` | ~40 | 新建 `@CurrentUser()` 装饰器 + `AuthUser` 类型（`common/current-user.decorator.ts`），全量替换 |
+| Ticket 接口缺 DTO | 4 | 新建 `CreateTicketDto` / `AddCommentDto` / `AppealDto` / `ResolveComplaintDto`（`tickets.dto.ts`） |
+| Service `dto: any` / `filter: any` | 8 | 新建 `TicketListFilter` / `RefundListFilter` / `AddCommentInput` interface |
+| `orders.gateway.ts` 全文 `any` | 17 | 新建 `WsServer` / `WsSocket` / `ServiceAreaEntry` / `OrderWithAddress` 接口替代 |
+| Prisma 枚举 `as any` | ~10 | → `as never`（agreements / withdrawals / tickets，Prisma 枚举边界安全断言） |
+| Prisma JSON `as any[]` | ~5 | → `ServiceAreaEntry[]` 类型化数组（masters / orders / master.util） |
+| 前端 `as any` | 10 | `MasterInfo` 补 `rating` / `orderCount` / `serviceAreas` 字段（`auth.ts`） |
+| 前端 `form.reason as any` | 1 | `useState` 类型化为 `ComplaintReason`（`complaints/page.tsx`） |
+| 其他散点 | ~4 | `notices.targetRegions` / `commission.tiers` / `orders.dto.photos` |
+
+- **合理保留的 139 处 `any`**：
+
+| 类别 | 估计数量 | 保留原因 |
+|---|---|---|
+| 支付通道（alipay/wechat/provider） | ~15 | 第三方 SDK 回调格式无法预定义 |
+| Cookie/Express 内部 | ~6 | Express `req`/`res` 内部结构 |
+| Prisma JSON 字段读取 | ~15 | Prisma `Json` 类型天然返回 `unknown` |
+| `catch (e: any)` | ~20 | TS 异常处理常见模式 |
+| 测试 Mock | ~6 | spec 文件已 ESLint 放行 |
+| TiPTap 富文本 | ~5 | 第三方编辑器扩展命令类型不完整 |
+| 前端 page.tsx 各种 | ~72 | `catch` 块 + axios 拦截器 + 小组件 |
+
+- **状态**：✅ 已完成（2026-08-24）
+- **验证**：
+  - `npx tsc --noEmit`（nest）→ EXIT=0
+  - `npx tsc --noEmit`（next）→ EXIT=0
+  - `pnpm --filter @laoma/backend lint` → 0 error / 90 warning（原 188，降 98）
+  - P0/P1 单测 10 suites / 195 tests PASS
+  - E2E 测试 2 suites / 16 tests PASS
+  - `any` 总量 288 → 139（-149，52%）；shared 端始终保持 0
 
 ### P2 — 工程化完善（可排期）
 
@@ -176,7 +220,7 @@
 | E-02 | CI typecheck 门禁 `continue-on-error` | P0  | ✅ 已解决  | 删除 `continue-on-error`，verify job 现阻塞部署；同批追加 `pnpm lint` |
 | E-03 | 无统一异常处理                             | P1  | ✅ 已解决  | `AllExceptionsFilter` 已接线 + 3722 冒烟 404/400/200 全过；错误码枚举与结构化日志留待 E-07 |
 | E-04 | 零自动化测试                              | P1  | ✅ 已完成   | jest 基础设施 + P0 纯函数(5 suites/107 tests) + P1 金额守卫(10 suites/195 tests) + P2 e2e 链路(2 suites/16 tests)，共 17 suites / 318 tests PASS，双端 tsc EXIT=0 |
-| E-05 | 无 lint / 格式化                        | P1  | 🔄 部分完成 | eslint 0 error 接入 CI；prettier 配置就位但存量 55 文件格式债未统一；next 端 lint 未配 |
+| E-05 | 无 lint / 格式化                        | P1  | 🔄 部分完成 | eslint 0 error / 90 warn 接入 CI（原 188 warn，E-14 清理后降 98）；prettier 配置就位但存量 55 文件格式债未统一；next 端 lint 未配 |
 | E-06 | 缺 `.env.example`                    | P2  | 📋 待处理 | nest/next 各补样例                                         |
 | E-07 | 日志无结构化                              | P2  | 📋 待处理 | 引 pino，关键路径结构化；顺带承接 E-03 错误码枚举                |
 | E-08 | 部署迁移策略风险                            | P2  | 📋 待处理 | db push vs migrate deploy，需决策                          |
@@ -185,6 +229,7 @@
 | E-11 | 前端性能/可访问性                           | P3  | 📋 待处理 | 排期后续                                                   |
 | E-12 | 短信验证码 DTO 校验不严（`phone` 仅 `IsString`） | P1  | 📋 待处理 | `POST /api/auth/send-code` 传 `phone:"123"` 可通过校验并真发码；建议 `IsMobilePhone`，需确认 mock 假号测试兼容性（见 §1 P1） |
 | E-13 | Git 提交信息无规范                       | P1  | ✅ 已完成 | commitlint + husky + .gitmessage 模板 + CI 校验步骤；详见 [`docs/commit-convention.md`](commit-convention.md) |
+| E-14 | TypeScript `any` 类型安全治理            | P1  | ✅ 已完成 | 288→139 处 any（-149，52%）；新建 @CurrentUser 装饰器 + 4 DTO + 3 interface + Gateway 类型；三端 tsc EXIT=0；211 tests PASS |
 
 
 

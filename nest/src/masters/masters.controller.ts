@@ -6,12 +6,13 @@ import {
   Param,
   Query,
   Patch,
-  Req,
   UseGuards,
   BadRequestException,
 } from '@nestjs/common';
 import { MastersService } from './masters.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthUser } from '../auth/auth-user.interface';
 import { RolesGuard } from '../common/roles.guard';
 import { PermGuard } from '../common/perm.guard';
 import { Roles } from '../common/roles.decorator';
@@ -70,7 +71,7 @@ export class MastersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.Master)
   @Patch('me')
-  updateMe(@Req() req: any, @Body() dto: UpdateMasterMeDto) {
-    return this.masters.updateMe(req.user.sub, dto);
+  updateMe(@CurrentUser() user: AuthUser, @Body() dto: UpdateMasterMeDto) {
+    return this.masters.updateMe(user.sub, dto);
   }
 }

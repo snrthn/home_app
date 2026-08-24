@@ -145,7 +145,7 @@ export default function MasterHome() {
     { pool: true },
   );
 
-  const p = profile as any;
+  const p = profile;
   const masterStatus: string = p?.master?.status ?? '';
   const nickname = p?.nickname || '师傅';
   const active = masterStatus === 'active';

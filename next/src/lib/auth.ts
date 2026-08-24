@@ -9,6 +9,16 @@ export interface MasterInfo {
   idCard?: string | null;
   skills?: string[] | null;
   status?: string | null;
+  rating?: number | null;
+  orderCount?: number | null;
+  serviceAreas?: Array<{
+    provinceCode: string | null;
+    cityCode: string | null;
+    districtCode: string | null;
+    province?: string | null;
+    city?: string | null;
+    district?: string | null;
+  }> | null;
   province?: string | null;
   provinceCode?: string | null;
   city?: string | null;

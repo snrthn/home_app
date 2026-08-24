@@ -6,7 +6,7 @@ export class CreateOrderDto {
   @IsOptional() @IsString() appointmentSlot?: string;
   @IsOptional() appointmentDate?: string; // ISO date
   @IsOptional() @IsString() remark?: string;
-  @IsOptional() photos?: any;
+  @IsOptional() photos?: string[];
 }
 
 export class AssignDto {

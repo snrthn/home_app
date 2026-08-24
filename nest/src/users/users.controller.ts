@@ -5,12 +5,13 @@ import {
   Get,
   Patch,
   Param,
-  Req,
   UseGuards,
   BadRequestException,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthUser } from '../auth/auth-user.interface';
 import { RolesGuard } from '../common/roles.guard';
 import { PermGuard } from '../common/perm.guard';
 import { Roles } from '../common/roles.decorator';
@@ -59,17 +60,17 @@ export class UsersController {
   @RequirePerm('users:admin_manage')
   @Patch('admins/:id')
   updateAdmin(
-    @Req() req: any,
+    @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body()
     body: { nickname?: string; password?: string; staffRoleId?: string },
   ) {
     // 防自锁死：禁止管理员把自己的 super_admin 角色改走（当前为 super_admin 且目标角色变更）
     if (
-      id === req.user?.sub &&
-      req.user?.staffRoleKey === 'super_admin' &&
+      id === user?.sub &&
+      user?.staffRoleKey === 'super_admin' &&
       body.staffRoleId !== undefined &&
-      body.staffRoleId !== req.user?.staffRoleId
+      body.staffRoleId !== user?.staffRoleId
     ) {
       throw new BadRequestException('不能修改自己的超级管理员角色');
     }
@@ -82,12 +83,12 @@ export class UsersController {
   @RequirePerm('users:admin_manage')
   @Post('admins/:id/status')
   setAdminStatus(
-    @Req() req: any,
+    @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() body: { status: string },
   ) {
     // 防自锁死：禁止管理员禁用 / 冻结自己的账号
-    if (id === req.user?.sub) {
+    if (id === user?.sub) {
       throw new BadRequestException('不能禁用或冻结自己当前登录的账号');
     }
     return this.users.setAdminStatus(id, body.status);

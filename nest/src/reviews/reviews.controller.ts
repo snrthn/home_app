@@ -5,10 +5,11 @@ import {
   Param,
   Body,
   UseGuards,
-  Req,
 } from '@nestjs/common';
 import { ReviewsService } from './reviews.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthUser } from '../auth/auth-user.interface';
 import { RolesGuard } from '../common/roles.guard';
 import { Roles } from '../common/roles.decorator';
 import { Role } from '@laoma/shared';
@@ -21,11 +22,11 @@ export class ReviewsController {
   @Roles(Role.Customer)
   @Post()
   create(
-    @Req() req: any,
+    @CurrentUser() user: AuthUser,
     @Body()
     dto: { orderId: string; rating: number; comment?: string; anonymous?: boolean },
   ) {
-    return this.r.create(req.user.sub, dto);
+    return this.r.create(user.sub, dto);
   }
 
   @UseGuards(JwtAuthGuard)

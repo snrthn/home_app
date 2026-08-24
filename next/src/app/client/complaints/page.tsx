@@ -4,7 +4,7 @@ import { useMemo, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getMyOrders, type OrderLite } from '@/lib/orders-api';
-import { createComplaint } from '@/lib/tickets-api';
+import { createComplaint, type ComplaintReason } from '@/lib/tickets-api';
 import { PortalNavSetter } from '@/components/PortalShell';
 
 const REASONS: [string, string][] = [
@@ -20,7 +20,13 @@ const COMPLAINTABLE: string[] = ['reviewed', 'evaluated'];
 
 export default function ClientComplaintsPage() {
   const qc = useQueryClient();
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    orderId: string;
+    reason: ComplaintReason;
+    title: string;
+    content: string;
+    expectation: string;
+  }>({
     orderId: '',
     reason: 'quality',
     title: '',
@@ -69,7 +75,7 @@ export default function ClientComplaintsPage() {
     if (!form.content.trim()) return setMsg('请填写投诉内容');
     mutation.mutate({
       orderId: form.orderId,
-      reason: form.reason as any,
+      reason: form.reason,
       title: form.title,
       content: form.content,
       expectation: form.expectation || undefined,
@@ -113,7 +119,7 @@ export default function ClientComplaintsPage() {
             <select
               className="select"
               value={form.reason}
-              onChange={(e) => setForm({ ...form, reason: e.target.value })}
+              onChange={(e) => setForm({ ...form, reason: e.target.value as ComplaintReason })}
             >
               {REASONS.map(([v, l]) => (
                 <option key={v} value={v}>{l}</option>

@@ -5,11 +5,12 @@ import {
   Param,
   Body,
   UseGuards,
-  Req,
   Patch,
 } from '@nestjs/common';
 import { AgreementsService } from './agreements.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthUser } from '../auth/auth-user.interface';
 import { RolesGuard } from '../common/roles.guard';
 import { PermGuard } from '../common/perm.guard';
 import { Roles } from '../common/roles.decorator';
@@ -29,10 +30,10 @@ export class AgreementsController {
   @RequirePerm('content:manage')
   @Post()
   createTemplate(
-    @Req() req: any,
+    @CurrentUser() user: AuthUser,
     @Body() dto: { scope: string; type: string; title: string },
   ) {
-    return this.s.createTemplate(req.user.sub, dto);
+    return this.s.createTemplate(user.sub, dto);
   }
 
   // 修改协议类型名称（创建后允许修正；不影响 code 与已有版本）
@@ -60,11 +61,11 @@ export class AgreementsController {
   @RequirePerm('content:manage')
   @Post(':id/versions')
   createVersion(
-    @Req() req: any,
+    @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body() dto: { title: string; contentHtml?: string },
   ) {
-    return this.s.createVersion(req.user.sub, id, dto);
+    return this.s.createVersion(user.sub, id, dto);
   }
 
   // 编辑版本（仅草稿可改；非草稿需新建版本后上架）

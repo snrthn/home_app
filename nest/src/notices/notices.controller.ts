@@ -5,13 +5,14 @@ import {
   Param,
   Body,
   UseGuards,
-  Req,
   Patch,
   Delete,
   Query,
 } from '@nestjs/common';
 import { NoticesService } from './notices.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthUser } from '../auth/auth-user.interface';
 import { RolesGuard } from '../common/roles.guard';
 import { PermGuard } from '../common/perm.guard';
 import { Roles } from '../common/roles.decorator';
@@ -46,7 +47,7 @@ export class NoticesController {
   @RequirePerm('content:manage')
   @Post()
   create(
-    @Req() req: any,
+    @CurrentUser() user: AuthUser,
     @Body()
     dto: {
       scope: string;
@@ -59,7 +60,7 @@ export class NoticesController {
       targetRegions?: any[];
     },
   ) {
-    return this.s.create(req.user.sub, dto);
+    return this.s.create(user.sub, dto);
   }
 
   // 编辑（标题/正文/所属端/时间窗等）

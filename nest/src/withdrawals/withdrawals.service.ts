@@ -49,7 +49,7 @@ export class WithdrawalsService {
         data: {
           masterId: master.id,
           amount,
-          channel: dto.channel as any,
+          channel: dto.channel as never,
           account: dto.account,
           status: 'pending',
         },
@@ -75,7 +75,7 @@ export class WithdrawalsService {
       where: {
         deletedAt: null,
         ...(status && ['pending', 'paid', 'rejected'].includes(status)
-          ? { status: status as any }
+          ? { status: status as never }
           : {}),
       },
       include: {

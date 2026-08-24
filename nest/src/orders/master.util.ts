@@ -20,7 +20,7 @@ export function masterCoversOrder(
   master: MasterRegion | null,
   addr: AddrRegion | null | undefined,
 ): boolean {
-  const areas = (master?.serviceAreas as any[]) ?? [];
+  const areas = (master?.serviceAreas as Array<{ provinceCode?: string | null; cityCode?: string | null; districtCode?: string | null }>) ?? [];
   const home = master?.provinceCode
     ? [
         {

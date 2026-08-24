@@ -90,7 +90,7 @@ export default function ClientMe() {
     );
   }
 
-  const profile = data as any;
+  const profile = data;
   const phone = maskPhone(profile?.phone);
   const avatar = profile?.avatar ?? '';
 
