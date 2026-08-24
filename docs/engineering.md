@@ -1,0 +1,155 @@
+# 工程化专项（Engineering）
+
+> **维护者**：AI Agent「巴比」　**创建**：2026-08-24　**联动**：`docs/HANDOFF.md` §1.2  
+> **目的**：集中记录 home_app 的**工程化 / 质量 / 安全 / CI / 部署**问题、优先级与处理跟踪，与业务逻辑解耦（业务设计见各 `*-design.md`）。  
+> **用法**：每个问题一条（E-xx），含证据（文件:行）、影响、建议、状态。解决后回填 commit 与验证命令，不要只改状态。
+
+---
+
+## 0. 现状体检快照（2026-08-24 实测；E-03/E-04/E-05 处理后）
+
+| 维度         | 现状                                                                                        | 结论            |
+| ---------- | ----------------------------------------------------------------------------------------- | ------------- |
+| 类型检查       | `nest` / `next` 均 `tsc --noEmit` EXIT=0                                                   | ✅ 通过          |
+| 单元测试       | jest + ts-jest 就位；`tier.util.spec.ts` 8/8 PASS（`pnpm --filter @laoma/backend test`）      | 🟡 起步（覆盖不足）  |
+| Lint / 格式化 | eslint 9 flat config 打通，`pnpm lint` 0 error / 188 warn；prettier 配置就位，存量 55 文件格式债未统一 | 🟡 部分完成       |
+| CI 门禁      | `.github/workflows/deploy.yml` 现跑 `pnpm typecheck` + `pnpm lint`，失败即阻断部署             | ✅ 门禁生效       |
+| CORS       | `main.ts` 读 `CORS_ORIGIN` env（逗号白名单），未设回落 true；生产设白名单即锁死                  | ✅ 已收敛        |
+| 统一异常       | `AllExceptionsFilter` 全局注册，404/400/500 统一 `{code,message,data,path,timestamp}`        | ✅ 已收敛        |
+| 日志         | nest 2 处 + next 4 处 `console.log` 散落，无 pino/winston                                       | ⚠️ 无结构化       |
+| 密钥管理       | `.gitignore` 已忽略 `.env`（不入库）；无 `.env.example`                                             | ⚠️ 安全但缺样例     |
+| 部署迁移       | `scripts/deploy.sh` 第 6 步 `npx prisma db push`（非 `migrate deploy`）；本地却有 14 个 migration 文件 | ⚠️ 双路径不一致、无回滚 |
+
+> 安全亮点：密钥无硬编码（均在 `.env`），`.gitignore` 正确忽略 `.env`，`git archive` 部署也自动排除。
+
+---
+
+## 1. 问题清单（按优先级）
+
+### P0 — 安全 / 上线即风险（改动小、收益大，优先做）
+
+#### E-01　CORS `origin: true` + `credentials: true` 写入生产
+
+- **证据**：`nest/src/main.ts:10` → `app.enableCors({ origin: true, credentials: true });`
+- **影响**：`origin: true` 等于「任意来源」都允许，叠加 `credentials: true` 允许带用户凭证请求 → 跨站凭证泄露 / CSRF 类风险。开发方便，但 `main.ts` 是 dev 与 `dist/main.js`（生产）共用同一份代码，生产环境同样无差别放行。
+- **建议**：从 `process.env.CORS_ORIGIN` 读取（逗号分隔白名单，`*` 仅限 dev 显式声明），去掉无差别 `true`。约 1 行代码 + 1 个 env 变量。
+- **状态**：✅ 已解决（2026-08-24）
+- **验证**：`nest tsc --noEmit` EXIT=0；已重启 3721 生效。未设 `CORS_ORIGIN` 时回落 `true`（dev 跨端口兼容），生产配置白名单即锁死任意来源带凭证风险。代码已改，待 commit。
+
+#### E-02　CI 质量门禁失效（`continue-on-error: true`）
+
+- **证据**：`.github/workflows/deploy.yml` → `pnpm typecheck` 上方 `continue-on-error: true`
+- **影响**：typecheck 失败也照常部署，等于没有门禁；坏类型/误用直接上线。
+- **建议**：去掉 `continue-on-error`；至少让 typecheck 阻断部署。后续把 lint 也加进 `verify` job。
+- **状态**：✅ 已解决（2026-08-24）
+- **验证**：已删除 `deploy.yml` 的 `continue-on-error: true`，`verify` job 现阻塞部署（typecheck 失败即终止）。代码已改，待 commit/push 生效。
+
+### P1 — 健壮性 / 可维护性（中期必做）
+
+#### E-03　无统一异常处理
+
+- **证据**：`grep -rln "ExceptionFilter" nest/src` → NONE；无 `AllExceptionsFilter` / `HttpExceptionFilter`
+- **影响**：业务异常（余额不足、订单状态非法、权限不足）依赖框架默认 500/HTML 响应，格式不可控，前端难统一处理，排障靠猜。
+- **建议**：加 `AllExceptionsFilter` 统一响应体 `{ code, message, data? }` + 业务错误码枚举；业务 service 抛 `BizException(code)`，过滤器转译并结构化日志（含 traceId/requestId）。
+- **状态**：✅ 已解决（2026-08-24）
+- **验证**：
+  - `nest/src/common/filters/all-exceptions.filter.ts`【新建】：`@Catch()` 全量兜底——HttpException 透出 status + message（数组 join 成 `；`）；Prisma 已知错误映射 `DB_P2002`（唯一约束）/`DB_VALIDATION`；未知异常统一 `500 + code='INTERNAL_ERROR'`，不泄露堆栈；响应体 `{ code, message, data:null, path, timestamp }`，message 始终保留在顶层（前端 `getApiErrorMsg` 只读它）
+  - `main.ts:24` 已 `app.useGlobalFilters(new AllExceptionsFilter())` 注册
+  - `nest tsc --noEmit` EXIT=0；**3722 冒烟实测**：404 → `HTTP_404`、ValidationPipe 校验失败 → `HTTP_400`（message=「phone must be a string」）、非法 JSON → `HTTP_400`、正常接口 200 不受影响；3722 已退服
+  - 剩余债：错误码未枚举化（`HTTP_xxx` 直透）、未接结构化日志——按建议后半段属长期债，留待 E-07 一并处理
+
+#### E-04　零自动化测试
+
+- **证据**：`nest/package.json`、`next/package.json`、`package.json` 均无 `test` 脚本；无 jest/vitest 配置；无 `*.spec.ts` / `*.test.ts`
+- **影响**：支付/退款状态机、派单 candidates 算法、分账 `resolveTierRatio` 等核心逻辑**无回归保护**，任何重构即裸奔。
+- **建议**：先补最高价值单测（分账阶梯计算、退款阶梯、派单评分排序），再补 1 条 e2e smoke（登录 → 下单 → 支付确认 → 退款审核）。框架用 vitest + supertest（nest）即可，不引入重量级依赖。
+- **状态**：🔄 部分完成（2026-08-24：基础设施 + 首条核心单测；退款阶梯/派单排序待补）
+- **验证**：
+  - **基础设施**：`nest/jest.config.js` + `nest/tsconfig.spec.json`【新建】——jest + ts-jest + `testRegex .*\.spec\.ts$`，`@laoma/shared` 经 `moduleNameMapper` 映射到 `shared/dist/index.js`（避免 pnpm 双副本解析漂移）；`nest/package.json` 加 `test` script
+  - **首条单测**：`nest/src/commission/tier.util.spec.ts`【新建】——把 `commission.service.ts` 内联的 `CANCELLABLE_LIFECYCLE/resolveTierRatio/clamp01` 抽到 `tier.util.ts`【新建】（纯函数可测），单测覆盖区间继承/最近断点优先/空 tiers 兜底/clamp01 越界 4 组语义，**8/8 PASS**（`pnpm --filter @laoma/backend test`）；重构为纯抽取，service 行为零变更（diff 仅删除内联实现 + import）
+  - **剩余**：退款阶梯（`payments.service` 退款比例分支）、派单评分排序（`orders.service.listCandidates` 排序键）两条单测未补；e2e smoke 未做——留待后续迭代
+- **框架说明**：实际选用 jest（非 vitest）——nest 官方默认 + 沙箱安装链已验证
+
+#### E-05　无 Lint / 格式化
+
+- **证据**：`find . -maxdepth 3 -name '.eslintrc*' -o -name 'eslint.config.*' -o -name 'prettier*'` → 全空
+- **影响**：代码风格靠自觉，CI 不拦截 `any` 扩散、未用变量、潜在 bug 模式。
+- **建议**：加共享 eslint flat config（nest 用 `@nestjs/eslint`，next 用 `eslint-config-next`）+ prettier；`package.json` 加 `lint` 脚本；CI `verify` job 串 lint。
+- **状态**：🔄 部分完成（2026-08-24：eslint 通道打通 0 error 并接入 CI；prettier 配置就位但存量格式债未统一、未接 CI）
+- **验证**：
+  - `nest/eslint.config.mjs`【新建】：eslint 9 flat config（`@eslint/js` + `typescript-eslint` recommended）——TS 源码关 `no-undef`（tsc 兜底，官方推荐）；`no-explicit-any`/`no-unused-vars` 降 warn 不阻断；**Node CommonJS 脚本**（`prisma/seed-*.js`、`jest.config.js`、`scripts/*.cjs`）声明运行时 globals + 放行 `require`；`.mjs`（config 自身）按 ESM 处理
+  - `nest/.prettierrc.json`（semi/singleQuote/trailingComma/printWidth 100）+ `.prettierignore`（dist/node_modules/coverage）【新建】；`nest/package.json` 加 `lint`/`format` script；根 `package.json` + `turbo.json` 加 `lint` task（`pnpm lint` 全仓入口）
+  - `.github/workflows/deploy.yml`：`verify` job 在 typecheck 后追加 `pnpm lint`（与 E-02 同批改）
+  - **实测**：`pnpm --filter @laoma/backend lint` **0 error / 188 warning**（存量 any/未用变量债，warn 级）；`scripts/verify-p1-runtime.cjs` 一处未用变量顺手修掉
+  - **存量格式债**：`npx prettier --check src/**/*.ts` → 55 文件不合规（历史无 prettier 约束）。**决策：本轮不跑 `--write` 全量格式化**——大 diff 混入工程提交风险高，且与用户编辑器正在改的文件冲突；`format` 脚本留作按需执行，后续单独开一轮「prettier 全量统一 + 接 CI」
+  - **未做**：next 端 lint（`eslint-config-next`）未配——`pnpm lint`（turbo）当前仅 nest 生效，next 无 lint script 自动跳过；建议下轮补
+
+#### E-12　短信验证码 DTO 校验不严（2026-08-24 冒烟时发现）
+
+- **证据**：`POST /api/auth/send-code` 传 `{"phone":"123"}` → 200 且 mock 模式真返回验证码（`{ok:true,code:"107227",dev:true}`）；`send-code.dto.ts` 的 `phone` 仅 `@IsString()`，无手机号格式校验
+- **影响**：任意字符串（非手机号）都能触发发码；real 模式下等于免费短信轰炸接口（若接真网关无频控成本风险），体验上无效号码也能「获取验证码」
+- **建议**：`phone` 加 `@IsMobilePhone('zh-CN')`（class-validator 内置）；需确认 mock 模式测试假号（如 `13800000000`）仍合法——合法格式内假号不受影响；若存在故意用非手机号串的场景再单独评估
+- **状态**：📋 待处理（低风险快改，1 行 DTO；待虎哥确认 mock 假号兼容后动手）
+
+### P2 — 工程化完善（可排期）
+
+#### E-06　缺少 `.env.example`
+
+- **证据**：根目录 / `nest/` / `next/` 均无 `.env.example`；`.gitignore` 已忽略 `.env`（✅）
+- **影响**：新环境、同事、CI runner 不知道需要哪些变量（DATABASE_URL、JWT_SECRET、CORS_ORIGIN、短信四参数、支付商户号/密钥、OSS 等），只能看代码反推。
+- **建议**：在 `nest/.env.example` 与 `next/.env.example` 列出全部变量名 + 说明，值留占位（`JWT_SECRET=`、`DATABASE_URL=`）。
+- **状态**：📋 待处理
+
+#### E-07　日志无结构化
+
+- **证据**：`grep -rn 'console.log' nest/src` → 2 处；`next/src` → 4 处；无 pino/winston
+- **影响**：生产排障靠 `console`，无分级（info/warn/error）、无上下文字段（orderId/requestId）、无法对接日志收集。
+- **建议**：引入 `pino`（轻量、快）；关键路径（支付回调、派单执行、退款审核、WS 连接）打结构化日志；开发态仍可读。
+- **状态**：📋 待处理
+
+#### E-08　部署迁移策略风险（`prisma db push` 而非 `migrate deploy`）
+
+- **证据**：`scripts/deploy.sh` 第 6 步 `( cd nest && npx prisma db push )`；本地 `nest/prisma/migrations/` 却有 14 个 migration 文件
+- **影响**：
+  - 生产无迁移历史审计，schema 变更不可追溯；
+  - `db push` 对删列/改类型**直接生效且无确认**，生产误删字段即丢数据（HANDOFF §595 已记录此坑）；
+  - 本地用 `migrate dev`、生产用 `db push`，两套路径，长期必漂移。
+- **建议（二选一，需你拍板）**：
+  1. **切 `migrate deploy`**：本地 `prisma migrate dev` 产出迁移，生产 `migrate deploy` 应用；部署前自动 `mysqldump` 备份。最规范，但有历史迁移需要补齐（当前 14 个文件未在生产登记）。
+  2. **保留 `db push` 但加护栏**：部署前自动备份库；明确纪律「删列/改类型必须手写迁移 + 评审」，db push 只负责加列/加表这类安全变更。
+- **状态**：📋 待处理（需决策方案）
+
+### P3 — 后续可选（不阻塞业务）
+
+- **E-09** 前端统一错误边界：`ErrorBoundary` + 401 统一跳登录 + 网络错误全局 toast（需确认 `next/src/lib` api 封装是否已统一拦截）
+- **E-10** 依赖安全审计：`pnpm audit` / Dependabot / snyk，定期扫描
+- **E-11** 前端性能与可访问性：route 级懒加载、bundle 拆分、a11y 基础（label/aria/focus）
+
+---
+
+## 2. 处理跟踪表
+
+| 编号   | 问题                                  | 优先级 | 状态     | 计划 / 备注                                                |
+| ---- | ----------------------------------- | --- | ------ | ------------------------------------------------------ |
+| E-01 | CORS 写死 `origin:true` 带入生产          | P0  | ✅ 已解决  | 改读 `CORS_ORIGIN` env；未设回落 true，设则白名单锁死；tsc 通过，已重启 3721 |
+| E-02 | CI typecheck 门禁 `continue-on-error` | P0  | ✅ 已解决  | 删除 `continue-on-error`，verify job 现阻塞部署；同批追加 `pnpm lint` |
+| E-03 | 无统一异常处理                             | P1  | ✅ 已解决  | `AllExceptionsFilter` 已接线 + 3722 冒烟 404/400/200 全过；错误码枚举与结构化日志留待 E-07 |
+| E-04 | 零自动化测试                              | P1  | 🔄 部分完成 | jest 基础设施 + 分账阶梯单测 8/8；退款阶梯/派单排序单测与 e2e smoke 待补 |
+| E-05 | 无 lint / 格式化                        | P1  | 🔄 部分完成 | eslint 0 error 接入 CI；prettier 配置就位但存量 55 文件格式债未统一；next 端 lint 未配 |
+| E-06 | 缺 `.env.example`                    | P2  | 📋 待处理 | nest/next 各补样例                                         |
+| E-07 | 日志无结构化                              | P2  | 📋 待处理 | 引 pino，关键路径结构化；顺带承接 E-03 错误码枚举                |
+| E-08 | 部署迁移策略风险                            | P2  | 📋 待处理 | db push vs migrate deploy，需决策                          |
+| E-09 | 前端统一错误边界                            | P3  | 📋 待处理 | 视 api 封装现状                                             |
+| E-10 | 依赖安全审计                              | P3  | 📋 待处理 | pnpm audit / Dependabot                                |
+| E-11 | 前端性能/可访问性                           | P3  | 📋 待处理 | 排期后续                                                   |
+| E-12 | 短信验证码 DTO 校验不严（`phone` 仅 `IsString`） | P1  | 📋 待处理 | `POST /api/auth/send-code` 传 `phone:"123"` 可通过校验并真发码；建议 `IsMobilePhone`，需确认 mock 假号测试兼容性（见 §1 P1） |
+
+
+
+---
+
+## 3. 处理约定
+
+- 解决某条时：**改代码 → 跑 `tsc`/lint/单测 → 回填本文件「计划/备注」列 commit 与验证命令 → 状态置 ✅**。
+- 新增问题：直接加在 §1 对应优先级小节，并在 §2 跟踪表追加一行。
+- 决策类（如 E-08）标注「需你拍板」，不在无授权下擅自改生产路径。

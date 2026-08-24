@@ -123,7 +123,7 @@ async function main() {
   assert(t && t.id, '客户提交投诉成功 ticket=' + (t && t.id));
 
   // admin 处置 result=refund（创建退款申请，关联到 refund 表 ticketId）
-  const resolved = await api('POST', `/tickets/${t.id}/complaint/resolve`, { result: 'refund', expectation: 'refund', note: '同意退款' }, adminToken);
+  await api('POST', `/tickets/${t.id}/complaint/resolve`, { result: 'refund', expectation: 'refund', note: '同意退款' }, adminToken);
   const rf = await prisma.refund.findFirst({ where: { ticketId: t.id } });
   assert(rf, 'admin 处置投诉(result=refund) 已创建退款申请');
   if (rf) created.refunds.push(rf.id);
