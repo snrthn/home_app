@@ -5,7 +5,7 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { PrismaClientKnownRequestError, PrismaClientValidationError } from '@prisma/client/runtime/library';
 import { Request, Response } from 'express';
 
 /**
@@ -40,14 +40,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
           : ((msg as string) ?? message);
       }
       code = `HTTP_${status}`;
-    } else if (exception instanceof Prisma.PrismaClientKnownRequestError) {
+    } else if (exception instanceof PrismaClientKnownRequestError) {
       status = HttpStatus.BAD_REQUEST;
       code = `DB_${exception.code}`;
       message =
         exception.code === 'P2002'
           ? '数据已存在（唯一约束冲突）'
           : '数据库约束错误';
-    } else if (exception instanceof Prisma.PrismaClientValidationError) {
+    } else if (exception instanceof PrismaClientValidationError) {
       status = HttpStatus.BAD_REQUEST;
       code = 'DB_VALIDATION';
       message = '数据校验错误';
