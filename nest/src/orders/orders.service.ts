@@ -11,6 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { regionMatches, serviceAreasToRules } from '../common/region-match';
 import { OrderStatus } from '@laoma/shared';
 import { canTransition } from './order-status';
+import { masterCoversOrder, slotsOverlap } from './master.util';
 import { OrdersGateway } from '../gateway/orders.gateway';
 import { SettlementsService } from '../settlements/settlements.service';
 import { PaymentsService } from '../payments/payments.service';
@@ -131,46 +132,6 @@ export class OrdersService {
     });
   }
 
-  // 师傅「所在地 ∪ 接单范围」是否覆盖订单地址（接单池过滤/抢单校验 共用）。
-  // 严格模式：两者皆空 → 不覆盖（pool 返回 []、grab throw）。
-  // code-only 匹配（撤掉名称兜底，避免「市辖区」跨城市误命中）。
-  private masterCoversOrder(
-    master:
-      | {
-          serviceAreas?: any;
-          provinceCode?: string | null;
-          cityCode?: string | null;
-          districtCode?: string | null;
-        }
-      | null,
-    addr:
-      | {
-          provinceCode?: string | null;
-          cityCode?: string | null;
-          districtCode?: string | null;
-        }
-      | null
-      | undefined,
-  ): boolean {
-    const areas = (master?.serviceAreas as any[]) ?? [];
-    const home = master?.provinceCode
-      ? [
-          {
-            provinceCode: master.provinceCode,
-            cityCode: master.cityCode,
-            districtCode: master.districtCode,
-          },
-        ]
-      : [];
-    const rules = [...areas, ...home];
-    if (rules.length === 0) return false;
-    return regionMatches(rules, {
-      provinceCode: addr?.provinceCode,
-      cityCode: addr?.cityCode,
-      districtCode: addr?.districtCode,
-    });
-  }
-
   async pool(masterId?: string) {
     // masterId:null 与抢单乐观锁条件对齐：抢单先占 masterId 再流转，
     // 中途异常会留下 PendingAccept+已占 的孤儿单，池子里不该再展示
@@ -186,7 +147,7 @@ export class OrdersService {
       where: { userId: masterId },
       select: { serviceAreas: true, provinceCode: true, cityCode: true, districtCode: true },
     });
-    return orders.filter((o) => this.masterCoversOrder(master, o.address));
+    return orders.filter((o) => masterCoversOrder(master, o.address));
   }
 
   async listForMaster(userId: string, city?: string) {
@@ -273,7 +234,7 @@ export class OrdersService {
       where: { userId },
       select: { serviceAreas: true, provinceCode: true, cityCode: true, districtCode: true },
     });
-    if (!this.masterCoversOrder(master, order?.address)) {
+    if (!masterCoversOrder(master, order?.address)) {
       throw new BadRequestException('您不在该订单的服务区域');
     }
     // 乐观锁：仅当订单处于「待接单」且尚无师傅接走(masterId=null)时原子抢占，
@@ -308,31 +269,6 @@ export class OrdersService {
     OrderStatus.Servicing,
     OrderStatus.PendingConfirm,
   ];
-
-  /**
-   * 预约时段重叠判定：双方均为 "HH:mm-HH:mm" 区间格式 → 区间相交；否则（枚举/自由文本如「上午」）去空白后字符串相等即冲突。
-   */
-  private static slotsOverlap(a?: string | null, b?: string | null): boolean {
-    const norm = (s?: string | null) => (s ?? '').replace(/\s+/g, '');
-    const pa = norm(a);
-    const pb = norm(b);
-    if (!pa || !pb) return false;
-    const toMin = (t: string) => {
-      const m = t.match(/^(\d{1,2}):(\d{2})$/);
-      return m ? Number(m[1]) * 60 + Number(m[2]) : null;
-    };
-    const ra = pa.match(/^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/);
-    const rb = pb.match(/^(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/);
-    if (ra && rb) {
-      const a1 = toMin(ra[1]);
-      const a2 = toMin(ra[2]);
-      const b1 = toMin(rb[1]);
-      const b2 = toMin(rb[2]);
-      if (a1 === null || a2 === null || b1 === null || b2 === null) return false;
-      return a1 < b2 && b1 < a2; // 区间相交（半开区间）
-    }
-    return pa === pb; // 自由文本/枚举：相等即冲突
-  }
 
   /**
    * 智能派单：为指定订单推荐候选师傅。
@@ -390,7 +326,7 @@ export class OrdersService {
     });
 
     // 区域硬过滤
-    const covered = masters.filter((m) => this.masterCoversOrder(m, order.address));
+    const covered = masters.filter((m) => masterCoversOrder(m, order.address));
     if (covered.length === 0) return [];
 
     const coveredIds = covered.map((m) => m.id);
@@ -426,7 +362,7 @@ export class OrdersService {
       });
       for (const o of sameDay) {
         if (!o.masterId) continue;
-        if (OrdersService.slotsOverlap(order.appointmentSlot, o.appointmentSlot)) {
+        if (slotsOverlap(order.appointmentSlot, o.appointmentSlot)) {
           if (!conflictMap.has(o.masterId)) {
             conflictMap.set(o.masterId, { orderNo: o.orderNo, slot: o.appointmentSlot });
           }
