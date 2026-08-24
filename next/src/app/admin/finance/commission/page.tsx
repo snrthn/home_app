@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import {
   getCommissionRules,
@@ -72,6 +72,26 @@ function sortedTierEntries<T>(tiers: Record<string, T>): [string, T][] {
   });
 }
 
+/** 未选状态行的临时 key 前缀：排序时落在列表末尾（findIndex=-1→999），保存时按此前缀过滤 */
+const UNSEL_PREFIX = '__unsel_';
+const isUnselected = (key: string) => key.startsWith(UNSEL_PREFIX);
+
+/** 区间继承来源：向前找最近一个已设断点；找不到说明是起点（全额退） */
+function inheritedFrom(stageKey: string, tiers: Record<string, string>): string {
+  const idx = LIFECYCLE.findIndex((s) => s.key === stageKey);
+  if (idx < 0) return '';
+  for (let i = idx - 1; i >= 0; i--) {
+    const k = LIFECYCLE[i].key;
+    if (k in tiers && tiers[k] !== '' && !isUnselected(k)) return LIFECYCLE[i].label;
+  }
+  return '起点（全额退）';
+}
+
+/** 计算某行可选的状态集合（排除已被其它行占用的生命周期阶段） */
+function availableStages(tiers: Record<string, string>, curKey: string): string[] {
+  return LIFECYCLE.filter((s) => !(s.key in tiers) || s.key === curKey).map((s) => s.key);
+}
+
 /** 将扁平类目列表构建为树 */
 function buildCategoryTree(flat: ServiceCategory[]): (ServiceCategory & { children: (ServiceCategory & { children: unknown[] })[] })[] {
   type Node = ServiceCategory & { children: Node[] };
@@ -132,6 +152,8 @@ export default function CommissionRulesPage() {
   const [editing, setEditing] = useState<CommissionRule | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
+  // 新增断点时生成的临时 key 计数器：未选状态的行用唯一临时 key，渲染时钉在列表末尾，保存时过滤掉
+  const tierSeqRef = useRef(0);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<CommissionRule | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -223,6 +245,7 @@ export default function CommissionRulesPage() {
     const tiersOut: Record<string, number> = {};
     if (form.refundPolicy === 'tiered') {
       for (const [k, v] of sortedTierEntries(form.refundTiers)) {
+        if (isUnselected(k)) continue; // 未选状态的临时行不入库
         const n = Number(v);
         if (v !== '' && !Number.isNaN(n) && n >= 0 && n <= 100) {
           tiersOut[k] = n / 100;
@@ -334,16 +357,15 @@ export default function CommissionRulesPage() {
   ];
 
   // ---- 弹窗内表单辅助 ----
-  /** 添加一个区间断点 */
+  /** 添加一个区间断点：在列表末尾追加一行「未选状态」的空行，由用户显式选择阶段，避免自动插入生命周期中间 */
   const addTier = () => {
-    // 找一个还没被用的状态
-    const used = new Set(Object.keys(form.refundTiers));
-    const next = LIFECYCLE.find((s) => !used.has(s.key));
-    if (!next) {
+    tierSeqRef.current += 1;
+    const tmpKey = `${UNSEL_PREFIX}${tierSeqRef.current}`;
+    if (availableStages(form.refundTiers, tmpKey).length === 0) {
       toast.error('所有状态都已添加断点');
       return;
     }
-    setForm((f) => ({ ...f, refundTiers: { ...f.refundTiers, [next.key]: '100' } }));
+    setForm((f) => ({ ...f, refundTiers: { ...f.refundTiers, [tmpKey]: '100' } }));
   };
 
   /** 删除一个区间断点 */
@@ -355,8 +377,27 @@ export default function CommissionRulesPage() {
     });
   };
 
-  /** 更新断点状态 key（切换到另一个状态） */
+  /** 更新断点状态 key（切换到另一个状态 / 选回占位变回未选） */
   const changeTierKey = (oldKey: string, newKey: string) => {
+    if (newKey === oldKey) return;
+    // 选回占位 → 变回「未选」临时行
+    if (!newKey) {
+      tierSeqRef.current += 1;
+      const tmpKey = `${UNSEL_PREFIX}${tierSeqRef.current}`;
+      setForm((f) => {
+        const next = { ...f.refundTiers };
+        const val = next[oldKey];
+        delete next[oldKey];
+        next[tmpKey] = val ?? '100';
+        return { ...f, refundTiers: next };
+      });
+      return;
+    }
+    // 该状态已被其它行占用 → 拦截，避免重复断点
+    if (Object.prototype.hasOwnProperty.call(form.refundTiers, newKey)) {
+      toast.error('该状态已有断点，请换一个');
+      return;
+    }
     setForm((f) => {
       const next = { ...f.refundTiers };
       const val = next[oldKey];
@@ -605,22 +646,26 @@ export default function CommissionRulesPage() {
               <div style={{ marginLeft: 80 }}>
                 <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 8 }}>退款区间断点</div>
                 <p className="field-hint" style={{ marginTop: 0, marginBottom: 10 }}>
-                  每个「从某状态起」定义一个退用户的比例断点；后续未定义的状态自动继承上一个断点，直到遇到下一个断点。
+                  每个「从某状态起」定义一个退用户的比例断点；后续未定义的状态自动继承上一个断点，直到遇到下一个断点。点击「+ 添加断点」会在列表末尾追加一行，请在下拉中指定状态。
                 </p>
                 {/* 断点列表 */}
-                {Object.entries(form.refundTiers).length === 0 && (
+                {Object.entries(form.refundTiers).filter(([k]) => !isUnselected(k)).length === 0 && (
                   <p className="field-hint" style={{ marginBottom: 8 }}>暂无断点，所有状态默认退 100%</p>
                 )}
-                {sortedTierEntries(form.refundTiers).map(([key, val]) => (
+                {sortedTierEntries(form.refundTiers).map(([key, val]) => {
+                  const unsel = isUnselected(key);
+                  const opts = availableStages(form.refundTiers, key);
+                  return (
                   <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                     <span style={{ fontSize: 13, color: 'var(--color-text-soft)' }}>从</span>
                     <select
                       className="input select-input"
                       style={{ width: 130 }}
-                      value={key}
+                      value={unsel ? '' : key}
                       onChange={(e) => changeTierKey(key, e.target.value)}
                     >
-                      {LIFECYCLE.map((s) => (
+                      {unsel && <option value="">请选择状态</option>}
+                      {LIFECYCLE.filter((s) => opts.includes(s.key)).map((s) => (
                         <option key={s.key} value={s.key}>{s.label}</option>
                       ))}
                     </select>
@@ -631,6 +676,7 @@ export default function CommissionRulesPage() {
                       min="0"
                       max="100"
                       value={val}
+                      disabled={unsel}
                       onChange={(e) => setForm((f) => ({
                         ...f,
                         refundTiers: { ...f.refundTiers, [key]: e.target.value },
@@ -639,14 +685,20 @@ export default function CommissionRulesPage() {
                       placeholder="100"
                     />
                     <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>%</span>
+                    {!unsel && (
+                      <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>
+                        继承自：{inheritedFrom(key, form.refundTiers)}
+                      </span>
+                    )}
                     <button
                       className="btn-link btn-link-danger"
                       onClick={() => removeTier(key)}
                       style={{ marginLeft: 4 }}
                     >删除</button>
                   </div>
-                ))}
-                {Object.keys(form.refundTiers).length < LIFECYCLE.length && (
+                  );
+                })}
+                {Object.keys(form.refundTiers).filter((k) => !isUnselected(k)).length < LIFECYCLE.length && (
                   <button className="btn-link" onClick={addTier} style={{ marginTop: 4 }}>
                     + 添加断点
                   </button>

@@ -322,7 +322,7 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 
 ---
 
-## 13. 当前完成状态（截至 2026-08-23）
+## 13. 当前完成状态（截至 2026-08-24）
 
 ### 已完成 ✅
 
@@ -376,13 +376,14 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 - [x] DetailModal 组件 + 用户/师傅详情弹窗 + 认证审核合并优化（详见第 22 节）：Descriptions 风格 + Tag 标签 + 分段操作按钮，customers/masters/verifications 三页统一（2026-08-24）
 - [x] 内容种子脚本 `seed-content.js`：三端关于我们（SiteContent）+ 三端协议（AgreementTemplate+Version 已发布）+ 平台上线公告（Notice），幂等不覆盖运营修改（2026-08-24）
 - [x] 师傅端首页布局优化（详见第 22 节）：Hero 渐变头区（头像+昵称+状态+评分+三指标条）+ 可提现余额大卡（含提现中副文案+立即提现）+ 快捷4宫格（SVG图标+角标）+ 进行中订单卡片（SVG替代emoji）+ WS实时刷新；头像 resolveAsset 修复 + 收入明细跳转修复（2026-08-24）
+- [x] 投诉/工单 Phase 2（详见第 18 节）：师傅端「我的工单」+ 申诉（`POST /tickets/:id/appeal` 复用 TicketComment，零迁移）、管理端工作台「待处理工单」指标卡（`dashboard().pendingTickets`）、`admin/reviews/tickets` SLA 倒计时列（超时标红）、订单详情（reviewed/evaluated）投诉按钮 + 评价 1-2 星引导投诉、客户端投诉页支持 `?orderId=&againstMasterId=` 预填（2026-08-21~24 落地）
+- [x] 退款/售后 Phase 2（详见第 19 节）：运营主动发起退款（`POST /payments/refunds` + `createRefundByOrderNo`，复用 `createRefundRequest` 的 `ticketId` 可空）+ 管理端「售后工作台」聚合页（`/admin/aftersale`）+ `reports.business()` 直读 Refund 表 + 退款台账页「发起退款」Modal（2026-08-21~24 落地）
+- [x] 分账规则「退款区间断点」新增交互优化：`+ 添加断点` 改为末尾追加未选空行（用户显式选阶段，杜绝自动插入生命周期中间飘走）；`changeTierKey` 去重护栏 + 保存过滤未选行；已选行灰字「继承自：XXX」显性化区间继承（2026-08-24）
 
 ### 待办 / 已知缺口
 
 | 优先级 | 事项 | 说明 |
 |---|---|---|
-| P2 | 投诉/工单 Phase 2 | 师傅端「我的工单」查看+申诉、工作台「待处理工单」指标卡、SLA 倒计时前端展示（超时标红）、订单详情投诉按钮、评价 1-2 星引导投诉（**评估 2026-08-24：低～中。后端仅 2 处小改——`GET /tickets/mine` 加师傅角色分支（现只按 customerId 过滤，师傅端需按 masterId）+ 申诉端点（方案 A：Ticket 加申诉字段需小迁移 / 方案 B：复用 TicketComment 零迁移，待定）；SLA 倒计时纯前端（`firstResponseDeadline`/`resolveDeadline` 已落库）；工作台指标卡复用 `GET /tickets` active 筛选；订单详情投诉按钮 + 评价引导纯前端（`createTicket`/`Ticket.reviewId` 已就绪）。无架构改动，主工作量在前端页面，可一次批量**） |
-| P2 | 退款 Phase 2 | 运营主动发起退款 / 售后工作台聚合 / business 报表直读 Refund 表（**评估 2026-08-24：低～中。`createRefundRequest` 已支持 `ticketId` 可空（投诉来源与主动发起共用同一函数），主动退款仅需新增 `POST /payments/refunds` 端点（perm `orders:refund`）+ 前端「主动退款」入口；售后工作台聚合复用现成工单/退款列表端点，主工作量在前端聚合页；报表直读在 `reports.service.business()` 加 Refund 聚合，复用现有分桶框架。无迁移、无架构改动**） |
 | ~~**P1**~~ | 投诉/工单 + 退款审核端到端联调 | ✅ 迁移已应用（2026-08-21 14:00 用户授权后本机 `migrate resolve --applied 20260821000000_add_tickets_module` + `migrate deploy`，14 迁移全绿，工单带 refunds 关联查询实测通过）。**2026-08-21 脚本端到端验证 PASS（`nest/scripts/verify-p1-runtime.cjs` 10/10）**；（2026-08-24 收敛待办：剩 Playwright 浏览器冒烟并入下行，不再单列） |
 | ~~**P1**~~ | 浏览器跑通 mock 全流程 | 用户重启 3721 后 Playwright 打 3824 验证 departing/arrived → evaluated + WS（2026-08-24 收敛待办，执行动作仍有效） |
 | ~~**P1**~~ | 订单内 IM 聊天 | 独立工程；会话锚点用 `Conversation.orderId`（非手机号 Hash）；验证码切勿走 IM 发送（2026-08-24 收敛待办，未立项） |
@@ -522,7 +523,7 @@ cd nest && PORT=3721 pnpm start:dev
   ```
 - **坑**：`@prisma/client` re-export 破损 → Prisma 类型走相对路径 `../../node_modules/.prisma/client`；seed.js 用 CommonJS 直连 `.prisma/client`（绕开 pnpm 双副本）
 - **Phase 2（2026-08-21 已落地）**：① 师傅端「我的工单」`/master/tickets`（列表 + 申诉 Modal，`POST /tickets/:id/appeal` 复用 addComment visibleTo:'master'，零迁移）；② 管理端工作台 `admin/page.tsx` 加「待处理工单」指标卡（`dashboard()` 返回 `pendingTickets`）；③ `admin/reviews/tickets` 加 SLA 倒计时列（取 firstResponseDeadline/resolveDeadline 较小未过期者，每 30s 刷新；双空「-」、双过期标红、终态「已完结」）；④ 订单详情 `client/orders/[id]` reviewed/evaluated 加「投诉」按钮（跳 `/client/complaints?orderId=&againstMasterId=`）与 1-2 星引导 Banner；`/client/complaints` 支持 `?orderId=/?againstMasterId=` 预填
-- **⚠️ 用户本地必做**：重启后端 3721（appeal/dashboard/报表聚合均有后端改动）；前端在已跑的 3824 经 HMR 自动生效；本轮未改迁移、未改权限码（复用 orders:refund），无需 migrate/seed
+- 后端改动已随 3721 重启生效（appeal/dashboard/报表聚合）；前端经 HMR 自动生效；本轮未改迁移、未改权限码（复用 orders:refund），无需 migrate/seed
 - **未做**：端到端联调（SLA 倒计时/申诉/投诉引导需浏览器实测）
 
 ---
@@ -540,7 +541,7 @@ cd nest && PORT=3721 pnpm start:dev
 - **保留直退**：取消单自动退 / 客户端手动退款仍直退，不建单不审核；审核流只针对「运营判定性退款」（投诉处置）
 - **✅ 迁移已应用**（2026-08-21 14:00 用户授权后本机 `migrate resolve --applied 20260821000000_add_tickets_module` + `migrate deploy` 完成，`20260821010000_add_refund` 已落库，14 迁移全绿）；`orders:refund` 权限已在 seed，用户本地只需重跑 `pnpm seed`（权限码/角色绑定）
 - **Phase 2（2026-08-21 已落地）**：① 运营主动发起退款——`createRefundRequest` 的 `ticketId` 改可选 + 新增 `createRefundByOrderNo` + `POST /payments/refunds`（orders:refund + @Audit）；`/admin/orders/refund` 台账页补「发起退款」按钮 + Modal（按订单号建待审核单，金额/原因选填）；② 售后工作台 `/admin/aftersale`（指标卡：待审核退款/进行中工单/待处理工单 + 待审核退款/进行中工单两区块），`admin-menu.ts` 加「售后工作台」入口（perm orders:refund）；③ `reports.business()` 退款口径由补偿单反推改为**直读 Refund 表**（status=approved + reviewedAt 区间），前端 `admin/reports/business` 字段不变自动生效
-- **⚠️ 用户本地必做**：重启后端 3721（主动退款/报表聚合有后端改动）；前端在已跑的 3824 经 HMR 自动生效；本轮未改迁移、未改权限码，无需 migrate/seed
+- 后端改动已随 3721 重启生效（主动退款/报表聚合）；前端经 HMR 自动生效；本轮未改迁移、未改权限码，无需 migrate/seed
 - **未做**：退款失败对账（补偿单/退款单状态一致性巡检）
 
 ---
