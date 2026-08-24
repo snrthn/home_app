@@ -8,6 +8,7 @@ import { heartbeatApi } from '../lib/api';
 import CurrentUserLoader from './CurrentUserLoader';
 import PortalTabBar from './PortalTabBar';
 import PageNav, { type PageNavMenuItem } from './PageNav';
+import StickyTabs, { type StickyTabItem } from './StickyTabs';
 
 export interface PortalNavConfig {
   title: string;
@@ -17,10 +18,26 @@ export interface PortalNavConfig {
   menu?: PageNavMenuItem[];
 }
 
+export interface StickyTabsConfig {
+  tabs: StickyTabItem[];
+  active: string;
+  onChange: (key: string) => void;
+  ariaLabel?: string;
+  visible?: boolean;
+}
+
 const DEFAULT_NAV: Record<AppRole, PortalNavConfig> = {
   customer: { title: '老马家电' },
   master: { title: '老马家电 · 师傅端' },
   admin: { title: '管理端' },
+};
+
+const DEFAULT_STICKY_TABS: StickyTabsConfig = {
+  tabs: [],
+  active: '',
+  ariaLabel: '状态筛选',
+  visible: false,
+  onChange: () => {},
 };
 
 type NavCtx = {
@@ -29,6 +46,13 @@ type NavCtx = {
 };
 
 const PortalNavContext = createContext<NavCtx | null>(null);
+
+type StickyTabsCtx = {
+  config: StickyTabsConfig;
+  setConfig: React.Dispatch<React.SetStateAction<StickyTabsConfig>>;
+};
+
+const StickyTabsContext = createContext<StickyTabsCtx | null>(null);
 
 /**
  * 供 client 组件设置公共 Header 配置（页面级使用）。
@@ -58,11 +82,43 @@ export function PortalNavSetter(props: PortalNavConfig) {
   return null;
 }
 
-// 用户端 / 师傅端统一外壳：全局注入当前用户 + 公共顶栏 + 内容容器 + 底部 Tab。
-// 顶栏（PageNav）作为公共区域在布局层渲染，由各页通过 PortalNavSetter 上抛标题/返回/菜单，
-// 因此不再嵌在页面内容容器（portal-main）内——既符合"Header 属公共区域"的语义，
-// 也避免 sticky 顶栏落在每次路由切换会重新挂载的页面容器内，从而消除
-// Next.js "Skipping auto-scroll behavior" 的滚动恢复警告。
+/**
+ * 供 client 组件把订单列表的吸顶 StickyTabs 配置上抛到布局层渲染，
+ * 避免 tabs 随页面内容重新挂载而触发 Next.js auto-scroll 警告。
+ */
+export function useStickyTabs(config: StickyTabsConfig) {
+  const ctx = useContext(StickyTabsContext);
+  const key = JSON.stringify({
+    tabs: config.tabs,
+    active: config.active,
+    ariaLabel: config.ariaLabel,
+    visible: config.visible,
+  });
+  // 页面挂载/配置变化时同步到布局层；依赖 key 避免函数引用变化导致无限 setConfig。
+  useEffect(() => {
+    if (!ctx) return;
+    ctx.setConfig({ ...config });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  // 页面卸载时隐藏 tabs，避免非订单页顶部残留吸顶条。
+  useEffect(() => {
+    return () => {
+      if (!ctx) return;
+      ctx.setConfig((prev) => ({ ...prev, visible: false }));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+}
+
+export function StickyTabsSetter(props: StickyTabsConfig) {
+  useStickyTabs(props);
+  return null;
+}
+
+// 用户端 / 师傅端统一外壳：全局注入当前用户 + 公共顶栏 + 吸顶 Tab + 内容容器 + 底部 Tab。
+// 顶栏（PageNav）与订单列表的吸顶 StickyTabs 均作为公共区域在布局层渲染，由各页通过
+// PortalNavSetter / StickyTabsSetter 上抛配置，因此不会嵌在每次路由切换会重新挂载的
+// 页面容器内，从而消除 Next.js "Skipping auto-scroll behavior" 的滚动恢复警告。
 // 管理端为桌面侧栏形态，不使用本外壳（见 app/admin/layout.tsx）。
 export default function PortalShell({
   role,
@@ -80,6 +136,7 @@ export default function PortalShell({
     ...DEFAULT_NAV[role],
     title: defaultTitle,
   });
+  const [stickyConfig, setStickyConfig] = useState<StickyTabsConfig>(DEFAULT_STICKY_TABS);
 
   // 站点名称加载/变更后，若顶栏仍显示默认品牌标题则同步更新；
   // 页面级显式标题（如「我的订单」）不会被覆盖。
@@ -109,10 +166,19 @@ export default function PortalShell({
 
   return (
     <PortalNavContext.Provider value={{ config, setConfig }}>
-      <CurrentUserLoader role={role} />
-      <PageNav {...config} />
-      <main className="portal-main">{children}</main>
-      <PortalTabBar role={role} />
+      <StickyTabsContext.Provider value={{ config: stickyConfig, setConfig: setStickyConfig }}>
+        <CurrentUserLoader role={role} />
+        <PageNav {...config} />
+        <StickyTabs
+          tabs={stickyConfig.tabs}
+          active={stickyConfig.active}
+          onChange={stickyConfig.onChange}
+          ariaLabel={stickyConfig.ariaLabel}
+          visible={stickyConfig.visible}
+        />
+        <main className="portal-main">{children}</main>
+        <PortalTabBar role={role} />
+      </StickyTabsContext.Provider>
     </PortalNavContext.Provider>
   );
 }

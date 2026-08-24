@@ -18,11 +18,13 @@ export default function StickyTabs({
   active,
   onChange,
   ariaLabel = '状态筛选',
+  visible = true,
 }: {
   tabs: StickyTabItem[];
   active: string;
   onChange: (key: string) => void;
   ariaLabel?: string;
+  visible?: boolean;
 }) {
   const innerRef = useRef<HTMLDivElement>(null);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -46,16 +48,19 @@ export default function StickyTabs({
     el.scrollBy({ left: el.clientWidth * 0.8, behavior: 'smooth' });
   };
 
+  const empty = !visible || tabs.length === 0;
+
   return (
-    <div className="sticky-tabs">
-      <div className="sticky-tabs-wrap">
-        <div
-          ref={innerRef}
-          className="sticky-tabs-inner"
-          role="tablist"
-          aria-label={ariaLabel}
-          onScroll={update}
-        >
+    <div className={`sticky-tabs${empty ? ' sticky-tabs--empty' : ''}`} aria-hidden={empty}>
+      {!empty && (
+        <div className="sticky-tabs-wrap">
+          <div
+            ref={innerRef}
+            className="sticky-tabs-inner"
+            role="tablist"
+            aria-label={ariaLabel}
+            onScroll={update}
+          >
           {tabs.map((t) => {
             const isActive = t.key === active;
             return (
@@ -87,7 +92,8 @@ export default function StickyTabs({
             </svg>
           </button>
         )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

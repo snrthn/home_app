@@ -119,6 +119,14 @@ body {
   background: var(--color-surface);
   border-bottom: 1px solid #eef0f2;
 }
+/* 布局层常驻占位：无内容时不占高度、无边框，但保持 DOM 不重新挂载 */
+.sticky-tabs--empty {
+  height: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  overflow: hidden;
+}
 /* 包裹层：与内容列同宽（720px 居中），箭头指引以此为定位基准 */
 .sticky-tabs-wrap {
   position: relative;

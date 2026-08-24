@@ -1,8 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { PortalNavSetter } from '@/components/PortalShell';
-import StickyTabs from '@/components/StickyTabs';
+import { useState, useCallback } from 'react';
+import { PortalNavSetter, StickyTabsSetter } from '@/components/PortalShell';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -18,6 +17,7 @@ export default function ClientOrdersPage() {
   const router = useRouter();
   const qc = useQueryClient();
   const [tab, setTab] = useState('all');
+  const onTabChange = useCallback((key: string) => setTab(key), []);
   const { data: orders = [], isLoading } = useQuery({
     queryKey: QK.orderMine,
     queryFn: getMyOrders,
@@ -46,11 +46,12 @@ export default function ClientOrdersPage() {
         }}
         menu={[{ label: '刷新数据', onClick: () => qc.invalidateQueries({ queryKey: QK.orderMine }) }]}
       />
-      <StickyTabs
+      <StickyTabsSetter
         tabs={counts.map(({ key, label, count }) => ({ key, label, count: key === 'all' ? 0 : count }))}
         active={tab}
-        onChange={setTab}
+        onChange={onTabChange}
         ariaLabel="订单状态筛选"
+        visible
       />
       <div className="laoma-container order-mod">
         {isLoading ? (

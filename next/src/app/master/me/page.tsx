@@ -38,14 +38,6 @@ function IconOrder() {
     </svg>
   );
 }
-function IconNotice() {
-  return (
-    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M3 11l14-6v14L3 13z" />
-      <path d="M3 11v2a2 2 0 0 0 2 2h1" />
-    </svg>
-  );
-}
 function IconGear() {
   return (
     <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -138,7 +130,6 @@ export default function MasterMe() {
         <div className="me-grid">
           <MeEntry label="我的订单" icon={<IconOrder />} href="/master/orders/mine" />
           <MeEntry label="我的工单" icon={<IconTicket />} href="/master/tickets" />
-          <MeEntry label="平台公告" icon={<IconNotice />} href="/master/notices" />
           <MeEntry label="接单设置" icon={<IconGear />} href="/master/me/accept-settings" />
           <MeEntry label="收入提现" icon={<IconWallet />} href="/master/me/income" />
         </div>
