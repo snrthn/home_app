@@ -75,7 +75,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @laoma/shared build
       - run: pnpm prisma:generate
-      - run: pnpm --filter @laoma/backend exec prisma migrate deploy
+      - run: pnpm --filter @laoma/backend exec prisma db push --skip-generate
       - run: pnpm --filter @laoma/backend run seed
       - run: pnpm --filter @laoma/backend run seed:categories
       - run: pnpm --filter @laoma/backend run seed:items
