@@ -236,6 +236,103 @@ flowchart LR
     end
 ```
 
+## 数据库表关系图
+
+> 完整字段定义见 `nest/prisma/schema.prisma`，以下展示核心表的关联关系。
+
+```mermaid
+erDiagram
+    USER ||--|| USER_PROFILE : "1:1 资料画像"
+    USER ||--o| MASTER : "1:1 师傅扩展"
+    USER ||--o{ ADDRESS : "收货地址"
+    USER ||--o{ ORDER : "客户下单"
+    USER ||--o{ PAYMENT : "支付记录"
+    USER ||--o{ REVIEW : "评价"
+    USER ||--o{ TICKET : "客户/受理人工单"
+    USER ||--o{ REFUND : "退款发起/审核"
+    USER }o--o| STAFF_ROLE : "后台岗位角色"
+
+    MASTER ||--o{ ORDER : "师傅接单"
+    MASTER ||--o{ SETTLEMENT : "结算单"
+    MASTER ||--o{ WITHDRAWAL : "提现申请"
+    MASTER ||--o{ QUOTATION : "报价"
+    MASTER ||--o{ REVIEW : "被评价"
+    MASTER ||--o{ TICKET : "被投诉"
+
+    SERVICE_CATEGORY ||--o{ SERVICE_ITEM : "类目→服务项"
+    SERVICE_CATEGORY ||--o{ SERVICE_CATEGORY : "父子树"
+    SERVICE_ITEM ||--o{ ORDER : "下单服务项"
+    ADDRESS ||--o{ ORDER : "服务地址"
+
+    ORDER ||--o{ ORDER_LOG : "状态流转日志"
+    ORDER ||--o{ PAYMENT : "支付记录"
+    ORDER ||--o{ QUOTATION : "师傅报价"
+    ORDER ||--|| SETTLEMENT : "1:1 结算单"
+    ORDER ||--o| REVIEW : "1:1 评价"
+    ORDER ||--o{ TICKET : "关联工单"
+    ORDER ||--o{ REFUND : "退款单"
+
+    TICKET ||--o| COMPLAINT : "1:1 投诉挂件"
+    TICKET ||--o{ TICKET_COMMENT : "处理留言"
+    REFUND ||--o| SETTLEMENT : "补偿结算单(1:1)"
+
+    STAFF_ROLE ||--o{ STAFF_ROLE_PERMISSION : "角色-权限"
+    PERMISSION ||--o{ STAFF_ROLE_PERMISSION : "权限-角色"
+
+    AGREEMENT_TEMPLATE ||--o{ AGREEMENT_VERSION : "协议版本"
+
+    USER {
+        string id PK
+        enum role "admin/master/customer"
+        string phone UK
+        string passwordHash
+        int tokenVersion "改密+1使旧token失效"
+        string staffRoleId FK
+    }
+    ORDER {
+        string id PK
+        string orderNo UK
+        string customerId FK
+        string masterId FK
+        string addressId FK
+        string serviceItemId FK
+        json serviceSnapshot "下单快照"
+        json commissionSnapshot "分账快照"
+        enum status "12态状态机"
+        decimal amount
+    }
+    SETTLEMENT {
+        string id PK
+        string orderId UK
+        string masterId FK
+        decimal orderAmount
+        decimal platformFee
+        decimal masterAmount
+        enum type "normal/compensation"
+        enum status "pending/credited/rejected"
+    }
+    TICKET {
+        string id PK
+        string ticketNo UK
+        enum type "consult/complaint/refund/report/system"
+        enum status "open→resolved→closed"
+        string orderId FK
+        string customerId FK
+        string masterId FK
+        string assigneeId FK
+    }
+    REFUND {
+        string id PK
+        string refundNo UK
+        string orderId FK
+        string ticketId FK
+        enum status "pending_review/approved/rejected"
+        decimal amount
+        decimal refundedAmount "阶梯实退"
+        string settlementId FK
+    }
+```
+
 ## 技术栈
 
 | 分层 | 技术 | 目录 | 端口 |

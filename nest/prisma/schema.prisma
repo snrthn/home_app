@@ -116,6 +116,8 @@ model User {
   // 管理端 RBAC：单角色，一个后台账号(role=admin)绑一个岗位角色；role≠admin 时恒为空
   staffRoleId String?
   staffRole   StaffRole? @relation(fields: [staffRoleId], references: [id])
+
+  @@map("user")
 }
 
 // ---------------- 资料画像（展示 / 业务扩展，1:1） ----------------
@@ -147,6 +149,8 @@ model UserProfile {
   updatedAt     DateTime @updatedAt
 
   deletedAt     DateTime?
+
+  @@map("userprofile")
 }
 
 // ---------------- 师傅扩展（1:1，师傅专属） ----------------
@@ -183,6 +187,8 @@ model Master {
   withdrawals  Withdrawal[]
   quotations   Quotation[]
   tickets      Ticket[]
+
+  @@map("master")
 }
 
 model ServiceCategory {
@@ -201,6 +207,8 @@ model ServiceCategory {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   deletedAt   DateTime?
+
+  @@map("servicecategory")
 }
 
 model ServiceItem {
@@ -221,6 +229,8 @@ model ServiceItem {
   deletedAt       DateTime?
 
   orders Order[]
+
+  @@map("serviceitem")
 }
 
 // ---------------- 服务区域（平台开通城市字典，2026-08-12 新增） ----------------
@@ -253,6 +263,8 @@ model ServiceArea {
   @@index([level])
   @@index([parentCode])
   @@index([provinceCode])
+
+  @@map("servicearea")
 }
 
 model Address {
@@ -275,6 +287,8 @@ model Address {
   deletedAt    DateTime?
 
   orders Order[]
+
+  @@map("address")
 }
 
 model Order {
@@ -313,6 +327,8 @@ model Order {
   review      Review?
   tickets     Ticket[]
   refunds     Refund[]
+
+  @@map("order")
 }
 
 model OrderLog {
@@ -328,6 +344,8 @@ model OrderLog {
   createdAt  DateTime    @default(now())
 
   deletedAt  DateTime?
+
+  @@map("orderlog")
 }
 
 model Payment {
@@ -347,6 +365,8 @@ model Payment {
   createdAt   DateTime      @default(now())
 
   deletedAt   DateTime?
+
+  @@map("payment")
 }
 
 model Quotation {
@@ -363,6 +383,8 @@ model Quotation {
   createdAt   DateTime @default(now())
 
   deletedAt   DateTime?
+
+  @@map("quotation")
 }
 
 model Settlement {
@@ -385,6 +407,8 @@ model Settlement {
   deletedAt    DateTime?
 
   refund       Refund?          // 反向：该结算单由哪个退款单审核通过后生成（1:1）
+
+  @@map("settlement")
 }
 
 // ---------------- 分账规则配置（2026-08-19 新增） ----------------
@@ -424,6 +448,8 @@ model CommissionRule {
 
   @@unique([scope, refId])
   @@index([scope, isActive])
+
+  @@map("commissionrule")
 }
 
 // ---------------- 师傅提现（2026-08-18 新增） ----------------
@@ -459,6 +485,8 @@ model Withdrawal {
 
   @@index([masterId, status])
   @@index([status, createdAt])
+
+  @@map("withdrawal")
 }
 
 model Review {
@@ -477,6 +505,8 @@ model Review {
   deletedAt   DateTime?
 
   tickets     Ticket[]
+
+  @@map("review")
 }
 
 model PaymentQr {
@@ -487,6 +517,8 @@ model PaymentQr {
   updatedAt DateTime @updatedAt
 
   deletedAt DateTime?
+
+  @@map("paymentqr")
 }
 
 model Notification {
@@ -499,6 +531,8 @@ model Notification {
   createdAt DateTime @default(now())
 
   deletedAt DateTime?
+
+  @@map("notification")
 }
 
 // ---------------- 协议管理（注册协议 / 隐私政策，多端多版本） ----------------
@@ -533,6 +567,8 @@ model AgreementTemplate {
   deletedAt DateTime?
 
   @@index([scope, type])
+
+  @@map("agreementtemplate")
 }
 
 // 协议版本：每次新建=一条记录，版本号按模板内 max+1 自增（只增不减）
@@ -552,6 +588,8 @@ model AgreementVersion {
 
   @@index([templateId])
   @@index([isCurrent])
+
+  @@map("agreementversion")
 }
 
 // 公告通知：运营端编辑发布的广播（活动/规则/维护/节假日等），按端投放。
@@ -574,6 +612,8 @@ model Notice {
   targetRegions Json? // 通知范围：数组，每项 {provinceCode?,cityCode?,districtCode?}，缺级=通配；空=全平台可见
 
   @@index([scope, status])
+
+  @@map("notice")
 }
 
 // 站点内容（运营可维护的静态文案 / 富文本）：关于我们等。
@@ -586,6 +626,8 @@ model SiteContent {
   updatedAt   DateTime @updatedAt
 
   @@index([key])
+
+  @@map("sitecontent")
 }
 
 // ---------------- 全局配置（单例，运营端系统设置，2026-08-17 新增） ----------------
@@ -608,6 +650,8 @@ model SystemConfig {
   // Sentry DSN：运营平台配置后前端自动初始化错误监控；留空=关闭监控
   sentryDsn            String?
   updatedAt            DateTime @updatedAt
+
+  @@map("systemconfig")
 }
 
 // ---------------- 管理端 RBAC（角色权限，2026-08-11 新增，对应 docs/rbac-design.md） ----------------
@@ -627,6 +671,8 @@ model StaffRole {
   updatedAt   DateTime @updatedAt
 
   deletedAt   DateTime?
+
+  @@map("staffrole")
 }
 
 // 权限：抽象权 resource:action（如 orders:refund）。粒度适中，不按页面、也不按每个按钮。
@@ -642,6 +688,8 @@ model Permission {
   createdAt   DateTime @default(now())
 
   @@index([group])
+
+  @@map("permission")
 }
 
 // 角色-权限 多对多中间表（取代用户-多角色，初期单角色即可满足）
@@ -652,6 +700,8 @@ model StaffRolePermission {
   permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
   @@id([roleId, permissionId])
+
+  @@map("staffrolepermission")
 }
 
 // ---------------- 管理端操作审计日志（P5 收口，2026-08-11 新增） ----------------
@@ -673,6 +723,8 @@ model OperationLog {
   @@index([module])
   @@index([userId])
   @@index([action])
+
+  @@map("operationlog")
 }
 
 // ---------------- 工单 / 投诉（2026-08-20 新增，详见 docs/complaints-tickets-design.md） ----------------
@@ -766,6 +818,8 @@ model Ticket {
   @@index([orderId])
   @@index([customerId])
   @@index([masterId])
+
+  @@map("ticket")
 }
 
 model Complaint {
@@ -779,6 +833,8 @@ model Complaint {
   refundSettlementId  String?                            // 关联 compensation 结算单（result=refund/compensate 时）
   handledAt           DateTime?
   createdAt           DateTime        @default(now())
+
+  @@map("complaint")
 }
 
 // 退款单（2026-08-21 新增，详见 docs/refund-aftersale-design.md）
@@ -818,6 +874,8 @@ model Refund {
   @@index([status, createdAt])
   @@index([orderId])
   @@index([ticketId])
+
+  @@map("refund")
 }
 
 model TicketComment {
@@ -834,4 +892,6 @@ model TicketComment {
   deletedAt   DateTime?
 
   @@index([ticketId])
+
+  @@map("ticketcomment")
 }
