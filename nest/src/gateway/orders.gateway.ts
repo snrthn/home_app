@@ -105,40 +105,59 @@ export class OrdersGateway
       this.logger.warn(`[WS join-pool] rejected: role=${role} is not master`);
       return;
     }
-    let areas: ServiceAreaEntry[] = [];
+    // 与 orders.service 中 masterCoversOrder 保持一致：所在地 ∪ 接单范围 并集
+    let allAreas: ServiceAreaEntry[] = [];
     try {
       const master = await this.prisma.master.findUnique({
         where: { userId: sub },
-        select: { serviceAreas: true },
+        select: {
+          serviceAreas: true,
+          provinceCode: true,
+          cityCode: true,
+          districtCode: true,
+        },
       });
-      areas = Array.isArray(master?.serviceAreas) ? (master!.serviceAreas as ServiceAreaEntry[]) : [];
-      this.logger.log(`[WS join-pool] master serviceAreas count=${areas.length}`);
+      const serviceAreas = Array.isArray(master?.serviceAreas)
+        ? (master!.serviceAreas as ServiceAreaEntry[])
+        : [];
+      // 所在地也视为一个接单区域（与 masterCoversOrder 同口径）
+      const homeArea: ServiceAreaEntry | null = master?.provinceCode
+        ? {
+            provinceCode: master.provinceCode,
+            cityCode: master.cityCode ?? undefined,
+            districtCode: master.districtCode ?? undefined,
+          }
+        : null;
+      allAreas = homeArea ? [homeArea, ...serviceAreas] : serviceAreas;
+      this.logger.log(
+        `[WS join-pool] serviceAreas=${serviceAreas.length} home=${homeArea ? 'yes' : 'no'} total=${allAreas.length}`,
+      );
     } catch (e) {
       this.logger.error(`[WS join-pool] db query failed: ${e}`);
-      areas = [];
+      allAreas = [];
     }
-    if (areas.length === 0) {
+    if (allAreas.length === 0) {
       socket.join('pool');
-      this.logger.log(`[WS join-pool] joined room=pool (no service areas)`);
+      this.logger.log(`[WS join-pool] joined room=pool (no regions)`);
       return;
     }
     let joinedAny = false;
     const joinedRooms: string[] = [];
-    for (const a of areas) {
+    for (const a of allAreas) {
       const p = a?.provinceCode, c = a?.cityCode, d = a?.districtCode;
       if (!p) continue;
       const r1 = `zone:${p}::`;
       socket.join(r1);
-      joinedRooms.push(r1);
+      if (!joinedRooms.includes(r1)) joinedRooms.push(r1);
       if (c) {
         const r2 = `zone:${p}:${c}:`;
         socket.join(r2);
-        joinedRooms.push(r2);
+        if (!joinedRooms.includes(r2)) joinedRooms.push(r2);
       }
       if (d) {
         const r3 = `zone:${p}:${c}:${d}`;
         socket.join(r3);
-        joinedRooms.push(r3);
+        if (!joinedRooms.includes(r3)) joinedRooms.push(r3);
       }
       joinedAny = true;
     }
