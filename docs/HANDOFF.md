@@ -94,6 +94,24 @@ Role.Customer = 'customer'
 
 手写测试 JWT 时 role 必须写小写 `'admin'`，大写会 403。PermGuard 需 payload 带 `perms: string[]`。
 
+### 2.5 Swagger 文档路径为什么是 `/api/docs` 而非 `/docs`
+
+```typescript
+// main.ts
+app.setGlobalPrefix('api');                    // 全局前缀 /api
+SwaggerModule.setup('api/docs', app, document); // 挂载路径 /api/docs
+```
+
+**背景**：项目最初用 `SwaggerModule.setup('docs', ...)`，路径是 `/docs`。但生产环境 Nginx 配置了 `location /api/ { proxy_pass http://127.0.0.1:4200; }`，只代理 `/api/` 前缀的请求。Swagger 挂在 `/docs` 时，生产环境无法通过域名访问（Nginx 不转发），只能直接访问后端端口。
+
+**改造**：将挂载路径改为 `api/docs`，使其落在 Nginx `/api/` 代理范围内，生产环境通过 `域名/api/docs` 即可访问，无需额外 Nginx 规则。
+
+**访问方式**：
+- 开发环境：`http://localhost:3721/api/docs`
+- 生产环境：`https://你的域名/api/docs`
+
+> ⚠️ 不要改回 `/docs`，否则生产环境 Swagger 不可达。
+
 ---
 
 ## 3. 前端 UI 通用规矩（11 条，编号稳定）

@@ -461,7 +461,7 @@ pnpm dev    # turbo run dev，并行启动前端(:3824) + 后端(:3721)
 
 - 前端：http://localhost:3824
 - 后端 API：http://localhost:3721/api/v1
-- Swagger 文档：http://localhost:3721/docs
+- Swagger 文档：http://localhost:3721/api/docs
 
 ### 6. 类型检查 / 生产构建
 
@@ -478,7 +478,7 @@ pnpm build       # 两端分别 build
 | `Can't reach database server` | 检查 MySQL 是否启动、`DATABASE_URL` 中的端口/密码是否正确 |
 | `prisma generate` 报类型找不到 | 确保先 `pnpm prisma:generate` 再跑 typecheck |
 | 前端登录成功但不跳转 | `next/.env.local` 不要设 `NEXT_PUBLIC_API_BASE`，留空让自动解析 host |
-| Swagger 页面 404 | 开发环境直接访问 `localhost:3721/docs`，生产通过 Nginx `/api/docs` 代理 |
+| Swagger 页面 404 | 开发环境访问 `localhost:3721/api/docs`（不是 `/docs`），生产通过 Nginx `/api/` 代理自动可达 |
 | `pnpm install` 报 lockfile 过期 | CI 环境下 `CI=true` 会冻结锁文件，本地用 `pnpm install --no-frozen-lockfile` |
 
 ## 可用脚本
