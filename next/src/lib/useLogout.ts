@@ -1,12 +1,15 @@
 'use client';
 import { useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import api from './api';
 import { clearSession, clearUserCache, roleFromPath } from './auth';
 import { useUserStore } from './user-store';
-import { exitFullscreenSafe } from './fullscreen';
 
-// 退出登录：先通知后端拉黑 token，再清本地会话并跳登录页
+// 退出登录：先通知后端拉黑 token，再清本地会话并跳登录页。
+// 注意：使用 router.replace 而非 window.location.href，
+//       避免整页跳转导致浏览器自动退出全屏（自助终端场景需要保持全屏）。
 export function useLogout() {
+  const router = useRouter();
   return useCallback(async () => {
     const role = roleFromPath();
     try {
@@ -24,12 +27,8 @@ export function useLogout() {
       clearUserCache();
       useUserStore.getState().clearUser();
     }
-    // 退出前解除全屏：浏览器跳转不会自动退出全屏，需手动调用
-    exitFullscreenSafe();
-    if (typeof window !== 'undefined') {
-      // 管理端退出后回到管理员登录态（mode=admin），其它端回通用登录页。
-      const target = role === 'admin' ? '/login?mode=admin&role=customer' : '/login';
-      window.location.href = target;
-    }
-  }, []);
+    // 管理端退出后回到管理员登录态（mode=admin），其它端回通用登录页。
+    const target = role === 'admin' ? '/login?mode=admin&role=customer' : '/login';
+    router.replace(target);
+  }, [router]);
 }
