@@ -6,6 +6,7 @@ import { OrderStatus } from '@laoma/shared';
 import { AppModule } from '../app.module';
 import { PrismaService } from '../prisma/prisma.service';
 import { AllExceptionsFilter } from '../common/filters/all-exceptions.filter';
+import { pinoLogger } from '../common/logger/pino-logger.service';
 
 export interface E2EContext {
   app: INestApplication;
@@ -36,7 +37,7 @@ export async function bootstrapApp(): Promise<INestApplication> {
   app.setGlobalPrefix('api');
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-  app.useGlobalFilters(new AllExceptionsFilter());
+  app.useGlobalFilters(new AllExceptionsFilter(pinoLogger));
   await app.init();
   return app;
 }

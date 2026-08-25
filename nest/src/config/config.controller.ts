@@ -49,6 +49,11 @@ export class UpdateSystemConfigDto {
   @IsOptional()
   @IsString()
   smsTemplateCode?: string;
+
+  // Sentry DSN：填入后前端自动初始化错误监控；清空=关闭监控
+  @IsOptional()
+  @IsString()
+  sentryDsn?: string;
 }
 
 @ApiTags('系统配置')

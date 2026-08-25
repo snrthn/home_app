@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { OrdersGateway } from '../gateway/orders.gateway';
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
 // —— AccessKeySecret 加密存储（AES-256-GCM）——
@@ -89,11 +90,16 @@ export interface SystemConfigDto {
   smsTemplateCode: string | null;
   // 浏览器侧提示：AccessKeySecret 是否已配置（不直接返回明文）
   smsSecretSet: boolean;
+  // Sentry DSN：前端拉取后据此初始化或关闭错误监控
+  sentryDsn: string | null;
 }
 
 @Injectable()
 export class ConfigService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private ordersGateway: OrdersGateway,
+  ) {}
 
   // 单例读取：不存在则 upsert 默认行（保证 GET 永远有值，无需前端判空分支）
   async getGlobal(): Promise<SystemConfigDto> {
@@ -116,6 +122,7 @@ export class ConfigService {
     smsAccessKeySecret?: string;
     smsSignName?: string;
     smsTemplateCode?: string;
+    sentryDsn?: string;
   }): Promise<SystemConfigDto> {
     const cfg = await this.prisma.systemConfig.upsert({
       where: { id: 1 },
@@ -133,6 +140,7 @@ export class ConfigService {
           : {}),
         ...(dto.smsSignName !== undefined ? { smsSignName: dto.smsSignName } : {}),
         ...(dto.smsTemplateCode !== undefined ? { smsTemplateCode: dto.smsTemplateCode } : {}),
+        ...(dto.sentryDsn !== undefined ? { sentryDsn: dto.sentryDsn } : {}),
       },
       create: {
         id: 1,
@@ -145,8 +153,10 @@ export class ConfigService {
         smsAccessKeySecret: dto.smsAccessKeySecret != null ? encryptSecret(dto.smsAccessKeySecret) : null,
         smsSignName: dto.smsSignName ?? null,
         smsTemplateCode: dto.smsTemplateCode ?? null,
+        sentryDsn: dto.sentryDsn ?? null,
       },
     });
+    this.ordersGateway.broadcastSentryConfig(cfg.sentryDsn);
     return this.toDto(cfg);
   }
 
@@ -160,6 +170,7 @@ export class ConfigService {
     smsAccessKeySecret: string | null;
     smsSignName: string | null;
     smsTemplateCode: string | null;
+    sentryDsn: string | null;
   }): SystemConfigDto {
     // smsAccessKeySecret 解密后供内部（短信发送）使用；浏览器侧由 public controller 掩码
     const secret = c.smsAccessKeySecret ? decryptSecret(c.smsAccessKeySecret) : null;
@@ -174,6 +185,7 @@ export class ConfigService {
       smsSignName: c.smsSignName,
       smsTemplateCode: c.smsTemplateCode,
       smsSecretSet: !!c.smsAccessKeySecret,
+      sentryDsn: c.sentryDsn,
     };
   }
 }

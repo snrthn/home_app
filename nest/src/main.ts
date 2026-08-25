@@ -5,9 +5,14 @@ import { join } from 'path';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { PinoLoggerService, pinoLogger } from './common/logger/pino-logger.service';
+import { requestIdMiddleware } from './common/middleware/request-id.middleware';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    logger: new PinoLoggerService(),
+  });
+  app.use(requestIdMiddleware);
   app.setGlobalPrefix('api');
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
 
@@ -32,10 +37,9 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, transform: true }),
   );
-  app.useGlobalFilters(new AllExceptionsFilter());
+  app.useGlobalFilters(new AllExceptionsFilter(pinoLogger));
   const port = process.env.PORT || 3824;
   await app.listen(port);
-  // eslint-disable-next-line no-console
-  console.log(`[老马家电] backend listening on http://localhost:${port}`);
+  pinoLogger.info(`[老马家电] backend listening on http://localhost:${port}`);
 }
 bootstrap();

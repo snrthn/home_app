@@ -10,6 +10,15 @@ import { applyThemeColor } from '@/lib/theme';
 
 const DEFAULT_COLOR = '#3e8fb0';
 
+const sectionTitleStyle: React.CSSProperties = {
+  fontSize: 15,
+  fontWeight: 600,
+  color: 'var(--color-text)',
+  margin: '28px 0 14px 0',
+  paddingBottom: 8,
+  borderBottom: '1px solid var(--color-border, #e3e8eb)',
+};
+
 export default function GlobalConfigPage() {
   const toast = useToast();
   const qc = useQueryClient();
@@ -29,6 +38,7 @@ export default function GlobalConfigPage() {
   const [smsSignName, setSmsSignName] = useState('');
   const [smsTemplateCode, setSmsTemplateCode] = useState('');
   const [smsSecretSet, setSmsSecretSet] = useState(false);
+  const [sentryDsn, setSentryDsn] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -46,6 +56,7 @@ export default function GlobalConfigPage() {
     setSmsSignName(data.smsSignName ?? '');
     setSmsTemplateCode(data.smsTemplateCode ?? '');
     setSmsSecretSet(!!data.smsSecretSet);
+    setSentryDsn(data.sentryDsn ?? '');
   }, [data]);
 
   const save = async () => {
@@ -61,6 +72,7 @@ export default function GlobalConfigPage() {
         smsAccessKeySecret: smsAccessKeySecret || undefined,
         smsSignName: smsSignName || undefined,
         smsTemplateCode: smsTemplateCode || undefined,
+        sentryDsn: sentryDsn || undefined,
       });
       qc.invalidateQueries({ queryKey: QK.globalConfig });
       applyThemeColor(primaryColor);
@@ -107,6 +119,7 @@ export default function GlobalConfigPage() {
               聚合平台基础信息与视觉主题，修改后全端即时生效（系统名称同步用户端/师傅端/运营端，主题色立即应用，用户端「在线客服」读取客服电话）。
             </p>
 
+            <h3 style={sectionTitleStyle}>基础信息</h3>
             <Field label="系统名称">
               <input
                 className="input"
@@ -214,6 +227,7 @@ export default function GlobalConfigPage() {
               </div>
             </Field>
 
+            <h3 style={sectionTitleStyle}>短信配置</h3>
             <Field
               label="短信验证码模式"
               hint="mock=开发/演示（验证码直接以 Toast 显示在页面，便于本地联调）；real=真实调用阿里云短信网关下发到手机。所有环境均可切换，生产环境请谨慎。"
@@ -284,6 +298,19 @@ export default function GlobalConfigPage() {
                 </Field>
               </>
             )}
+
+            <h3 style={sectionTitleStyle}>监控配置</h3>
+            <Field
+              label="前端错误监控 (Sentry DSN)"
+              hint="填入 Sentry DSN 后全端自动初始化错误监控；清空则关闭。保存后已在线用户通过 WebSocket 实时生效，无需刷新页面。后端日志（Pino）常开启，不受此开关影响。"
+            >
+              <input
+                className="input"
+                value={sentryDsn}
+                placeholder="如 https://xxx@sentry.io/123（留空=关闭前端监控）"
+                onChange={(e) => setSentryDsn(e.target.value)}
+              />
+            </Field>
 
             <div className="modal-actions" style={{ marginTop: 16 }}>
               <button

@@ -6,7 +6,7 @@
 
 ---
 
-## 0. 现状体检快照（2026-08-25 实测；E-03/E-04/E-05/E-13/E-14/E-15/E-16 处理后）
+## 0. 现状体检快照（2026-08-25 实测；E-03/E-04/E-05/E-07/E-13/E-14/E-15/E-16 处理后）
 
 | 维度         | 现状                                                                                        | 结论            |
 | ---------- | ----------------------------------------------------------------------------------------- | ------------- |
@@ -14,13 +14,13 @@
 | `any` 类型安全 | 三端共 139 处 `any`（nest 58 / next 81 / shared 0），较修复前 288 处减少 149 处（52%）；零 `@ts-ignore`/`@ts-nocheck` | 🟡 大幅改善，剩余为合理保留 |
 | 单元测试       | jest + ts-jest 就位；P0 纯函数 5 suites/107 tests + P1 金额守卫 10 suites/195 tests，共 195 tests PASS | ✅ 已完成 |
 | E2E 测试     | 2 suites / 16 tests PASS（正向全链 + 售后链）                                                       | ✅ 已完成 |
-| Lint / 格式化 | eslint 9 flat config 打通，`pnpm lint` 0 error / 82 warn（原 188 warn，any 清理+round2 修复后降 106）；prettier 配置就位，存量 55 文件格式债未统一 | 🟡 部分完成       |
+| Lint / 格式化 | eslint 9 flat config 打通，`pnpm lint` 0 error / 81 warn（原 188 warn，any 清理+round2+日志改造后降 107）；prettier 配置就位，存量 55 文件格式债未统一 | 🟡 部分完成       |
 | CI 门禁      | `.github/workflows/deploy.yml` 现跑 `pnpm prisma:generate` + `pnpm typecheck` + `pnpm lint` + commitlint，失败即阻断部署             | ✅ 门禁生效       |
 | API 版本控制   | `main.ts` 启用 `enableVersioning({ type: URI, defaultVersion: '1' })`，所有接口走 `/api/v1/...`；未来升级挂 `@Version('2')` 即可 | ✅ 已完成 |
 | API 文档     | `@nestjs/swagger` v7 + `swagger-ui-express` 接入，25 个 controller + 15 个 DTO 全量标注；访问 `http://localhost:3721/docs` | ✅ 已完成 |
 | CORS       | `main.ts` 读 `CORS_ORIGIN` env（逗号白名单），未设回落 true；生产设白名单即锁死                  | ✅ 已收敛        |
 | 统一异常       | `AllExceptionsFilter` 全局注册，404/400/500 统一 `{code,message,data,path,timestamp}`        | ✅ 已收敛        |
-| 日志         | nest 2 处 + next 4 处 `console.log` 散落，无 pino/winston                                       | ⚠️ 无结构化       |
+| 日志         | 后端 Pino 结构化 JSON（reqId/method/path/stack）+ PM2 落盘轮转；前端 Sentry 插拔式（运营平台开关 + WS 实时通知） | ✅ 已完成       |
 | 密钥管理       | `.gitignore` 已忽略 `.env`（不入库）；无 `.env.example`                                             | ⚠️ 安全但缺样例     |
 | 部署迁移       | `scripts/deploy.sh` 第 6 步 `npx prisma db push`（非 `migrate deploy`）；本地却有 14 个 migration 文件 | ⚠️ 双路径不一致、无回滚 |
 
@@ -192,7 +192,27 @@
 - **证据**：`grep -rn 'console.log' nest/src` → 2 处；`next/src` → 4 处；无 pino/winston
 - **影响**：生产排障靠 `console`，无分级（info/warn/error）、无上下文字段（orderId/requestId）、无法对接日志收集。
 - **建议**：引入 `pino`（轻量、快）；关键路径（支付回调、派单执行、退款审核、WS 连接）打结构化日志；开发态仍可读。
-- **状态**：📋 待处理
+- **状态**：✅ 已完成（2026-08-25：P0 后端 Pino 结构化日志 + PM2 轮转；P1 前端 Sentry 插拔式监控）
+- **验证**：
+  - **P0 后端日志**：
+    - `nest/src/common/logger/pino-logger.service.ts`【新建】：Pino 实例 + `PinoLoggerService`（实现 NestJS `LoggerService`，映射 log/error/warn/debug/verbose → pino info/error/warn/debug/trace）；生产纯 JSON 输出，开发 pino-pretty 彩色
+    - `nest/src/common/middleware/request-id.middleware.ts`【新建】：Express 中间件，为每个请求生成 UUID v4（或复用上游 `x-request-id`），挂到 `req.requestId` + 响应头
+    - `nest/src/main.ts`：传入 `PinoLoggerService` 替代默认 console logger；`app.use(requestIdMiddleware)` 注册中间件；`AllExceptionsFilter` 注入 `pinoLogger`
+    - `nest/src/common/filters/all-exceptions.filter.ts`：构造器注入 `pino.Logger`；异常按级别记录（4xx→warn，5xx→error，DB 约束→warn），含 reqId/method/path/code/stack
+    - `ecosystem.config.js`：两个 app 均添加 `out_file`/`error_file`/`merge_logs: true`；PM2 捕获 Pino stdout/stderr 落盘；推荐 `pm2-logrotate` 模块做 50M 轮转
+  - **P1 前端 Sentry 监控**：
+    - `next/src/lib/sentry.ts`【新建】：`initSentry(dsn)` / `closeSentry()` 封装，模块级 `isInitialized` 防重入
+    - `next/src/components/SentryProvider.tsx`【新建】：从 `GlobalConfigProvider` 读取 `sentryDsn` 兜底初始化；登录态建立 WS 连接监听 `sentry:config` 事件实时响应开关
+    - `next/src/lib/global-config.tsx`：`GlobalConfigValue` 增加 `sentryDsn` 字段
+    - `next/src/app/providers.tsx`：在 `GlobalConfigProvider` 内嵌 `SentryProvider`
+    - `nest/src/config/config.service.ts`：`SystemConfigDto` + `updateGlobal` + `toDto` 增加 `sentryDsn`；更新后调 `ordersGateway.broadcastSentryConfig()` WS 广播
+    - `nest/src/gateway/orders.gateway.ts`：新增 `broadcastSentryConfig(dsn)` 方法，`server.emit('sentry:config', { dsn })` 广播全量在线客户端
+    - `nest/src/config/config.module.ts`：导入 `GatewayModule` 以注入 `OrdersGateway`
+    - `nest/src/config/config.controller.ts`：`UpdateSystemConfigDto` 增加 `sentryDsn?: string`
+    - `nest/prisma/schema.prisma`：`SystemConfig` 模型增加 `sentryDsn String?`
+    - 设计：开关只影响前端监控，后端日志常开启；DSN 是公钥不掩码；Docker 部署时 stdout/stderr 由容器日志驱动收集，方案不受影响
+  - **E2E 稳定性**：`jest.e2e.config.js` 增加 `maxWorkers: 1`，解决两套 E2E 并行时 ServiceArea upsert 竞态
+  - `pnpm typecheck` EXIT=0；`pnpm lint` 0 error / 81 warnings；P0/P1 10 suites / 195 tests PASS；E2E 2 suites / 16 tests PASS
 
 #### E-08　部署迁移策略风险（`prisma db push` 而非 `migrate deploy`）
 
@@ -248,7 +268,7 @@
 | E-04 | 零自动化测试                              | P1  | ✅ 已完成   | jest 基础设施 + P0 纯函数(5 suites/107 tests) + P1 金额守卫(10 suites/195 tests) + P2 e2e 链路(2 suites/16 tests)，共 17 suites / 318 tests PASS，双端 tsc EXIT=0 |
 | E-05 | 无 lint / 格式化                        | P1  | 🔄 部分完成 | eslint 0 error / 90 warn 接入 CI（原 188 warn，E-14 清理后降 98）；prettier 配置就位但存量 55 文件格式债未统一；next 端 lint 未配 |
 | E-06 | 缺 `.env.example`                    | P2  | 📋 待处理 | nest/next 各补样例                                         |
-| E-07 | 日志无结构化                              | P2  | 📋 待处理 | 引 pino，关键路径结构化；顺带承接 E-03 错误码枚举                |
+| E-07 | 日志无结构化                              | P2  | ✅ 已完成 | P0: Pino 结构化 JSON + reqId 中间件 + 异常过滤器注入 + PM2 轮转；P1: Sentry 插拔式（运营平台开关 + WS 实时通知）；tsc+lint+211 tests PASS |
 | E-08 | 部署迁移策略风险                            | P2  | 📋 待处理 | db push vs migrate deploy，需决策                          |
 | E-09 | 前端统一错误边界                            | P3  | 📋 待处理 | 视 api 封装现状                                             |
 | E-10 | 依赖安全审计                              | P3  | 📋 待处理 | pnpm audit / Dependabot                                |

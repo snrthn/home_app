@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@laoma/shared": "workspace:*",
+    "@sentry/nextjs": "^10.71.0",
     "@tanstack/react-query": "^5.40.0",
     "@tiptap/extension-color": "^2.27.2",
     "@tiptap/extension-highlight": "^2.27.2",

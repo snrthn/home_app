@@ -605,6 +605,8 @@ model SystemConfig {
   smsAccessKeySecret   String?
   smsSignName          String?
   smsTemplateCode      String?
+  // Sentry DSN：运营平台配置后前端自动初始化错误监控；留空=关闭监控
+  sentryDsn            String?
   updatedAt            DateTime @updatedAt
 }
 

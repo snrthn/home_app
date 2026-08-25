@@ -16,6 +16,7 @@ import type { Role } from '@laoma/shared';
 
 interface WsServer {
   to(room: string): { emit(event: string, data: unknown): void };
+  emit(event: string, data: unknown): void;
 }
 
 interface WsSocket {
@@ -157,5 +158,13 @@ export class OrdersGateway
 
   broadcastTicketUpdate(ticket: unknown) {
     this.server?.to('tickets-pool').emit('ticket-update', ticket);
+  }
+
+  /**
+   * 广播 Sentry 配置变更：运营平台更新 sentryDsn 后通知所有在线客户端。
+   * 客户端收到后 initSentry(dsn) 或 closeSentry()。
+   */
+  broadcastSentryConfig(dsn: string | null) {
+    this.server?.emit('sentry:config', { dsn: dsn || '' });
   }
 }

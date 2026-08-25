@@ -11,7 +11,7 @@
 
 | 事项 | 内容 |
 |---|---|
-| 工程根 | `D:\FrontEnd\home_app`（monorepo: `nest/` + `next/` + `shared/`） |
+| 工程根 | `.`（monorepo: `nest/` + `next/` + `shared/`） |
 | 技术栈 | NestJS + Next.js(App Router) + Prisma + MySQL + pnpm + Turborepo |
 | 用户开发端口 | 后端 3721 / 前端 3824（**AI 绝不起/kill**） |
 | AI 调试端口 | 后端 3722（跑完必退）；前端不可另起（`.next` 共享目录冲突 → ChunkLoadError） |
@@ -23,15 +23,7 @@
 
 ## 1. 关联文件索引（全部记忆与规则来源）
 
-### 1.1 项目记忆文件（WorkBuddy 托管）
-
-| 文件 | 作用 | 路径 |
-|---|---|---|
-| **项目长期记忆** | 工程纪律、Prisma 坑、UI 规矩、状态机、模块速查、下一步 | `C:\Users\yhnce\WorkBuddy\2026-08-06-09-48-07\.workbuddy\memory\MEMORY.md` |
-| **每日工作日志** | 按日记录做了什么、踩了什么坑、做了什么决策 | `…\.workbuddy\memory\YYYY-MM-DD.md`（2026-08-06 ~ 08-19） |
-| **用户级跨项目记忆** | 协作方式、端口分工、调试方法论、UI 偏好、身份称呼 | `C:\Users\yhnce\.workbuddy\MEMORY.md` |
-
-### 1.2 项目内文档（工程内 docs/）
+### 1.1 项目内文档（工程内 docs/）
 
 | 文件 | 作用 | 路径 |
 |---|---|---|
@@ -416,7 +408,7 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 ## 15. 工程结构速览
 
 ```
-D:\FrontEnd\home_app\
+./
 ├── nest/                      # NestJS 后端
 │   ├── src/
 │   │   ├── auth/              # JWT 鉴权
