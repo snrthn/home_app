@@ -18,7 +18,9 @@ import { Audit } from '../common/audit.decorator';
 import { Role } from '@laoma/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { RejectSettlementDto, CreditSettlementDto } from './settlements.dto';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody, ApiParam } from '@nestjs/swagger';
 
+@ApiTags('结算管理')
 @Controller('settlements')
 export class SettlementsController {
   constructor(
@@ -30,6 +32,8 @@ export class SettlementsController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.Master)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '师傅收入汇总' })
   @Get('summary')
   async summary(@CurrentUser() user: AuthUser) {
     const master = await this.prisma.master.findUnique({
@@ -41,6 +45,8 @@ export class SettlementsController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.Master)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '师傅结算明细列表' })
   @Get('mine')
   async mine(@CurrentUser() user: AuthUser) {
     const master = await this.prisma.master.findUnique({
@@ -54,6 +60,8 @@ export class SettlementsController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.Admin)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '结算单列表' })
   @Get()
   list() {
     return this.s.list();
@@ -61,6 +69,8 @@ export class SettlementsController {
 
   @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
   @Roles(Role.Admin)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '同步已支付订单结算单' })
   @Post('sync')
   sync() {
     return this.s.syncForPaidOrders();
@@ -69,6 +79,9 @@ export class SettlementsController {
   /** 按订单查结算单（含退款补偿单），三端订单详情展示补偿说明用 */
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.Customer, Role.Master, Role.Admin)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '按订单查结算单' })
+  @ApiParam({ name: 'orderId', description: '订单ID' })
   @Get('by-order/:orderId')
   async byOrder(@CurrentUser() user: AuthUser, @Param('orderId') orderId: string) {
     // 权限：仅订单相关方（客户/师傅本人）或管理员可见，防止跨单窥探
@@ -92,6 +105,10 @@ export class SettlementsController {
   @Roles(Role.Admin)
   @Audit('finance', 'finance:manage')
   @RequirePerm('finance:manage')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '补偿单确认入账' })
+  @ApiParam({ name: 'id', description: '结算单ID' })
+  @ApiBody({ type: CreditSettlementDto })
   @Post(':id/credit')
   credit(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: CreditSettlementDto) {
     return this.s.credit(id, dto.note, user.sub);
@@ -102,6 +119,10 @@ export class SettlementsController {
   @Roles(Role.Admin)
   @Audit('finance', 'finance:manage')
   @RequirePerm('finance:manage')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '补偿单驳回' })
+  @ApiParam({ name: 'id', description: '结算单ID' })
+  @ApiBody({ type: RejectSettlementDto })
   @Post(':id/reject')
   reject(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: RejectSettlementDto) {
     return this.s.reject(id, dto.reason, user.sub);

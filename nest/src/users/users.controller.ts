@@ -18,13 +18,17 @@ import { Roles } from '../common/roles.decorator';
 import { RequirePerm } from '../common/perm.decorator';
 import { Audit } from '../common/audit.decorator';
 import { Role } from '@laoma/shared';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 
+@ApiTags('用户管理')
 @Controller('users')
 export class UsersController {
   constructor(private users: UsersService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.Admin)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '管理员列表' })
   @Get('admins')
   listAdmins() {
     return this.users.listAdmins();
@@ -32,6 +36,8 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.Admin)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '客户列表' })
   @Get('customers')
   listCustomers() {
     return this.users.listCustomers();
@@ -41,6 +47,8 @@ export class UsersController {
   @Roles(Role.Admin)
   @Audit('users', 'users:admin_manage')
   @RequirePerm('users:admin_manage')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '创建管理员' })
   @Post('admins')
   createAdmin(
     @Body()
@@ -58,6 +66,9 @@ export class UsersController {
   @Roles(Role.Admin)
   @Audit('users', 'users:admin_manage')
   @RequirePerm('users:admin_manage')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '更新管理员' })
+  @ApiParam({ name: 'id', description: '管理员用户ID' })
   @Patch('admins/:id')
   updateAdmin(
     @CurrentUser() user: AuthUser,
@@ -81,6 +92,9 @@ export class UsersController {
   @Roles(Role.Admin)
   @Audit('users', 'users:admin_manage')
   @RequirePerm('users:admin_manage')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '设置管理员状态' })
+  @ApiParam({ name: 'id', description: '管理员用户ID' })
   @Post('admins/:id/status')
   setAdminStatus(
     @CurrentUser() user: AuthUser,
@@ -98,6 +112,9 @@ export class UsersController {
   @Roles(Role.Admin)
   @Audit('users', 'users:customer_toggle')
   @RequirePerm('users:customer_toggle')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '设置客户状态' })
+  @ApiParam({ name: 'id', description: '客户用户ID' })
   @Post('customers/:id/status')
   setCustomerStatus(
     @Param('id') id: string,

@@ -7,6 +7,7 @@ import {
   Max,
   MaxLength,
 } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
 
 // 服务区域（开通城市字典）节点的增删改 DTO。
 // 区域采用 6 段式（province/provinceCode/city/cityCode/district/districtCode），
@@ -16,27 +17,27 @@ import {
 
 export class CreateServiceAreaDto {
   // 至少选择一个省（直辖市也视为省一级）
-  @IsString() @MaxLength(50, { message: '省份名称不能超过 50 个字符' })
+  @ApiProperty({ description: '省份名称' }) @IsString() @MaxLength(50, { message: '省份名称不能超过 50 个字符' })
   province: string;
-  @IsString() @MaxLength(20, { message: '省份编码不能超过 20 个字符' })
+  @ApiProperty({ description: '省份编码' }) @IsString() @MaxLength(20, { message: '省份编码不能超过 20 个字符' })
   provinceCode: string;
 
-  @IsOptional() @IsString() @MaxLength(50) city?: string;
-  @IsOptional() @IsString() @MaxLength(20) cityCode?: string;
-  @IsOptional() @IsString() @MaxLength(50) district?: string;
-  @IsOptional() @IsString() @MaxLength(20) districtCode?: string;
+  @ApiProperty({ required: false, description: '城市名称' }) @IsOptional() @IsString() @MaxLength(50) city?: string;
+  @ApiProperty({ required: false, description: '城市编码' }) @IsOptional() @IsString() @MaxLength(20) cityCode?: string;
+  @ApiProperty({ required: false, description: '区/县名称' }) @IsOptional() @IsString() @MaxLength(50) district?: string;
+  @ApiProperty({ required: false, description: '区/县编码' }) @IsOptional() @IsString() @MaxLength(20) districtCode?: string;
 
-  @IsOptional() @IsBoolean() isActive?: boolean;
-  @IsOptional() @IsInt() @Min(0) @Max(99999) sort?: number;
+  @ApiProperty({ required: false, description: '是否启用' }) @IsOptional() @IsBoolean() isActive?: boolean;
+  @ApiProperty({ required: false, description: '排序号' }) @IsOptional() @IsInt() @Min(0) @Max(99999) sort?: number;
 }
 
 export class UpdateServiceAreaDto {
-  @IsOptional() @IsBoolean() isActive?: boolean;
-  @IsOptional() @IsInt() @Min(0) @Max(99999) sort?: number;
+  @ApiProperty({ required: false, description: '是否启用' }) @IsOptional() @IsBoolean() isActive?: boolean;
+  @ApiProperty({ required: false, description: '排序号' }) @IsOptional() @IsInt() @Min(0) @Max(99999) sort?: number;
 }
 
 // 级联启停：enabled=停/启用；cascadeChildren 仅启用时生效（停用永远整支向下传递）
 export class SetAreaActiveDto {
-  @IsBoolean() enabled: boolean;
-  @IsOptional() @IsBoolean() cascadeChildren?: boolean;
+  @ApiProperty({ description: '启用/停用' }) @IsBoolean() enabled: boolean;
+  @ApiProperty({ required: false, description: '是否级联子节点' }) @IsOptional() @IsBoolean() cascadeChildren?: boolean;
 }

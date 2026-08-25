@@ -6,7 +6,7 @@
 
 ---
 
-## 0. 现状体检快照（2026-08-24 实测；E-03/E-04/E-05/E-13/E-14 处理后）
+## 0. 现状体检快照（2026-08-25 实测；E-03/E-04/E-05/E-13/E-14/E-15/E-16 处理后）
 
 | 维度         | 现状                                                                                        | 结论            |
 | ---------- | ----------------------------------------------------------------------------------------- | ------------- |
@@ -14,8 +14,10 @@
 | `any` 类型安全 | 三端共 139 处 `any`（nest 58 / next 81 / shared 0），较修复前 288 处减少 149 处（52%）；零 `@ts-ignore`/`@ts-nocheck` | 🟡 大幅改善，剩余为合理保留 |
 | 单元测试       | jest + ts-jest 就位；P0 纯函数 5 suites/107 tests + P1 金额守卫 10 suites/195 tests，共 195 tests PASS | ✅ 已完成 |
 | E2E 测试     | 2 suites / 16 tests PASS（正向全链 + 售后链）                                                       | ✅ 已完成 |
-| Lint / 格式化 | eslint 9 flat config 打通，`pnpm lint` 0 error / 90 warn（原 188 warn，any 清理后降 98）；prettier 配置就位，存量 55 文件格式债未统一 | 🟡 部分完成       |
-| CI 门禁      | `.github/workflows/deploy.yml` 现跑 `pnpm typecheck` + `pnpm lint` + commitlint，失败即阻断部署             | ✅ 门禁生效       |
+| Lint / 格式化 | eslint 9 flat config 打通，`pnpm lint` 0 error / 82 warn（原 188 warn，any 清理+round2 修复后降 106）；prettier 配置就位，存量 55 文件格式债未统一 | 🟡 部分完成       |
+| CI 门禁      | `.github/workflows/deploy.yml` 现跑 `pnpm prisma:generate` + `pnpm typecheck` + `pnpm lint` + commitlint，失败即阻断部署             | ✅ 门禁生效       |
+| API 版本控制   | `main.ts` 启用 `enableVersioning({ type: URI, defaultVersion: '1' })`，所有接口走 `/api/v1/...`；未来升级挂 `@Version('2')` 即可 | ✅ 已完成 |
+| API 文档     | `@nestjs/swagger` v7 + `swagger-ui-express` 接入，25 个 controller + 15 个 DTO 全量标注；访问 `http://localhost:3721/docs` | ✅ 已完成 |
 | CORS       | `main.ts` 读 `CORS_ORIGIN` env（逗号白名单），未设回落 true；生产设白名单即锁死                  | ✅ 已收敛        |
 | 统一异常       | `AllExceptionsFilter` 全局注册，404/400/500 统一 `{code,message,data,path,timestamp}`        | ✅ 已收敛        |
 | 日志         | nest 2 处 + next 4 处 `console.log` 散落，无 pino/winston                                       | ⚠️ 无结构化       |
@@ -210,6 +212,30 @@
 - **E-10** 依赖安全审计：`pnpm audit` / Dependabot / snyk，定期扫描
 - **E-11** 前端性能与可访问性：route 级懒加载、bundle 拆分、a11y 基础（label/aria/focus）
 
+#### E-15　API 缺少版本控制
+
+- **证据**：`main.ts` 原先仅 `app.setGlobalPrefix('api')`，无 `enableVersioning`，所有接口走 `/api/orders` 等无版本路径
+- **影响**：重大功能升级时破坏性变更无法平滑迁移，所有客户端同时受影响；移动端 App 发布后无法绑定特定 API 版本
+- **修复**：
+  - `main.ts` + `e2e/setup.ts` 启用 `enableVersioning({ type: VersioningType.URI, defaultVersion: '1' })`
+  - `next/src/lib/api.ts` baseURL 从 `/api` → `/api/v1`，`API_ORIGIN` 正则同步
+  - 2 个 E2E spec 文件路径批量替换 `/api/` → `/api/v1/`（17 处）
+  - 附带修复：`setup.ts` ServiceArea `findUnique + create` → `upsert`，解决并行测试竞态
+- **状态**：✅ 已完成（2026-08-25）
+- **验证**：tsc (nest+next) EXIT=0；lint 0 error；P0/P1 10 suites/195 tests PASS；E2E 2 suites/16 tests PASS
+
+#### E-16　缺少 API 文档（Swagger/OpenAPI）
+
+- **证据**：项目无 `@nestjs/swagger` 依赖，0 处 `@ApiTags`/`@ApiOperation`/`@ApiProperty` 装饰器，前后端协作靠口头沟通或读代码
+- **影响**：新成员 onboarding 无接口全景；前端无法看到请求/响应 schema 定义；无交互式调试工具
+- **修复**：
+  - 安装 `@nestjs/swagger@7`（兼容 NestJS v10）+ `swagger-ui-express@5`
+  - `main.ts` 挂载 `DocumentBuilder` + `SwaggerModule.setup('docs')`，访问 `http://localhost:3721/docs`
+  - 25 个 controller 全量标注：`@ApiTags`（21 个中文标签）+ `@ApiOperation`（~80+ 端点）+ `@ApiBearerAuth`（受保护接口）+ `@ApiBody`/`@ApiParam`/`@ApiQuery`
+  - 15 个 DTO 文件全量标注：`@ApiProperty`（必填）/ `@ApiProperty({ required: false })`（可选），与 class-validator 装饰器对齐
+- **状态**：✅ 已完成（2026-08-25）
+- **验证**：tsc (nest+next) EXIT=0；lint 0 error / 82 warnings；P0/P1 195 tests PASS；E2E 16 tests PASS；frozen-lockfile EXIT=0
+
 ---
 
 ## 2. 处理跟踪表
@@ -230,6 +256,8 @@
 | E-12 | 短信验证码 DTO 校验不严（`phone` 仅 `IsString`） | P1  | 📋 待处理 | `POST /api/auth/send-code` 传 `phone:"123"` 可通过校验并真发码；建议 `IsMobilePhone`，需确认 mock 假号测试兼容性（见 §1 P1） |
 | E-13 | Git 提交信息无规范                       | P1  | ✅ 已完成 | commitlint + husky + .gitmessage 模板 + CI 校验步骤；详见 [`docs/commit-convention.md`](commit-convention.md) |
 | E-14 | TypeScript `any` 类型安全治理            | P1  | ✅ 已完成 | 288→139 处 any（-149，52%）；新建 @CurrentUser 装饰器 + 4 DTO + 3 interface + Gateway 类型；三端 tsc EXIT=0；211 tests PASS |
+| E-15 | API 缺少版本控制                         | P2  | ✅ 已完成 | `enableVersioning(URI, v1)`；前端 baseURL + E2E 路径全替换 `/api/v1/`；附修 ServiceArea upsert 竞态；tsc+lint+211 tests PASS |
+| E-16 | 缺少 API 文档（Swagger/OpenAPI）          | P2  | ✅ 已完成 | `@nestjs/swagger@7` + `swagger-ui-express`；25 controller + 15 DTO 全量标注；访问 `http://localhost:3721/docs`；tsc+lint+211 tests PASS |
 
 
 

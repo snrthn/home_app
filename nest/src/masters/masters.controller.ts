@@ -19,12 +19,25 @@ import { Roles } from '../common/roles.decorator';
 import { RequirePerm } from '../common/perm.decorator';
 import { Audit } from '../common/audit.decorator';
 import { Role } from '@laoma/shared';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiBody,
+  ApiQuery,
+  ApiParam,
+} from '@nestjs/swagger';
 import { CreateMasterDto, ApproveMasterDto, UpdateMasterMeDto } from './masters.dto';
 
+@ApiTags('师傅管理')
 @Controller('masters')
 export class MastersController {
   constructor(private masters: MastersService) {}
 
+  @ApiOperation({ summary: '师傅列表' })
+  @ApiQuery({ name: 'city', required: false })
+  @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'pendingOnly', required: false })
   @Get()
   list(
     @Query('city') city?: string,
@@ -34,6 +47,9 @@ export class MastersController {
     return this.masters.list(city, status, pendingOnly);
   }
 
+  @ApiOperation({ summary: '创建师傅' })
+  @ApiBearerAuth()
+  @ApiBody({ type: CreateMasterDto })
   @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
   @Roles(Role.Admin)
   @Audit('masters', 'users:master_verify')
@@ -43,6 +59,10 @@ export class MastersController {
     return this.masters.create(dto);
   }
 
+  @ApiOperation({ summary: '审核师傅' })
+  @ApiBearerAuth()
+  @ApiParam({ name: 'id' })
+  @ApiBody({ type: ApproveMasterDto })
   @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
   @Roles(Role.Admin)
   @Audit('masters', 'users:master_verify')
@@ -52,6 +72,17 @@ export class MastersController {
     return this.masters.approve(id, dto.status, dto.reason);
   }
 
+  @ApiOperation({ summary: '设置师傅状态' })
+  @ApiBearerAuth()
+  @ApiParam({ name: 'id' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['active', 'disabled'] },
+      },
+    },
+  })
   @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
   @Roles(Role.Admin)
   @Audit('masters', 'users:master_toggle')
@@ -68,6 +99,9 @@ export class MastersController {
   }
 
   // 师傅本人完善专属资料（需 master 角色）
+  @ApiOperation({ summary: '师傅完善自身资料' })
+  @ApiBearerAuth()
+  @ApiBody({ type: UpdateMasterMeDto })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.Master)
   @Patch('me')
