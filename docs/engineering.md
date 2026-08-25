@@ -268,3 +268,26 @@
 - 解决某条时：**改代码 → 跑 `tsc`/lint/单测 → 回填本文件「计划/备注」列 commit 与验证命令 → 状态置 ✅**。
 - 新增问题：直接加在 §1 对应优先级小节，并在 §2 跟踪表追加一行。
 - 决策类（如 E-08）标注「需你拍板」，不在无授权下擅自改生产路径。
+
+## 4. 工程纪律（不可违反）
+
+> 以下规矩由项目维护者确立，违反将导致 CI 失败、合并冲突或类型定义不一致。
+
+### 4.1 分支保护
+
+| 规矩 | 说明 |
+|---|---|
+| **禁止直接在 `main` 和 `master` 上修改代码** | 所有开发必须在 `develop` 分支进行 |
+| **合并流程** | `develop` → 测试通过 → 合并到 `master` 和 `main`（优先 fast-forward） |
+| **违反后果** | 直接在 `main`/`master` 上提交会导致与 `develop` 的哈希分叉，合并时产生三方合并冲突 + commitlint CI 失败 |
+| **历史教训** | 2026-08-25 因在 `main` 上直接提交（rebase 重写 commit message），导致 `develop → main` 合并时 10 个文件冲突，CI commitlint 步骤 `Invalid revision range` 失败 |
+
+### 4.2 Swagger 类型来源统一
+
+| 规矩 | 说明 |
+|---|---|
+| **禁止手写 `@ApiProperty`** | DTO 的 API 文档元数据由 Swagger CLI 插件自动推断 |
+| **插件配置** | `nest-cli.json` → `@nestjs/swagger` 插件，`classValidatorShims: true` |
+| **自动推断来源** | TypeScript 类型（`string`/`number`/`boolean`）+ class-validator 装饰器（`@IsOptional` → required: false） |
+| **仍需手写的** | Controller 级标注（`@ApiTags`/`@ApiOperation`/`@ApiBearerAuth`/`@ApiBody`/`@ApiParam`/`@ApiQuery`）— 插件不生成这些 |
+| **历史教训** | 2026-08-25 发现 148 处手写 `@ApiProperty` 与 class-validator 装饰器重复定义同一字段，改类型需同步两处，已全部移除并启用插件 |
