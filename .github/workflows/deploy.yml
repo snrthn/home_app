@@ -27,6 +27,7 @@ jobs:
       - run: pnpm prisma:generate
       - run: pnpm typecheck
       - run: pnpm lint
+      - run: pnpm test
       - name: 校验提交信息格式（commitlint）
         run: |
           FROM="${{ github.event.before }}"
@@ -37,10 +38,53 @@ jobs:
           echo "Checking commits from ${FROM} to ${{ github.sha }}"
           npx commitlint --from="${FROM}" --to="${{ github.sha }}" --verbose
 
-  # 2) 部署：runner checkout → git archive 打包 → scp 推代码到 ECS → ssh 构建
+  # 2) E2E 门禁：启动 MySQL → 建表 → 种子数据 → 跑端到端测试
+  e2e:
+    needs: verify
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: laoma_jiadian
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      DATABASE_URL: mysql://root:root@127.0.0.1:3306/laoma_jiadian?connection_limit=10
+      JWT_ACCESS_SECRET: ci-test-access-secret
+      JWT_REFRESH_SECRET: ci-test-refresh-secret
+      JWT_ACCESS_TTL: "3600"
+      JWT_REFRESH_TTL: "604800"
+      PORT: "3721"
+      UPLOAD_DIR: "./uploads"
+      LOG_LEVEL: "error"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - run: npm install -g pnpm@8.15.4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @laoma/shared build
+      - run: pnpm prisma:generate
+      - run: pnpm --filter @laoma/backend exec prisma migrate deploy
+      - run: pnpm --filter @laoma/backend run seed
+      - run: pnpm --filter @laoma/backend run seed:categories
+      - run: pnpm --filter @laoma/backend run seed:items
+      - run: pnpm test:e2e
+
+  # 3) 部署：runner checkout → git archive 打包 → scp 推代码到 ECS → ssh 构建
   #    push-based，避免 ECS 访问 GitHub 的网络问题（国内常 empty reply）
   deploy:
-    needs: verify
+    needs: [verify, e2e]
     runs-on: ubuntu-latest
     steps:
       - name: 拉取代码

@@ -7,10 +7,32 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { PinoLoggerService, pinoLogger } from './common/logger/pino-logger.service';
 import { requestIdMiddleware } from './common/middleware/request-id.middleware';
+import { Request, Response, NextFunction } from 'express';
+import helmet from 'helmet';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: new PinoLoggerService(),
+  });
+  // 信任代理（Nginx/X-Forwarded-For），限流、日志等需真实客户端 IP
+  app.set('trust proxy', 1);
+  // helmet 安全头：CSP/HSTS/XSS 等 10+ 项防护
+  // /api/docs 路径放宽 CSP（script-src: 'unsafe-inline'），否则 Swagger UI 无法加载
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.path.startsWith('/api/docs')) {
+      helmet({
+        contentSecurityPolicy: {
+          directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net'],
+            styleSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net'],
+            imgSrc: ["'self'", 'data:'],
+          },
+        },
+      })(req, res, next);
+    } else {
+      helmet()(req, res, next);
+    }
   });
   app.use(requestIdMiddleware);
   app.setGlobalPrefix('api');

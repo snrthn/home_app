@@ -44,8 +44,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
           ? (msg as unknown[]).join('；')
           : ((msg as string) ?? message);
       }
-      code = `HTTP_${status}`;
-      logLevel = status >= 500 ? 'error' : 'warn';
+      // 限流异常：友好 code + 中文提示
+      if (status === HttpStatus.TOO_MANY_REQUESTS) {
+        code = 'RATE_LIMITED';
+        message = '请求过于频繁，请稍后再试';
+        logLevel = 'warn';
+      } else {
+        code = `HTTP_${status}`;
+        logLevel = status >= 500 ? 'error' : 'warn';
+      }
     } else if (exception instanceof PrismaClientKnownRequestError) {
       status = HttpStatus.BAD_REQUEST;
       code = `DB_${exception.code}`;

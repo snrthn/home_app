@@ -10,6 +10,7 @@ import {
   Headers,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
@@ -50,6 +51,7 @@ export class AuthController {
 
   @ApiOperation({ summary: '发送短信验证码' })
   @ApiBody({ type: SendCodeDto })
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   @Post('send-code')
   sendCode(@Body() dto: SendCodeDto) {
     return this.auth.sendSmsCode(dto.phone);
@@ -57,6 +59,7 @@ export class AuthController {
 
   @ApiOperation({ summary: '用户注册' })
   @ApiBody({ type: RegisterDto })
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('register')
   async register(
     @Body() dto: RegisterDto,
@@ -78,6 +81,7 @@ export class AuthController {
 
   @ApiOperation({ summary: '登录' })
   @ApiBody({ type: LoginDto })
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Post('login')
   async login(
     @Body() dto: LoginDto,
@@ -141,6 +145,7 @@ export class AuthController {
   // 找回密码（公开，无需登录态）：手机号 + 验证码 + 新密码，OTP 即身份凭证。
   @ApiOperation({ summary: '找回密码' })
   @ApiBody({ type: ResetPasswordDto })
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   @Post('reset-password')
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.auth.resetPasswordByCode(dto.phone, dto.code, dto.newPassword);
