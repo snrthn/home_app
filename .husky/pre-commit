@@ -1,1 +1,11 @@
 pnpm lint
+
+# Auto-sync pnpm-lock.yaml if any package.json was modified
+CHANGED=$(git diff --cached --name-only)
+if echo "$CHANGED" | grep -q "package\.json"; then
+  if ! pnpm install --frozen-lockfile 2>/dev/null; then
+    echo "  ⚠️  pnpm-lock.yaml out of sync, auto-fixing..."
+    pnpm install --no-frozen-lockfile
+    git add pnpm-lock.yaml
+  fi
+fi
