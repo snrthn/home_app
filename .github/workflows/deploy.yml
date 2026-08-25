@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '18'
@@ -26,7 +28,14 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - name: 校验提交信息格式（commitlint）
-        run: npx commitlint --from="${{ github.event.before }}" --to="${{ github.sha }}" --verbose
+        run: |
+          FROM="${{ github.event.before }}"
+          # before 为全零（新分支）或不可达（force push / merge commit）时回退到 HEAD~1
+          if [ "${FROM}" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${FROM}" 2>/dev/null; then
+            FROM="HEAD~1"
+          fi
+          echo "Checking commits from ${FROM} to ${{ github.sha }}"
+          npx commitlint --from="${FROM}" --to="${{ github.sha }}" --verbose
 
   # 2) 部署：runner checkout → git archive 打包 → scp 推代码到 ECS → ssh 构建
   #    push-based，避免 ECS 访问 GitHub 的网络问题（国内常 empty reply）
