@@ -36,7 +36,7 @@ export function useOrderSocket(
     if (typeof window === 'undefined') return;
     const base =
       process.env.NEXT_PUBLIC_API_BASE
-        ? process.env.NEXT_PUBLIC_API_BASE.replace(/\/api$/, '')
+        ? process.env.NEXT_PUBLIC_API_BASE.replace(/\/api(\/v\d+)?$/, '')
         : `http://${window.location.hostname}:3721`;
 
     const socket: Socket = io(base, {

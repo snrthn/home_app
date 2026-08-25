@@ -133,7 +133,7 @@ export function getApiErrorMsg(e: unknown): string {
 
 // 后端上传接口基于全局前缀 api，静态资源挂在 /uploads。
 // 这里把相对路径（/uploads/xxx.jpg）解析为带源站的绝对地址，跨端口（前端 3824 / 后端 3721）也能正常显示。
-const API_ORIGIN = API_BASE.replace(/\/api\/v1$/, '');
+const API_ORIGIN = API_BASE.replace(/\/api(\/v\d+)?$/, '');
 
 export function resolveAsset(pathOrUrl?: string | null): string {
   if (!pathOrUrl) return '';
