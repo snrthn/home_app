@@ -113,7 +113,7 @@ function NewOrderForm() {
       });
       toast.success('下单成功，请完成支付');
       qc.invalidateQueries({ queryKey: QK.orderMine });
-      router.push(`/client/orders/${order.id}`);
+      router.replace(`/client/orders/${order.id}`);
     } catch (e: any) {
       toast.error(getApiErrorMsg(e));
     } finally {
