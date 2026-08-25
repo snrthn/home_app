@@ -1,13 +1,16 @@
 import { Controller, Get, Res } from '@nestjs/common';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Response } from 'express';
 import { ConfigService } from './config.service';
 
 // 公开：取全局配置（系统名称 / 主题色 / 客服电话等），无需登录。
 // 前端挂载时拉取以应用主题色，用户端「在线客服」读取客服电话。
+@ApiTags('系统配置')
 @Controller('config')
 export class ConfigPublicController {
   constructor(private s: ConfigService) {}
 
+  @ApiOperation({ summary: '获取全局配置' })
   @Get('global')
   async getGlobal(@Res() res: Response) {
     const result = await this.s.getGlobal();

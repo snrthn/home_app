@@ -1,7 +1,9 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { NoticesService, type RegionFilter } from './notices.service';
+import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 
 // 公开：取某端当前生效的公告列表（无需登录），供用户端/师傅端「平台公告」展示。
+@ApiTags('平台公告')
 @Controller('notices')
 export class NoticesPublicController {
   constructor(private s: NoticesService) {}
@@ -9,6 +11,12 @@ export class NoticesPublicController {
   // GET /notices?scope=master&regions=<JSON数组>
   // 数组元素为 { provinceCode, cityCode?, districtCode? }，命中任一即可见。
   // 兼容旧调用：未传 regions 但传了 provinceCode 时，按单 region 处理。
+  @ApiOperation({ summary: '获取生效公告列表（公开）' })
+  @ApiQuery({ name: 'scope' })
+  @ApiQuery({ name: 'regions', required: false })
+  @ApiQuery({ name: 'provinceCode', required: false })
+  @ApiQuery({ name: 'cityCode', required: false })
+  @ApiQuery({ name: 'districtCode', required: false })
   @Get()
   async list(
     @Query('scope') scope: string,

@@ -1,5 +1,5 @@
 import { Test } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication, ValidationPipe, VersioningType } from '@nestjs/common';
 import request from 'supertest';
 import bcrypt from 'bcryptjs';
 import { OrderStatus } from '@laoma/shared';
@@ -34,6 +34,7 @@ export async function bootstrapApp(): Promise<INestApplication> {
   }).compile();
   const app = moduleRef.createNestApplication();
   app.setGlobalPrefix('api');
+  app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.useGlobalFilters(new AllExceptionsFilter());
   await app.init();
@@ -119,26 +120,18 @@ export async function createE2EContext(app: INestApplication): Promise<E2EContex
   });
 
   // --- ServiceArea（平台开通区域）---
-  const existingArea = await prisma.serviceArea.findUnique({ where: { code: '110000' } });
-  if (existingArea) {
-    if (!existingArea.isActive) {
-      await prisma.serviceArea.update({
-        where: { code: '110000' },
-        data: { isActive: true },
-      });
-    }
-  } else {
-    await prisma.serviceArea.create({
-      data: {
-        level: 1,
-        name: '北京市',
-        code: '110000',
-        province: '北京市',
-        provinceCode: PROVINCE_CODE,
-        isActive: true,
-      },
-    });
-  }
+  await prisma.serviceArea.upsert({
+    where: { code: '110000' },
+    create: {
+      level: 1,
+      name: '北京市',
+      code: '110000',
+      province: '北京市',
+      provinceCode: PROVINCE_CODE,
+      isActive: true,
+    },
+    update: { isActive: true },
+  });
 
   // --- CommissionRule（全局佣金规则）---
   const existingRule = await prisma.commissionRule.findFirst({ where: { scope: 'global' } });
@@ -173,13 +166,13 @@ export async function createE2EContext(app: INestApplication): Promise<E2EContex
 
   // --- 登录获取 token ---
   const customerLogin = await request(server)
-    .post('/api/auth/login')
+    .post('/api/v1/auth/login')
     .send({ phone: customerPhone, password: PASSWORD, mode: 'password' });
   const masterLogin = await request(server)
-    .post('/api/auth/login')
+    .post('/api/v1/auth/login')
     .send({ phone: masterPhone, password: PASSWORD, mode: 'password' });
   const adminLogin = await request(server)
-    .post('/api/auth/login')
+    .post('/api/v1/auth/login')
     .send({ phone: adminPhone, password: PASSWORD, mode: 'admin' });
 
   if (!customerLogin.body.accessToken) {
@@ -228,58 +221,58 @@ export async function createAndCompleteOrder(ctx: E2EContext): Promise<string> {
 
   // 1. 下单
   const createRes = await request(server)
-    .post('/api/orders')
+    .post('/api/v1/orders')
     .set('Authorization', `Bearer ${customerToken}`)
     .send({ serviceItemId, addressId, appointmentDate: '2026-09-01', appointmentSlot: '09:00-12:00' });
   const orderId = createRes.body.id;
 
   // 2. 支付
   const chargeRes = await request(server)
-    .post('/api/payments/charge')
+    .post('/api/v1/payments/charge')
     .set('Authorization', `Bearer ${customerToken}`)
     .send({ orderId });
   const token = chargeRes.body.payParams.token;
 
   // 3. 模拟支付回调
   await request(server)
-    .post('/api/payments/mock/notify')
+    .post('/api/v1/payments/mock/notify')
     .set('Authorization', `Bearer ${customerToken}`)
     .send({ orderId, token });
 
   // 4. 抢单
   await request(server)
-    .post(`/api/orders/${orderId}/grab`)
+    .post(`/api/v1/orders/${orderId}/grab`)
     .set('Authorization', `Bearer ${masterToken}`);
 
   // 5. 出发
   await request(server)
-    .post(`/api/orders/${orderId}/depart`)
+    .post(`/api/v1/orders/${orderId}/depart`)
     .set('Authorization', `Bearer ${masterToken}`);
 
   // 6. 生成到达码
   const codeRes = await request(server)
-    .post(`/api/orders/${orderId}/generate-arrive-code`)
+    .post(`/api/v1/orders/${orderId}/generate-arrive-code`)
     .set('Authorization', `Bearer ${customerToken}`);
 
   // 7. 到达
   await request(server)
-    .post(`/api/orders/${orderId}/arrive`)
+    .post(`/api/v1/orders/${orderId}/arrive`)
     .set('Authorization', `Bearer ${masterToken}`)
     .send({ code: codeRes.body.code });
 
   // 8. 开始服务
   await request(server)
-    .post(`/api/orders/${orderId}/start`)
+    .post(`/api/v1/orders/${orderId}/start`)
     .set('Authorization', `Bearer ${masterToken}`);
 
   // 9. 完成服务
   await request(server)
-    .post(`/api/orders/${orderId}/complete`)
+    .post(`/api/v1/orders/${orderId}/complete`)
     .set('Authorization', `Bearer ${masterToken}`);
 
   // 10. 验收
   await request(server)
-    .post(`/api/orders/${orderId}/confirm`)
+    .post(`/api/v1/orders/${orderId}/confirm`)
     .set('Authorization', `Bearer ${customerToken}`);
 
   return orderId;

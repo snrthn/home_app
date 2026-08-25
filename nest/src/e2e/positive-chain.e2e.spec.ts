@@ -28,7 +28,7 @@ describe('正向全链 e2e — 下单→支付→抢单→履约→验收→结�
   // ---- 步骤 1: 客户下单 ----
   it('1. 客户下单 → pending_payment', async () => {
     const res = await request(ctx.server)
-      .post('/api/orders')
+      .post('/api/v1/orders')
       .set('Authorization', `Bearer ${ctx.customerToken}`)
       .send({
         serviceItemId: ctx.serviceItemId,
@@ -47,7 +47,7 @@ describe('正向全链 e2e — 下单→支付→抢单→履约→验收→结�
   // ---- 步骤 2: 客户发起支付 ----
   it('2. 客户发起支付 → 获取 mock token', async () => {
     const res = await request(ctx.server)
-      .post('/api/payments/charge')
+      .post('/api/v1/payments/charge')
       .set('Authorization', `Bearer ${ctx.customerToken}`)
       .send({ orderId });
     expect(res.status).toBe(201);
@@ -59,7 +59,7 @@ describe('正向全链 e2e — 下单→支付→抢单→履约→验收→结�
   // ---- 步骤 3: 模拟支付回调 ----
   it('3. 模拟支付成功 → pending_accept', async () => {
     const res = await request(ctx.server)
-      .post('/api/payments/mock/notify')
+      .post('/api/v1/payments/mock/notify')
       .set('Authorization', `Bearer ${ctx.customerToken}`)
       .send({ orderId, token: payToken });
     expect(res.status).toBe(201);
@@ -72,7 +72,7 @@ describe('正向全链 e2e — 下单→支付→抢单→履约→验收→结�
   // ---- 步骤 4: 师傅抢单 ----
   it('4. 师傅抢单 → accepted', async () => {
     const res = await request(ctx.server)
-      .post(`/api/orders/${orderId}/grab`)
+      .post(`/api/v1/orders/${orderId}/grab`)
       .set('Authorization', `Bearer ${ctx.masterToken}`);
     expect(res.status).toBe(201);
     expect(res.body.status).toBe(OrderStatus.Accepted);
@@ -82,7 +82,7 @@ describe('正向全链 e2e — 下单→支付→抢单→履约→验收→结�
   // ---- 步骤 5: 师傅出发 ----
   it('5. 师傅出发 → departing', async () => {
     const res = await request(ctx.server)
-      .post(`/api/orders/${orderId}/depart`)
+      .post(`/api/v1/orders/${orderId}/depart`)
       .set('Authorization', `Bearer ${ctx.masterToken}`);
     expect(res.status).toBe(201);
     expect(res.body.status).toBe(OrderStatus.Departing);
@@ -91,7 +91,7 @@ describe('正向全链 e2e — 下单→支付→抢单→履约→验收→结�
   // ---- 步骤 6: 客户生成到达验证码 ----
   it('6. 客户生成到达验证码', async () => {
     const res = await request(ctx.server)
-      .post(`/api/orders/${orderId}/generate-arrive-code`)
+      .post(`/api/v1/orders/${orderId}/generate-arrive-code`)
       .set('Authorization', `Bearer ${ctx.customerToken}`);
     expect(res.status).toBe(201);
     expect(res.body.code).toBeDefined();
@@ -102,7 +102,7 @@ describe('正向全链 e2e — 下单→支付→抢单→履约→验收→结�
   // ---- 步骤 7: 师傅确认到达 ----
   it('7. 师傅输入验证码到达 → arrived', async () => {
     const res = await request(ctx.server)
-      .post(`/api/orders/${orderId}/arrive`)
+      .post(`/api/v1/orders/${orderId}/arrive`)
       .set('Authorization', `Bearer ${ctx.masterToken}`)
       .send({ code: arriveCode });
     expect(res.status).toBe(201);
@@ -112,7 +112,7 @@ describe('正向全链 e2e — 下单→支付→抢单→履约→验收→结�
   // ---- 步骤 8: 师傅开始服务 ----
   it('8. 师傅开始服务 → servicing', async () => {
     const res = await request(ctx.server)
-      .post(`/api/orders/${orderId}/start`)
+      .post(`/api/v1/orders/${orderId}/start`)
       .set('Authorization', `Bearer ${ctx.masterToken}`);
     expect(res.status).toBe(201);
     expect(res.body.status).toBe(OrderStatus.Servicing);
@@ -121,7 +121,7 @@ describe('正向全链 e2e — 下单→支付→抢单→履约→验收→结�
   // ---- 步骤 9: 师傅完成服务 ----
   it('9. 师傅完成服务 → pending_confirm', async () => {
     const res = await request(ctx.server)
-      .post(`/api/orders/${orderId}/complete`)
+      .post(`/api/v1/orders/${orderId}/complete`)
       .set('Authorization', `Bearer ${ctx.masterToken}`);
     expect(res.status).toBe(201);
     expect(res.body.status).toBe(OrderStatus.PendingConfirm);
@@ -130,7 +130,7 @@ describe('正向全链 e2e — 下单→支付→抢单→履约→验收→结�
   // ---- 步骤 10: 客户验收 ----
   it('10. 客户验收 → reviewed', async () => {
     const res = await request(ctx.server)
-      .post(`/api/orders/${orderId}/confirm`)
+      .post(`/api/v1/orders/${orderId}/confirm`)
       .set('Authorization', `Bearer ${ctx.customerToken}`);
     expect(res.status).toBe(201);
     expect(res.body.status).toBe(OrderStatus.Reviewed);

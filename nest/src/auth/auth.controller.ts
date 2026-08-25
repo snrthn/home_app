@@ -9,6 +9,7 @@ import {
   Patch,
   Headers,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
@@ -42,15 +43,20 @@ function roleFromAuthHeader(auth?: string): string | null {
   }
 }
 
+@ApiTags('认证')
 @Controller('auth')
 export class AuthController {
   constructor(private auth: AuthService) {}
 
+  @ApiOperation({ summary: '发送短信验证码' })
+  @ApiBody({ type: SendCodeDto })
   @Post('send-code')
   sendCode(@Body() dto: SendCodeDto) {
     return this.auth.sendSmsCode(dto.phone);
   }
 
+  @ApiOperation({ summary: '用户注册' })
+  @ApiBody({ type: RegisterDto })
   @Post('register')
   async register(
     @Body() dto: RegisterDto,
@@ -70,6 +76,8 @@ export class AuthController {
     return result;
   }
 
+  @ApiOperation({ summary: '登录' })
+  @ApiBody({ type: LoginDto })
   @Post('login')
   async login(
     @Body() dto: LoginDto,
@@ -90,6 +98,8 @@ export class AuthController {
     return result;
   }
 
+  @ApiOperation({ summary: '刷新令牌' })
+  @ApiBody({ type: RefreshDto })
   @Post('refresh')
   async refresh(
     @Body() dto: RefreshDto,
@@ -102,12 +112,17 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '获取当前用户信息' })
   @Get('profile')
   profile(@CurrentUser() user: AuthUser) {
     return this.auth.profile(user.sub);
   }
 
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '更新个人资料' })
+  @ApiBody({ type: UpdateProfileDto })
   @Patch('profile')
   updateProfile(@CurrentUser() user: AuthUser, @Body() dto: UpdateProfileDto) {
     return this.auth.updateProfile(user.sub, dto);
@@ -115,12 +130,17 @@ export class AuthController {
 
   // 设置 / 重置登录密码（需登录态）。已有密码时须传 oldPassword 校验。
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '设置/重置登录密码' })
+  @ApiBody({ type: SetPasswordDto })
   @Post('password')
   setPassword(@CurrentUser() user: AuthUser, @Body() dto: SetPasswordDto) {
     return this.auth.setPassword(user.sub, dto);
   }
 
   // 找回密码（公开，无需登录态）：手机号 + 验证码 + 新密码，OTP 即身份凭证。
+  @ApiOperation({ summary: '找回密码' })
+  @ApiBody({ type: ResetPasswordDto })
   @Post('reset-password')
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.auth.resetPasswordByCode(dto.phone, dto.code, dto.newPassword);
@@ -128,12 +148,15 @@ export class AuthController {
 
   // 登录心跳：刷新 lastActiveAt 保活「在线」状态，供工作台在线师傅统计。
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '登录心跳保活' })
   @Post('heartbeat')
   heartbeat(@CurrentUser() user: AuthUser) {
     return this.auth.heartbeat(user.sub);
   }
 
   // 退出登录：幂等（token 已失效/缺失也返回成功）；同时清除该角色的服务端 cookie
+  @ApiOperation({ summary: '退出登录' })
   @Post('logout')
   logout(
     @Req() req: Request,

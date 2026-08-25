@@ -24,14 +24,19 @@ import {
   ResolveComplaintDto,
 } from './tickets.dto';
 import type { TicketListFilter } from './tickets.service';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody, ApiParam } from '@nestjs/swagger';
 
 // 工单底座：提交对全端开放（登录即可）；列表/改派/流转/处置走管理端权限。
+@ApiTags('工单/投诉')
 @Controller('tickets')
 export class TicketsController {
   constructor(private s: TicketsService) {}
 
   // 客户端/师傅提交工单（投诉校验已完成订单）
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '提交工单' })
+  @ApiBody({ type: CreateTicketDto })
   @Post()
   create(@CurrentUser() user: AuthUser, @Body() dto: CreateTicketDto) {
     return this.s.createTicket(user.sub, dto);
@@ -41,24 +46,35 @@ export class TicketsController {
   @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
   @Roles(Role.Admin)
   @RequirePerm('tickets:manage')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '工单池列表' })
   @Get()
   list(@Query() q: TicketListFilter) {
     return this.s.list(q);
   }
 
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '我的工单列表' })
   @Get('mine')
   mine(@CurrentUser() user: AuthUser) {
     return this.s.listMine(user.sub, user.role);
   }
 
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '获取工单详情' })
+  @ApiParam({ name: 'id', description: '工单ID' })
   @Get(':id')
   getById(@Param('id') id: string) {
     return this.s.getById(id);
   }
 
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '添加工单评论' })
+  @ApiParam({ name: 'id', description: '工单ID' })
+  @ApiBody({ type: AddCommentDto })
   @Post(':id/comments')
   addComment(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: AddCommentDto) {
     return this.s.addComment(user.sub, id, dto);
@@ -66,6 +82,10 @@ export class TicketsController {
 
   // 师傅申诉（对外留言，客服可见）
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '师傅申诉' })
+  @ApiParam({ name: 'id', description: '工单ID' })
+  @ApiBody({ type: AppealDto })
   @Post(':id/appeal')
   @Audit('tickets', 'appeal')
   appeal(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: AppealDto) {
@@ -76,6 +96,9 @@ export class TicketsController {
   @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
   @Roles(Role.Admin)
   @RequirePerm('tickets:manage')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '改派工单受理人' })
+  @ApiParam({ name: 'id', description: '工单ID' })
   @Post(':id/assign')
   assign(@Param('id') id: string, @Body('assigneeId') assigneeId: string) {
     return this.s.assign(id, assigneeId);
@@ -86,6 +109,9 @@ export class TicketsController {
   @Roles(Role.Admin)
   @RequirePerm('tickets:manage')
   @Audit('tickets', 'tickets:manage')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '工单状态流转' })
+  @ApiParam({ name: 'id', description: '工单ID' })
   @Post(':id/status')
   changeStatus(@Param('id') id: string, @Body('status') status: string) {
     return this.s.changeStatus(id, status);
@@ -96,6 +122,10 @@ export class TicketsController {
   @Roles(Role.Admin)
   @RequirePerm('complaints:handle')
   @Audit('tickets', 'complaints:handle')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '投诉处置' })
+  @ApiParam({ name: 'id', description: '工单ID' })
+  @ApiBody({ type: ResolveComplaintDto })
   @Post(':id/complaint/resolve')
   resolveComplaint(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: ResolveComplaintDto) {
     return this.s.resolveComplaint(user.sub, id, dto);

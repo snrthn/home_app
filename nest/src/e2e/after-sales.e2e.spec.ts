@@ -35,7 +35,7 @@ describe('售后链 e2e — 投诉→审核→退款/补偿', () => {
 
   it('A1. 客户创建投诉工单 → open', async () => {
     const res = await request(ctx.server)
-      .post('/api/tickets')
+      .post('/api/v1/tickets')
       .set('Authorization', `Bearer ${ctx.customerToken}`)
       .send({
         type: 'complaint',
@@ -55,7 +55,7 @@ describe('售后链 e2e — 投诉→审核→退款/补偿', () => {
 
   it('A2. 管理员处置投诉(result=refund) → 退款申请 pending_review', async () => {
     const res = await request(ctx.server)
-      .post(`/api/tickets/${ticketA}/complaint/resolve`)
+      .post(`/api/v1/tickets/${ticketA}/complaint/resolve`)
       .set('Authorization', `Bearer ${ctx.adminToken}`)
       .send({ result: 'refund' });
     expect(res.status).toBe(201);
@@ -71,7 +71,7 @@ describe('售后链 e2e — 投诉→审核→退款/补偿', () => {
 
   it('A3. 管理员审核通过退款 → 订单 refunded + 全额退款（reviewed 不在阶梯断点中）', async () => {
     const res = await request(ctx.server)
-      .post(`/api/payments/refunds/${refundId}/approve`)
+      .post(`/api/v1/payments/refunds/${refundId}/approve`)
       .set('Authorization', `Bearer ${ctx.adminToken}`)
       .send({ note: '投诉属实，同意退款' });
     expect(res.status).toBe(201);
@@ -102,7 +102,7 @@ describe('售后链 e2e — 投诉→审核→退款/补偿', () => {
 
   it('B1. 客户创建第二单投诉 → open', async () => {
     const res = await request(ctx.server)
-      .post('/api/tickets')
+      .post('/api/v1/tickets')
       .set('Authorization', `Bearer ${ctx.customerToken}`)
       .send({
         type: 'complaint',
@@ -121,7 +121,7 @@ describe('售后链 e2e — 投诉→审核→退款/补偿', () => {
 
   it('B2. 管理员处置投诉(result=compensate) → 工单 resolved, complaint.result=compensate', async () => {
     const res = await request(ctx.server)
-      .post(`/api/tickets/${ticketB}/complaint/resolve`)
+      .post(`/api/v1/tickets/${ticketB}/complaint/resolve`)
       .set('Authorization', `Bearer ${ctx.adminToken}`)
       .send({ result: 'compensate' });
     expect(res.status).toBe(201);

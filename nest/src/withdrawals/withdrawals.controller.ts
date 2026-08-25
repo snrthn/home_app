@@ -18,7 +18,9 @@ import { RequirePerm } from '../common/perm.decorator';
 import { Audit } from '../common/audit.decorator';
 import { Role } from '@laoma/shared';
 import { CreateWithdrawalDto, RejectWithdrawalDto } from './withdrawals.dto';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody, ApiQuery, ApiParam } from '@nestjs/swagger';
 
+@ApiTags('提现管理')
 @Controller('withdrawals')
 export class WithdrawalsController {
   constructor(private s: WithdrawalsService) {}
@@ -27,6 +29,9 @@ export class WithdrawalsController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.Master)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '创建提现申请' })
+  @ApiBody({ type: CreateWithdrawalDto })
   @Post()
   create(@CurrentUser() user: AuthUser, @Body() dto: CreateWithdrawalDto) {
     return this.s.create(user.sub, dto);
@@ -34,6 +39,8 @@ export class WithdrawalsController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.Master)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '我的提现记录' })
   @Get('mine')
   mine(@CurrentUser() user: AuthUser) {
     return this.s.mine(user.sub);
@@ -44,6 +51,9 @@ export class WithdrawalsController {
   @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
   @Roles(Role.Admin)
   @RequirePerm('finance:manage')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '提现申请列表' })
+  @ApiQuery({ name: 'status', required: false, description: '按状态筛选' })
   @Get()
   list(@Query('status') status?: string) {
     return this.s.list(status);
@@ -54,6 +64,9 @@ export class WithdrawalsController {
   @Roles(Role.Admin)
   @Audit('finance', 'finance:manage')
   @RequirePerm('finance:manage')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '标记提现已打款' })
+  @ApiParam({ name: 'id', description: '提现单ID' })
   @Post(':id/pay')
   pay(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.s.markPaid(id, user.sub);
@@ -64,6 +77,10 @@ export class WithdrawalsController {
   @Roles(Role.Admin)
   @Audit('finance', 'finance:manage')
   @RequirePerm('finance:manage')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '驳回提现申请' })
+  @ApiParam({ name: 'id', description: '提现单ID' })
+  @ApiBody({ type: RejectWithdrawalDto })
   @Post(':id/reject')
   reject(@Param('id') id: string, @Body() dto: RejectWithdrawalDto, @CurrentUser() user: AuthUser) {
     return this.s.reject(id, user.sub, dto.reason);
