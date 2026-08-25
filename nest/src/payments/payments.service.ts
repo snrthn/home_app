@@ -129,10 +129,12 @@ export class PaymentsService {
     return { provider: provider.name, payParams: res.payParams };
   }
 
-  /** 模拟通道回调：前端点「模拟支付成功」调用，等价于真实通道的异步 notify */
+  /** 模拟通道回调：前端点「模拟支付成功」调用，等价于真实通道的异步 notify。
+   *  注意：始终走 mock provider 校验，不受当前配置的真实通道影响——
+   *  否则生产环境切到微信/支付宝后，mock 回调会用真实通道 verifyNotify 校验失败，
+   *  导致 applyPaid 不执行、broadcastNewOrder 不触发，师傅端收不到新单推送。 */
   async mockNotify(orderId: string, token: string) {
-    const provider = await this.getProvider();
-    const result = await provider.verifyNotify({ orderId, token });
+    const result = await this.mock.verifyNotify({ orderId, token });
     if (!result.success) throw new BadRequestException('模拟支付校验失败');
     return this.applyPaid(orderId, result.tradeNo);
   }
