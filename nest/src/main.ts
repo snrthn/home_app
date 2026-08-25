@@ -38,7 +38,7 @@ async function bootstrap() {
     new ValidationPipe({ whitelist: true, transform: true }),
   );
   app.useGlobalFilters(new AllExceptionsFilter(pinoLogger));
-  const port = process.env.PORT || 3824;
+  const port = process.env.PORT || 3721;
   await app.listen(port);
   pinoLogger.info(`[老马家电] backend listening on http://localhost:${port}`);
 }

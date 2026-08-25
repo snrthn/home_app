@@ -321,49 +321,68 @@ home_app/
 
 - Node ≥ 18（推荐 20+）
 - pnpm 8.15.4（见根 `package.json` 的 `packageManager`）
-- MySQL 8（连接串在 `nest/.env`）
+- MySQL 8.0+（需先安装并创建数据库）
 
 ## 快速开始
 
-### 1. 安装依赖
+### 1. 准备数据库
+
+安装 MySQL 8 后创建数据库：
+
+```sql
+CREATE DATABASE laoma_jiadian CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+### 2. 安装依赖
 
 ```bash
 pnpm install
 ```
 
-### 2. 配置环境变量
+### 3. 配置环境变量
 
-新建 `nest/.env`，至少包含：
-
-```ini
-DATABASE_URL="mysql://user:password@localhost:3306/laoma_jiadian"
-JWT_SECRET="your-secret"
-PORT=3721
+```bash
+cp nest/.env.example nest/.env    # 后端配置
+cp next/.env.example next/.env.local  # 前端配置（开发环境可全留默认）
 ```
 
-### 3. 初始化数据库
+编辑 `nest/.env`，至少修改 `DATABASE_URL`（改为你的 MySQL 连接串）。其余变量按注释说明按需配置。
+
+### 4. 初始化数据库
 
 ```bash
 pnpm prisma:generate   # 生成 Prisma Client
-pnpm prisma:migrate    # 执行迁移
+pnpm prisma:migrate    # 执行迁移建表
 pnpm --filter @laoma/backend seed   # 写入种子数据（角色/权限/类目/区域）
 ```
 
-### 4. 启动开发服务
+### 5. 启动开发服务
 
 ```bash
 pnpm dev    # turbo run dev，并行启动前端(:3824) + 后端(:3721)
 ```
 
 - 前端：http://localhost:3824
-- 后端 API：http://localhost:3721/api
+- 后端 API：http://localhost:3721/api/v1
+- Swagger 文档：http://localhost:3721/docs
 
-### 5. 类型检查 / 生产构建
+### 6. 类型检查 / 生产构建
 
 ```bash
 pnpm typecheck   # 两端 tsc --noEmit
 pnpm build       # 两端分别 build
 ```
+
+## 常见问题
+
+| 问题 | 解决方案 |
+|------|----------|
+| `EADDRINUSE: address already in use :::3721` | 端口被占：`netstat -ano \| findstr 3721` 找 PID，`taskkill /PID <pid> /F` 释放 |
+| `Can't reach database server` | 检查 MySQL 是否启动、`DATABASE_URL` 中的端口/密码是否正确 |
+| `prisma generate` 报类型找不到 | 确保先 `pnpm prisma:generate` 再跑 typecheck |
+| 前端登录成功但不跳转 | `next/.env.local` 不要设 `NEXT_PUBLIC_API_BASE`，留空让自动解析 host |
+| Swagger 页面 404 | 开发环境直接访问 `localhost:3721/docs`，生产通过 Nginx `/api/docs` 代理 |
+| `pnpm install` 报 lockfile 过期 | CI 环境下 `CI=true` 会冻结锁文件，本地用 `pnpm install --no-frozen-lockfile` |
 
 ## 可用脚本
 
