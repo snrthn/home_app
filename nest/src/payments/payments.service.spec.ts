@@ -235,3 +235,68 @@ describe('PaymentsService.refund - 三策略守卫', () => {
     });
   });
 });
+
+describe('PaymentsService.mockNotify - 模拟支付回调', () => {
+  function setupMockNotifyService(opts?: { orderStatus?: string }) {
+    const prisma = createMockPrisma();
+    const commission = createMockCommission();
+    const orders = createMockOrders();
+    const settlements = createMockSettlements();
+    const gateway = createMockGateway();
+
+    const order = makeOrder({
+      status: opts?.orderStatus ?? OrderStatus.PendingPayment,
+      customerId: CUSTOMER_ID,
+    });
+    prisma.order.findUnique.mockResolvedValue(order);
+    prisma.order.update.mockResolvedValue({ ...order, status: OrderStatus.PendingAccept });
+    prisma.payment.updateMany.mockResolvedValue({ count: 1 });
+    prisma.orderLog.create.mockResolvedValue({ id: 'log-1' });
+
+    const service = new PaymentsService(prisma, gateway, settlements, commission, orders);
+
+    return { service, prisma, gateway };
+  }
+
+  it('模拟支付成功 → 触发 broadcastNewOrder（师傅端新单推送）', async () => {
+    const { service, gateway } = setupMockNotifyService();
+    await service.mockNotify(ORDER_ID, 'mock-token-123');
+    expect(gateway.broadcastNewOrder).toHaveBeenCalled();
+  });
+
+  it('模拟支付成功 → 订单状态从 PendingPayment 变为 PendingAccept', async () => {
+    const { service, prisma } = setupMockNotifyService({ orderStatus: OrderStatus.PendingPayment });
+    await service.mockNotify(ORDER_ID, 'mock-token-123');
+    expect(prisma.order.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: ORDER_ID },
+        data: { status: OrderStatus.PendingAccept },
+      }),
+    );
+  });
+
+  it('非 PendingPayment 状态 → 幂等跳过，不重复广播', async () => {
+    const { service, prisma, gateway } = setupMockNotifyService({
+      orderStatus: OrderStatus.PendingAccept,
+    });
+    await service.mockNotify(ORDER_ID, 'mock-token-123');
+    expect(prisma.order.update).not.toHaveBeenCalled();
+    expect(gateway.broadcastNewOrder).not.toHaveBeenCalled();
+  });
+
+  it('即使 getProvider 返回真实通道，mockNotify 仍走 mock 校验（生产环境关键修复）', async () => {
+    const { service, gateway } = setupMockNotifyService();
+    // 模拟 getProvider 返回 wechat（生产环境配置了真实支付通道）
+    const fakeWechatProvider = {
+      name: 'wechat',
+      verifyNotify: jest.fn().mockResolvedValue({ orderId: '', success: false }),
+    };
+    jest.spyOn(service as any, 'getProvider').mockResolvedValue(fakeWechatProvider);
+
+    // mockNotify 应该不受 getProvider 影响，仍然用 mock provider 校验并成功
+    await service.mockNotify(ORDER_ID, 'mock-token-123');
+    expect(gateway.broadcastNewOrder).toHaveBeenCalled();
+    // 真实通道的 verifyNotify 不应被调用
+    expect(fakeWechatProvider.verifyNotify).not.toHaveBeenCalled();
+  });
+});

@@ -55,6 +55,9 @@ export function createMockPrisma() {
       findFirst: jest.fn(),
       create: jest.fn(),
     },
+    orderLog: {
+      create: jest.fn(),
+    },
     $transaction: jest.fn(),
   } as any;
 }
@@ -91,6 +94,7 @@ export function createMockSettlements() {
 
 export function createMockGateway() {
   return {
+    broadcastNewOrder: jest.fn(),
     broadcastOrderUpdate: jest.fn(),
     broadcastPoolUpdate: jest.fn(),
     broadcastSettlementUpdate: jest.fn(),
