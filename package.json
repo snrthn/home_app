@@ -12,6 +12,8 @@
     "prisma:generate": "pnpm --filter @laoma/backend exec prisma generate",
     "prisma:migrate": "pnpm --filter @laoma/backend exec prisma migrate dev",
     "prisma:studio": "pnpm --filter @laoma/backend exec prisma studio",
+    "test": "pnpm --filter @laoma/backend test",
+    "test:e2e": "pnpm --filter @laoma/backend test:e2e",
     "commitlint": "commitlint --from=HEAD~1 --to=HEAD",
     "prepare": "husky"
   },

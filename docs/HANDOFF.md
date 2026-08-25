@@ -514,6 +514,10 @@ NEXT_PUBLIC_API_BASE=http://127.0.0.1:3721/api next dev -p 3824
 # 后端启动（用户自己跑）
 # main.ts 用 process.env.PORT
 cd nest && PORT=3721 pnpm start:dev
+
+# 测试（根目录直接跑）
+pnpm test          # 单元测试（P0 纯函数 + P1 金额守卫，195 tests）
+pnpm test:e2e      # E2E 测试（需先启动后端 3721 端口）
 ```
 
 ---

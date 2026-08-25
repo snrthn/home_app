@@ -494,6 +494,8 @@ pnpm build       # 两端分别 build
 | `pnpm prisma:generate` | 生成 Prisma Client |
 | `pnpm prisma:migrate` | 执行数据库迁移 |
 | `pnpm prisma:studio` | Prisma Studio 数据库 GUI |
+| `pnpm test` | 单元测试（P0 纯函数 + P1 金额守卫，195 tests） |
+| `pnpm test:e2e` | E2E 测试（正向全链 + 售后链，16 tests，需先启动后端） |
 
 **后端 `nest/`**
 
