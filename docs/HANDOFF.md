@@ -248,6 +248,7 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 - **前端**：`useOrderSocket` 连接带 `auth.token`，三个消费页分别传 `{orderId}` / `{pool:true}`
 - **验证**：鉴权（无 token/假 token 被拒）+ 房间隔离（master 收 new-order、customer 收 order:A、customer join-pool 被拦）两类 PASS
 - **坑**：`jsonwebtoken` 在 pnpm 隔离下不可直接 import，改用 `JwtService` + `GatewayModule` 的 `JwtModule.registerAsync`
+- **⚠️ 生产环境必看坑（2026-08-25）**：`handleJoinPool` 必须与 `masterCoversOrder` 同口径——**所在地 ∪ 接单范围**并集加入 zone 房间。早期实现只按 `serviceAreas` 加入，导致师傅所在地的订单在 API 池子里可见但 WS 收不到推送（开发环境因所在地和 serviceAreas 同城而未暴露）。修复：`handleJoinPool` 查 Master 时同时取 `provinceCode/cityCode/districtCode`，把所在地也视为一个 serviceArea 加入房间集合。
 
 ---
 
@@ -391,6 +392,10 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 - [x] 退款/售后 Phase 2（详见第 19 节）：运营主动发起退款（`POST /payments/refunds` + `createRefundByOrderNo`，复用 `createRefundRequest` 的 `ticketId` 可空）+ 管理端「售后工作台」聚合页（`/admin/aftersale`）+ `reports.business()` 直读 Refund 表 + 退款台账页「发起退款」Modal（2026-08-21~24 落地）
 - [x] 分账规则「退款区间断点」新增交互优化：`+ 添加断点` 改为末尾追加未选空行（用户显式选阶段，杜绝自动插入生命周期中间飘走）；`changeTierKey` 去重护栏 + 保存过滤未选行；已选行灰字「继承自：XXX」显性化区间继承（2026-08-24）
 - [x] 工程化专项第一批（详见 `docs/engineering.md`）：E-01 CORS 改读 `CORS_ORIGIN` env、E-02 CI typecheck 门禁阻塞化 + 串 lint、E-03 全局异常过滤器 `AllExceptionsFilter`（404/400/500 统一响应体，3722 冒烟实测）、E-04 jest 单测基础设施 + 分账阶梯 `tier.util` 单测 8/8、E-05 eslint 9 flat config 打通（0 error 接入 CI）+ prettier 配置就位（存量 55 文件格式债未统一，留待后续）；新增发现 E-12（send-code DTO 校验不严）（2026-08-24）
+- [x] 生产环境 socket 推送失效修复（2026-08-25）：`NEXT_PUBLIC_API_BASE` 从 `/api` 改为 `/api/v1` 后，`useOrderSocket.ts` 中剥离 API 前缀的正则 `/\/api$/` 未同步，导致 socket 连接到错误 namespace `/api/v1`；修复正则为 `/\/api(\/v\d+)?$/`
+- [x] 生产环境模拟支付不触发新单推送修复（2026-08-25）：`mockNotify()` 调用 `getProvider()`，生产环境配置了真实支付通道时返回 wechat/alipay，mock token 校验失败导致 `applyPaid` 不执行、`broadcastNewOrder` 不触发；修复为 `mockNotify` 直接使用 `this.mock`，语义上模拟支付回调就该走 mock 校验
+- [x] WS join-pool 遗漏师傅所在地房间修复（2026-08-25）：`handleJoinPool` 只按 `serviceAreas` 加入 zone 房间，漏掉了师傅所在地，导致「所在地订单在 API 池子里可见但 WS 收不到推送」；修复为与 `masterCoversOrder` 同口径：所在地 ∪ 接单范围 并集加入房间；**根因证据链：ECS 日志 + DB 直查（师傅所在地甘肃/接单范围北京，订单全在甘肃，WS 只加入北京房间）**
+- [x] 下单成功后返回逻辑修复（2026-08-25）：`router.push` 改 `router.replace`，避免历史栈中保留已失效的下单页导致重复下单
 
 ### 待办 / 已知缺口
 

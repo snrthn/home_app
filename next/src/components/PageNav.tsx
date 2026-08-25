@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
+import { toggleFullscreen } from '@/lib/fullscreen';
 
 export interface PageNavMenuItem {
   label: string;
@@ -65,15 +66,6 @@ export default function PageNav({
       document.removeEventListener('keydown', onKey);
     };
   }, [menuOpen]);
-
-  const toggleFullscreen = () => {
-    if (typeof document === 'undefined') return;
-    if (document.fullscreenElement) {
-      document.exitFullscreen?.().catch(() => {});
-    } else {
-      document.documentElement.requestFullscreen?.().catch(() => {});
-    }
-  };
 
   const backNode = showBack ? (
     onBack ? (
