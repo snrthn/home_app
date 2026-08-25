@@ -7,8 +7,15 @@ out
 .env
 .env.local
 .env.*.local
+.env.prod
+.env.production
 uploads
 coverage
 .DS_Store
 *.tsbuildinfo
 .npmrc
+
+# SSL 证书（保留 README，排除密钥文件）
+nginx/ssl/*.pem
+nginx/ssl/*.key
+nginx/ssl/*.crt

@@ -497,6 +497,97 @@ pnpm typecheck   # 两端 tsc --noEmit
 pnpm build       # 两端分别 build
 ```
 
+## 生产环境部署（Docker）
+
+生产环境用 `docker-compose.prod.yml` 一键部署：Nginx（SSL+反代）+ 后端 NestJS + 前端 Next.js，MySQL 在宿主机或外部 RDS（不容器化）。
+
+### 架构
+
+```
+                    ┌─────────────────────────────────┐
+  用户 ──443/80──→  │  nginx (laoma-nginx)             │
+                    │  /api/  → backend:3721           │
+                    │  /ws/   → backend:3721 (WebSocket)│
+                    │  /uploads/ → 静态卷 (upload-data) │
+                    │  /      → frontend:3824           │
+                    └──────┬──────────────┬────────────┘
+                           │              │
+              ┌────────────▼──┐  ┌────────▼─────────┐
+              │ backend:3721  │  │ frontend:3824    │
+              │ NestJS + Prisma│  │ Next.js SSR      │
+              │ 入口脚本自动   │  └──────────────────┘
+              │ db push+seed  │
+              └──────┬────────┘
+                     │
+              ┌──────▼──────┐
+              │  MySQL 8.0  │  宿主机 / RDS
+              └─────────────┘
+```
+
+### 部署步骤
+
+```bash
+# 1. 配置环境变量
+cp .env.prod.example .env.prod
+#    编辑 .env.prod，至少填写 DATABASE_URL / JWT 密钥 / ADMIN_PASSWORD
+#    生成密钥：openssl rand -hex 32
+
+# 2. 放置 SSL 证书（见 nginx/ssl/README.md）
+#    nginx/ssl/fullchain.pem + nginx/ssl/privkey.pem
+
+# 3. 构建镜像
+docker compose --env-file .env.prod -f docker-compose.prod.yml build
+
+# 4. 启动
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
+
+# 5. 查看日志
+docker compose -f docker-compose.prod.yml logs -f backend   # 后端（含 db push + seed 输出）
+docker compose -f docker-compose.prod.yml logs -f nginx      # nginx 访问日志
+
+# 6. 验证
+curl https://localhost/api/v1/config/public    # API 健康
+curl https://localhost/                          # 前端首页
+```
+
+### 容器说明
+
+| 容器 | 端口 | 说明 |
+|------|------|------|
+| `laoma-nginx` | 80→HTTPS跳转 / 443→SSL | 反向代理 + 静态资源 |
+| `laoma-backend` | 3721（内部） | NestJS，入口脚本自动 `prisma db push` + 4 个种子脚本 + init-admin |
+| `laoma-frontend` | 3824（内部） | Next.js SSR（standalone） |
+
+> 后端容器启动时自动执行数据库同步和种子初始化（幂等，安全重复执行），无需手动跑迁移。MySQL 不容器化，宿主机 MySQL 通过 `host.docker.internal` 访问。
+
+### 更新部署
+
+```bash
+# 拉取最新代码后重新构建
+git pull
+docker compose --env-file .env.prod -f docker-compose.prod.yml build
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
+```
+
+### 常用运维命令
+
+```bash
+# 重启单个服务
+docker compose -f docker-compose.prod.yml restart backend
+
+# 查看容器状态
+docker compose -f docker-compose.prod.yml ps
+
+# 进入后端容器排查
+docker compose -f docker-compose.prod.yml exec backend sh
+
+# Nginx 热重载（改了 nginx.conf 后）
+docker compose -f docker-compose.prod.yml exec nginx nginx -s reload
+
+# 停止全部
+docker compose -f docker-compose.prod.yml down
+```
+
 ## 常见问题
 
 | 问题 | 解决方案 |
