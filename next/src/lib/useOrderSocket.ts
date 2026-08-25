@@ -50,7 +50,11 @@ export function useOrderSocket(
     socket.on('new-order', (order: any) => handlersRef.current.onNewOrder?.(order));
     socket.on('order-update', (order: any) => handlersRef.current.onOrderUpdate?.(order));
     socket.on('dashboard-refresh', () => handlersRef.current.onDashboardRefresh?.());
-    socket.on('connect', () => console.log('[WS] connected:', socket.id));
+    socket.on('connect', () => {
+      console.log('[WS] connected:', socket.id);
+      if (orderId) socket.emit('subscribe-order', orderId);
+      if (pool) socket.emit('join-pool');
+    });
     socket.on('connect_error', (err: any) => {
       console.log('[WS] connect_error:', err.message);
       if (err?.message === 'unauthorized') {
@@ -58,10 +62,6 @@ export function useOrderSocket(
         console.warn('[WS] 鉴权失败，请重新登录');
       }
     });
-
-    // 进入即按选项订阅，离开时退订
-    if (orderId) socket.emit('subscribe-order', orderId);
-    if (pool) socket.emit('join-pool');
 
     return () => {
       if (orderId) socket.emit('unsubscribe-order', orderId);
