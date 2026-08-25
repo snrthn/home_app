@@ -422,7 +422,34 @@ home_app/
 
 ## 快速开始
 
-### 1. 准备数据库
+### 方式一：Docker 一键拉起（推荐新人）
+
+只需装了 Docker，一行命令启动全部依赖（MySQL + 后端 + 前端）：
+
+```bash
+docker compose up -d
+```
+
+等待约 1-2 分钟（首次构建镜像 + 初始化数据库），完成后访问：
+- 前端：http://localhost:3824
+- 后端 API：http://localhost:3721/api/v1
+- Swagger 文档：http://localhost:3721/api/docs
+- MySQL：localhost:3306（root / root123）
+
+**常用命令**：
+```bash
+docker compose logs -f backend   # 查看后端日志
+docker compose logs -f frontend  # 查看前端日志
+docker compose restart backend   # 重启后端
+docker compose down              # 停止并移除容器
+docker compose down -v           # 清空全部数据（含 MySQL）
+```
+
+> 源码已挂载到容器内，修改文件后 Nest 自动重启、Next 自动 HMR 热更新。
+
+### 方式二：本地 Node 开发
+
+#### 1. 准备数据库
 
 安装 MySQL 8 后创建数据库：
 
@@ -430,13 +457,13 @@ home_app/
 CREATE DATABASE laoma_jiadian CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-### 2. 安装依赖
+#### 2. 安装依赖
 
 ```bash
 pnpm install
 ```
 
-### 3. 配置环境变量
+#### 3. 配置环境变量
 
 ```bash
 cp nest/.env.example nest/.env    # 后端配置
@@ -445,7 +472,7 @@ cp next/.env.example next/.env.local  # 前端配置（开发环境可全留默�
 
 编辑 `nest/.env`，至少修改 `DATABASE_URL`（改为你的 MySQL 连接串）。其余变量按注释说明按需配置。
 
-### 4. 初始化数据库
+#### 4. 初始化数据库
 
 ```bash
 pnpm prisma:generate   # 生成 Prisma Client
@@ -453,7 +480,7 @@ pnpm prisma:migrate    # 执行迁移建表
 pnpm --filter @laoma/backend seed   # 写入种子数据（角色/权限/类目/区域）
 ```
 
-### 5. 启动开发服务
+#### 5. 启动开发服务
 
 ```bash
 pnpm dev    # turbo run dev，并行启动前端(:3824) + 后端(:3721)
@@ -463,7 +490,7 @@ pnpm dev    # turbo run dev，并行启动前端(:3824) + 后端(:3721)
 - 后端 API：http://localhost:3721/api/v1
 - Swagger 文档：http://localhost:3721/api/docs
 
-### 6. 类型检查 / 生产构建
+#### 6. 类型检查 / 生产构建
 
 ```bash
 pnpm typecheck   # 两端 tsc --noEmit

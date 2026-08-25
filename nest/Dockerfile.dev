@@ -1,0 +1,31 @@
+# 后端开发镜像（NestJS + pnpm workspace + Prisma）
+# 与 docker-compose.yml 配合使用，支持热重载
+
+FROM node:18-alpine
+
+# 安装 pnpm
+RUN corepack enable && corepack prepare pnpm@8.15.4 --activate
+
+WORKDIR /app
+
+# 复制 workspace 配置和所有 package.json（利用 Docker 缓存）
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY nest/package.json ./nest/package.json
+COPY next/package.json ./next/package.json
+COPY shared/package.json ./shared/package.json
+
+# 安装依赖（仅安装，不跑 build）
+RUN pnpm install --frozen-lockfile
+
+# 复制源码
+COPY nest ./nest
+COPY next ./next
+COPY shared ./shared
+
+# 生成 Prisma Client
+RUN cd /app/nest && npx prisma generate
+
+EXPOSE 3721
+
+# 默认命令由 docker-compose 覆盖（含 db push + seed + dev）
+CMD ["pnpm", "--filter", "@laoma/backend", "dev"]

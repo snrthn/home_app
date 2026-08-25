@@ -1,0 +1,31 @@
+# 前端开发镜像（Next.js + pnpm workspace）
+# 与 docker-compose.yml 配合使用，支持 HMR 热更新
+
+FROM node:18-alpine
+
+# 安装 pnpm
+RUN corepack enable && corepack prepare pnpm@8.15.4 --activate
+
+WORKDIR /app
+
+# 复制 workspace 配置和所有 package.json（利用 Docker 缓存）
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY nest/package.json ./nest/package.json
+COPY next/package.json ./next/package.json
+COPY shared/package.json ./shared/package.json
+
+# 安装依赖
+RUN pnpm install --frozen-lockfile
+
+# 复制源码
+COPY nest ./nest
+COPY next ./next
+COPY shared ./shared
+
+# 构建 shared（前端依赖 shared 的 build 产物）
+RUN pnpm --filter @laoma/shared build
+
+EXPOSE 3824
+
+# Next.js dev server（HMR）
+CMD ["pnpm", "--filter", "@laoma/frontend", "dev"]

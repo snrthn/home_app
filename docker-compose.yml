@@ -1,0 +1,92 @@
+# 本地开发环境一键拉起（MySQL + 后端 Nest + 前端 Next）
+# 用法：docker compose up -d
+# 停止：docker compose down
+# 清空数据：docker compose down -v
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: laoma-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-laoma_jiadian}
+      TZ: Asia/Shanghai
+      # 兼容老客户端认证（开发环境方便连接）
+      MYSQL_AUTHENTICATION_PLUGIN: mysql_native_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root123}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: nest/Dockerfile.dev
+    container_name: laoma-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=mysql://root:${MYSQL_ROOT_PASSWORD:-root123}@mysql:3306/${MYSQL_DATABASE:-laoma_jiadian}?connection_limit=10
+      - PORT=3721
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:-laoma-dev-access-secret-change-me}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-laoma-dev-refresh-secret-change-me}
+      - JWT_ACCESS_TTL=3600
+      - JWT_REFRESH_TTL=604800
+      - CORS_ORIGIN=*
+      - LOG_LEVEL=info
+      - UPLOAD_DIR=/app/uploads
+      - SMS_MODE=mock
+      - PAYMENT_PROVIDER=mock
+      - WX_MCH_SERIAL=
+      - WX_NOTIFY_URL=
+      - ALIPAY_GATEWAY=
+      - ALIPAY_NOTIFY_URL=
+      - TZ=Asia/Shanghai
+    ports:
+      - "3721:3721"
+    volumes:
+      # 挂载源码实现热重载（nest --watch）
+      - ./nest/src:/app/nest/src
+      - ./nest/prisma:/app/nest/prisma
+      - ./shared/src:/app/shared/src
+      - upload-data:/app/uploads
+    # 启动：等待 MySQL → 生成 Prisma Client → 同步表结构 → 种子数据 → 启动 dev
+    command: sh -c "cd /app/nest && npx prisma generate && npx prisma db push --skip-generate && node prisma/seed.js && pnpm dev"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: next/Dockerfile.dev
+    container_name: laoma-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_BASE=http://localhost:3721/api/v1
+      - PORT=3824
+      - TZ=Asia/Shanghai
+    ports:
+      - "3824:3824"
+    volumes:
+      # 挂载源码实现 HMR 热更新
+      - ./next/src:/app/next/src
+      - ./next/public:/app/next/public
+      - ./shared/src:/app/shared/src
+
+volumes:
+  mysql-data:
+  upload-data:
