@@ -47,20 +47,35 @@ export function useOrderSocket(
       auth: { token: getToken() ?? undefined }, // 携带当前角色 JWT，供网关鉴权
     });
 
-    socket.on('new-order', (order: any) => handlersRef.current.onNewOrder?.(order));
-    socket.on('order-update', (order: any) => handlersRef.current.onOrderUpdate?.(order));
-    socket.on('dashboard-refresh', () => handlersRef.current.onDashboardRefresh?.());
     socket.on('connect', () => {
-      console.log('[WS] connected:', socket.id);
-      if (orderId) socket.emit('subscribe-order', orderId);
-      if (pool) socket.emit('join-pool');
+      console.log('[WS] connected:', socket.id, 'base=', base, 'pool=', pool, 'orderId=', orderId);
+      if (orderId) {
+        console.log('[WS] emit subscribe-order:', orderId);
+        socket.emit('subscribe-order', orderId);
+      }
+      if (pool) {
+        console.log('[WS] emit join-pool');
+        socket.emit('join-pool');
+      }
     });
     socket.on('connect_error', (err: any) => {
-      console.log('[WS] connect_error:', err.message);
+      console.error('[WS] connect_error:', err?.message, err);
       if (err?.message === 'unauthorized') {
         // token 失效/被拉黑：提示重新登录（精细化自动刷新可后续补充）
         console.warn('[WS] 鉴权失败，请重新登录');
       }
+    });
+    socket.on('new-order', (order: any) => {
+      console.log('[WS] recv new-order:', order?.id);
+      handlersRef.current.onNewOrder?.(order);
+    });
+    socket.on('order-update', (order: any) => {
+      console.log('[WS] recv order-update:', order?.id, 'status=', order?.status);
+      handlersRef.current.onOrderUpdate?.(order);
+    });
+    socket.on('dashboard-refresh', () => {
+      console.log('[WS] recv dashboard-refresh');
+      handlersRef.current.onDashboardRefresh?.();
     });
 
     return () => {

@@ -68,10 +68,12 @@ export class OrdersGateway
 
   handleConnection(socket: WsSocket) {
     const role = socket.data?.user?.role;
-    this.logger.log(`client connected: ${socket.data?.user?.sub} (${role})`);
+    const sub = socket.data?.user?.sub;
+    this.logger.log(`[WS connect] id=${socket.id} sub=${sub} role=${role}`);
     if (role === 'admin') {
       socket.join('admin-dashboard');
       socket.join('tickets-pool');
+      this.logger.log(`[WS room] admin joined admin-dashboard + tickets-pool`);
     }
   }
 
@@ -96,8 +98,13 @@ export class OrdersGateway
 
   @SubscribeMessage('join-pool')
   async handleJoinPool(@ConnectedSocket() socket: WsSocket) {
-    if (socket.data?.user?.role !== 'master') return;
-    const sub = socket.data.user.sub;
+    const role = socket.data?.user?.role;
+    const sub = socket.data?.user?.sub;
+    this.logger.log(`[WS join-pool] id=${socket.id} sub=${sub} role=${role}`);
+    if (role !== 'master') {
+      this.logger.warn(`[WS join-pool] rejected: role=${role} is not master`);
+      return;
+    }
     let areas: ServiceAreaEntry[] = [];
     try {
       const master = await this.prisma.master.findUnique({
@@ -105,23 +112,41 @@ export class OrdersGateway
         select: { serviceAreas: true },
       });
       areas = Array.isArray(master?.serviceAreas) ? (master!.serviceAreas as ServiceAreaEntry[]) : [];
-    } catch {
+      this.logger.log(`[WS join-pool] master serviceAreas count=${areas.length}`);
+    } catch (e) {
+      this.logger.error(`[WS join-pool] db query failed: ${e}`);
       areas = [];
     }
     if (areas.length === 0) {
       socket.join('pool');
+      this.logger.log(`[WS join-pool] joined room=pool (no service areas)`);
       return;
     }
     let joinedAny = false;
+    const joinedRooms: string[] = [];
     for (const a of areas) {
       const p = a?.provinceCode, c = a?.cityCode, d = a?.districtCode;
       if (!p) continue;
-      socket.join(`zone:${p}::`);
-      if (c) socket.join(`zone:${p}:${c}:`);
-      if (d) socket.join(`zone:${p}:${c}:${d}`);
+      const r1 = `zone:${p}::`;
+      socket.join(r1);
+      joinedRooms.push(r1);
+      if (c) {
+        const r2 = `zone:${p}:${c}:`;
+        socket.join(r2);
+        joinedRooms.push(r2);
+      }
+      if (d) {
+        const r3 = `zone:${p}:${c}:${d}`;
+        socket.join(r3);
+        joinedRooms.push(r3);
+      }
       joinedAny = true;
     }
-    if (!joinedAny) socket.join('pool');
+    if (!joinedAny) {
+      socket.join('pool');
+      joinedRooms.push('pool');
+    }
+    this.logger.log(`[WS join-pool] joined rooms=[${joinedRooms.join(', ')}]`);
   }
 
   @SubscribeMessage('leave-pool')
@@ -142,7 +167,9 @@ export class OrdersGateway
   }
 
   broadcastNewOrder(order: OrderWithAddress) {
-    for (const room of this.dispatchZones(order)) this.server?.to(room).emit('new-order', order);
+    const rooms = this.dispatchZones(order);
+    this.logger.log(`[WS broadcast] new-order orderId=${order?.id} rooms=[${rooms.join(', ')}]`);
+    for (const room of rooms) this.server?.to(room).emit('new-order', order);
     this.notifyDashboardRefresh();
   }
 
@@ -152,7 +179,9 @@ export class OrdersGateway
   }
 
   broadcastPoolUpdate(order: OrderWithAddress) {
-    for (const room of this.dispatchZones(order)) this.server?.to(room).emit('order-update', order);
+    const rooms = this.dispatchZones(order);
+    this.logger.log(`[WS broadcast] pool-update orderId=${order?.id} rooms=[${rooms.join(', ')}]`);
+    for (const room of rooms) this.server?.to(room).emit('order-update', order);
     this.notifyDashboardRefresh();
   }
 
