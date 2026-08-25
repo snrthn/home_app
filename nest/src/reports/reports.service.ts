@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { round2, add2 } from '../common/money';
 import {
   Role,
   OrderStatus,
@@ -29,10 +30,6 @@ const PAID_STATUSES: OrderStatus[] = [
 const DONE_STATUSES: OrderStatus[] = [OrderStatus.Reviewed, OrderStatus.Evaluated];
 
 type BucketDim = 'day' | 'week' | 'month';
-
-function round2(n: number) {
-  return Math.round(n * 100) / 100;
-}
 
 @Injectable()
 export class ReportsService {
@@ -109,8 +106,8 @@ export class ReportsService {
       todayOrders,
       pendingOrders,
       onlineMasters,
-      monthlyGMV: Number(gmvResult._sum.amount ?? 0),
-      monthlyPlatformRevenue: Number(revenueResult._sum.platformFee ?? 0),
+      monthlyGMV: round2(gmvResult._sum.amount ?? 0),
+      monthlyPlatformRevenue: round2(revenueResult._sum.platformFee ?? 0),
       pendingTickets,
     };
   }
@@ -162,7 +159,7 @@ export class ReportsService {
       if (!p.paidAt) continue;
       const s = seriesMap.get(this.bucketOf(dim, p.paidAt).getTime());
       if (!s) continue;
-      s.gmv += Number(p.amount);
+      s.gmv = add2(s.gmv, p.amount);
       if (!paidOrderIds.has(p.orderId)) {
         paidOrderIds.add(p.orderId);
         s.orders += 1;
@@ -173,7 +170,7 @@ export class ReportsService {
       const s = seriesMap.get(this.bucketOf(dim, r.reviewedAt).getTime());
       if (!s) continue;
       s.refundOrders += 1;
-      s.refundAmount += Number(r.refundedAmount ?? r.amount);
+      s.refundAmount = add2(s.refundAmount, r.refundedAmount ?? r.amount);
     }
     for (const o of orders) {
       const s = seriesMap.get(this.bucketOf(dim, o.createdAt).getTime());
@@ -294,7 +291,8 @@ export class ReportsService {
       if (o.status === 'cancelled') a.cancelled += 1;
     }
     for (const s of settlementRows) {
-      touch(s.masterId).revenue += Number(s.masterAmount);
+      const a = touch(s.masterId);
+      a.revenue = add2(a.revenue, s.masterAmount);
     }
     for (const r of reviewRows) {
       const a = touch(r.masterId);

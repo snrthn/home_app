@@ -20,6 +20,7 @@ import { OrdersGateway } from '../gateway/orders.gateway';
 import { SettlementsService } from '../settlements/settlements.service';
 import { CommissionService } from '../commission/commission.service';
 import { OrdersService } from '../orders/orders.service';
+import { gt } from '../common/money';
 
 // 支付后（平台托管）可退款的状态，须与 orders.service 的同名常量保持一致，
 // 否则直接调用退款接口时 departing/arrived 会被误判为「不可退款」。
@@ -258,7 +259,7 @@ export class PaymentsService {
 
     // 留成中属于师傅的部分生成补偿结算单（pending，待管理端审核入账）。
     // 平台留成部分本就在平台账上，无需台账流转，仅记录在补偿单 platformFee 与日志中。
-    if (masterCompensation > 0 && order.masterId) {
+    if (gt(masterCompensation, 0) && order.masterId) {
       await this.settlements.createCompensation(
         orderId,
         masterCompensation,

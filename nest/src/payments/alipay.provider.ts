@@ -1,4 +1,5 @@
 import { createSign, createVerify } from 'node:crypto';
+import { format2 } from '../common/money';
 import type {
   PaymentProvider,
   PaymentProviderName,
@@ -74,7 +75,7 @@ export class AlipayPaymentProvider implements PaymentProvider {
     const method = 'alipay.trade.create';
     const biz = {
       out_trade_no: input.orderNo,
-      total_amount: input.amount.toFixed(2),
+      total_amount: format2(input.amount),
       subject: input.subject,
       product_code: 'GENERAL_WITHHOLDING',
     };
@@ -124,7 +125,7 @@ export class AlipayPaymentProvider implements PaymentProvider {
     const method = 'alipay.trade.refund';
     const biz = {
       out_trade_no: input.tradeNo,
-      refund_amount: input.amount.toFixed(2),
+      refund_amount: format2(input.amount),
       refund_reason: input.reason ?? '订单取消退款',
     };
     const params = this.buildParams(method, biz);

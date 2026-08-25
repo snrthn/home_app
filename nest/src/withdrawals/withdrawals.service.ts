@@ -4,6 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { round2, sub2, gt } from '../common/money';
 
 @Injectable()
 export class WithdrawalsService {
@@ -11,8 +12,8 @@ export class WithdrawalsService {
 
   /** 师傅发起提现申请：事务内实时聚合余额校验（防并发超提），申请即冻结（pending 计入占用）。 */
   async create(userId: string, dto: { amount: number; channel: string; account: string }) {
-    const amount = Math.round(dto.amount * 100) / 100;
-    if (amount <= 0) throw new BadRequestException('提现金额必须大于 0');
+    const amount = round2(dto.amount);
+    if (!gt(amount, 0)) throw new BadRequestException('提现金额必须大于 0');
 
     const master = await this.prisma.master.findUnique({
       where: { userId },
@@ -34,14 +35,11 @@ export class WithdrawalsService {
           _sum: { amount: true },
         }),
       ]);
-      const available =
-        Math.round(
-          (Number(creditedAgg._sum.masterAmount ?? 0) -
-            Number(paidAgg._sum.amount ?? 0) -
-            Number(pendingAgg._sum.amount ?? 0)) *
-            100,
-        ) / 100;
-      if (amount > available)
+      const available = sub2(
+        Number(creditedAgg._sum.masterAmount ?? 0),
+        Number(paidAgg._sum.amount ?? 0) + Number(pendingAgg._sum.amount ?? 0),
+      );
+      if (gt(amount, available))
         throw new BadRequestException(
           `可提现余额不足（当前可提现 ¥${available.toFixed(2)}）`,
         );

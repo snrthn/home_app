@@ -1,4 +1,5 @@
 import { randomBytes, createSign, createDecipheriv } from 'node:crypto';
+import { toCents } from '../common/money';
 import type {
   PaymentProvider,
   PaymentProviderName,
@@ -62,7 +63,7 @@ export class WechatPaymentProvider implements PaymentProvider {
       description: input.subject,
       out_trade_no: input.orderNo,
       notify_url: WX_NOTIFY_URL,
-      amount: { total: Math.round(input.amount * 100), currency: 'CNY' },
+      amount: { total: toCents(input.amount), currency: 'CNY' },
     };
     const body = JSON.stringify(bodyObj);
     const res = await fetch(WX_API + path, {
@@ -124,8 +125,8 @@ export class WechatPaymentProvider implements PaymentProvider {
     const path = '/v3/refund/domestic/refunds';
     const outRefundNo = 'ref_' + input.tradeNo + '_' + Date.now();
     // 微信要求 refund(退款额) ≤ total(订单原额)：部分退款时二者不同，全额退款相等
-    const total = Math.round((input.originalAmount ?? input.amount) * 100);
-    const refund = Math.round(input.amount * 100);
+    const total = toCents(input.originalAmount ?? input.amount);
+    const refund = toCents(input.amount);
     const bodyObj = {
       out_trade_no: input.tradeNo,
       out_refund_no: outRefundNo,

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CommissionService } from '../commission/commission.service';
+import { round2, sub2, lt } from '../common/money';
 
 @Injectable()
 export class SettlementsService {
@@ -44,8 +45,7 @@ export class SettlementsService {
   ): (T & { refundAmount: number })[] {
     return rows.map((r) => ({
       ...r,
-      refundAmount:
-        Math.round((Number(r.orderAmount) - Number(r.platformFee) - Number(r.masterAmount)) * 100) / 100,
+      refundAmount: sub2(Number(r.orderAmount), Number(r.platformFee) + Number(r.masterAmount)),
     }));
   }
 
@@ -176,13 +176,13 @@ export class SettlementsService {
     platformKeep = 0,
     ruleSource?: string,
   ) {
-    const comp = Math.round(compensation * 100) / 100;
-    if (comp <= 0) return null;
+    const comp = round2(compensation);
+    if (lt(comp, 0) || comp === 0) return null;
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order || !order.masterId) return null;
     const exist = await this.prisma.settlement.findUnique({ where: { orderId } });
     if (exist) return exist;
-    const keep = Math.round(platformKeep * 100) / 100;
+    const keep = round2(platformKeep);
     return this.prisma.settlement.create({
       data: {
         orderId,
@@ -237,18 +237,17 @@ export class SettlementsService {
         }),
       ]);
 
-    const totalCredited = Number(creditedAgg._sum.masterAmount ?? 0);
-    const totalPaid = Number(paidWd._sum.amount ?? 0);
-    const withdrawing = Number(pendingWd._sum.amount ?? 0);
+    const totalCredited = round2(creditedAgg._sum.masterAmount ?? 0);
+    const totalPaid = round2(paidWd._sum.amount ?? 0);
+    const withdrawing = round2(pendingWd._sum.amount ?? 0);
 
     return {
-      totalCredited: Math.round(totalCredited * 100) / 100, // 累计入账
-      monthCredited: Math.round(Number(monthAgg._sum.masterAmount ?? 0) * 100) / 100, // 本月入账
-      pendingCompensation:
-        Math.round(Number(pendingAgg._sum.masterAmount ?? 0) * 100) / 100, // 待审核补偿（不计入余额）
+      totalCredited, // 累计入账
+      monthCredited: round2(monthAgg._sum.masterAmount ?? 0), // 本月入账
+      pendingCompensation: round2(pendingAgg._sum.masterAmount ?? 0), // 待审核补偿（不计入余额）
       withdrawing, // 提现中（已冻结）
       totalWithdrawn: totalPaid, // 累计已提现
-      available: Math.round((totalCredited - totalPaid - withdrawing) * 100) / 100, // 可提现余额
+      available: sub2(totalCredited, totalPaid + withdrawing), // 可提现余额
     };
   }
 
