@@ -4,10 +4,11 @@ import {
   bootstrapApp,
   createE2EContext,
   cleanupE2EContext,
+  createAndCompleteOrder,
   E2EContext,
 } from './setup';
 
-describe('订单取消 e2e — 待支付取消 / 已支付取消', () => {
+describe('订单取消 e2e — 待支付取消 / 已支付取消 / 已接单取消 / 参数校验 / 已完成不可取消', () => {
   let ctx: E2EContext;
 
   beforeAll(async () => {
@@ -44,7 +45,7 @@ describe('订单取消 e2e — 待支付取消 / 已支付取消', () => {
     expect(cancelRes.body.cancelReason).toBe('不需要了');
   });
 
-  it('2. 已支付订单取消 → cancelled（需退款）', async () => {
+  it('2. 已支付订单取消 → cancelled', async () => {
     const createRes = await request(ctx.server)
       .post('/api/v1/orders')
       .set('Authorization', `Bearer ${ctx.customerToken}`)
@@ -60,12 +61,13 @@ describe('订单取消 e2e — 待支付取消 / 已支付取消', () => {
       .post('/api/v1/payments/charge')
       .set('Authorization', `Bearer ${ctx.customerToken}`)
       .send({ orderId });
-    const token = chargeRes.body.payParams.token;
+    expect(chargeRes.status).toBe(201);
 
-    await request(ctx.server)
+    const notifyRes = await request(ctx.server)
       .post('/api/v1/payments/mock/notify')
       .set('Authorization', `Bearer ${ctx.customerToken}`)
-      .send({ orderId, token });
+      .send({ orderId, token: chargeRes.body.payParams.token });
+    expect(notifyRes.status).toBe(201);
 
     const cancelRes = await request(ctx.server)
       .post(`/api/v1/orders/${orderId}/cancel`)
@@ -96,9 +98,10 @@ describe('订单取消 e2e — 待支付取消 / 已支付取消', () => {
       .set('Authorization', `Bearer ${ctx.customerToken}`)
       .send({ orderId, token: chargeRes.body.payParams.token });
 
-    await request(ctx.server)
+    const grabRes = await request(ctx.server)
       .post(`/api/v1/orders/${orderId}/grab`)
       .set('Authorization', `Bearer ${ctx.masterToken}`);
+    expect(grabRes.status).toBe(201);
 
     const cancelRes = await request(ctx.server)
       .post(`/api/v1/orders/${orderId}/cancel`)
@@ -128,48 +131,7 @@ describe('订单取消 e2e — 待支付取消 / 已支付取消', () => {
   });
 
   it('5. 已完成订单不可取消 → 400', async () => {
-    const createRes = await request(ctx.server)
-      .post('/api/v1/orders')
-      .set('Authorization', `Bearer ${ctx.customerToken}`)
-      .send({
-        serviceItemId: ctx.serviceItemId,
-        addressId: ctx.addressId,
-        appointmentDate: '2026-09-01',
-        appointmentSlot: '09:00-12:00',
-      });
-    const orderId = createRes.body.id;
-
-    const chargeRes = await request(ctx.server)
-      .post('/api/v1/payments/charge')
-      .set('Authorization', `Bearer ${ctx.customerToken}`)
-      .send({ orderId });
-    await request(ctx.server)
-      .post('/api/v1/payments/mock/notify')
-      .set('Authorization', `Bearer ${ctx.customerToken}`)
-      .send({ orderId, token: chargeRes.body.payParams.token });
-
-    await request(ctx.server)
-      .post(`/api/v1/orders/${orderId}/grab`)
-      .set('Authorization', `Bearer ${ctx.masterToken}`);
-    await request(ctx.server)
-      .post(`/api/v1/orders/${orderId}/depart`)
-      .set('Authorization', `Bearer ${ctx.masterToken}`);
-    const codeRes = await request(ctx.server)
-      .post(`/api/v1/orders/${orderId}/generate-arrive-code`)
-      .set('Authorization', `Bearer ${ctx.customerToken}`);
-    await request(ctx.server)
-      .post(`/api/v1/orders/${orderId}/arrive`)
-      .set('Authorization', `Bearer ${ctx.masterToken}`)
-      .send({ code: codeRes.body.code });
-    await request(ctx.server)
-      .post(`/api/v1/orders/${orderId}/start`)
-      .set('Authorization', `Bearer ${ctx.masterToken}`);
-    await request(ctx.server)
-      .post(`/api/v1/orders/${orderId}/complete`)
-      .set('Authorization', `Bearer ${ctx.masterToken}`);
-    await request(ctx.server)
-      .post(`/api/v1/orders/${orderId}/confirm`)
-      .set('Authorization', `Bearer ${ctx.customerToken}`);
+    const orderId = await createAndCompleteOrder(ctx);
 
     const cancelRes = await request(ctx.server)
       .post(`/api/v1/orders/${orderId}/cancel`)

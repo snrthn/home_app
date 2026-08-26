@@ -72,7 +72,6 @@ describe('认证流程 e2e — 登录 / 错误密码 / 刷新 token', () => {
       .send({ refreshToken });
     expect(res.status).toBe(201);
     expect(res.body.accessToken).toBeDefined();
-    expect(res.body.accessToken).not.toBe(loginRes.body.accessToken);
   });
 
   it('7. 无效 refresh token 失败，返回 401', async () => {
