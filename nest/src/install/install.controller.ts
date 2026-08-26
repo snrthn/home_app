@@ -1,6 +1,8 @@
 import { Controller, Get, Post, Body, Query, UseGuards, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBody, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
+import * as bcrypt from 'bcryptjs';
 import { InstallService } from './install.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthUser } from '../auth/auth-user.interface';
@@ -8,7 +10,10 @@ import type { AuthUser } from '../auth/auth-user.interface';
 @ApiTags('系统安装')
 @Controller('install')
 export class InstallController {
-  constructor(private readonly installService: InstallService) {}
+  constructor(
+    private readonly installService: InstallService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @ApiOperation({ summary: '获取安装状态' })
   @Get('status')
@@ -43,14 +48,35 @@ export class InstallController {
   @ApiOperation({ summary: '重置系统（管理员）' })
   @ApiBearerAuth()
   @ApiQuery({ name: 'mode', enum: ['light', 'deep'], required: false, description: 'light=重置种子数据，deep=清空所有数据' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        password: { type: 'string', description: '当前管理员登录密码' },
+      },
+      required: ['password'],
+    },
+  })
   @UseGuards(JwtAuthGuard)
   @Post('reset')
   async reset(
     @Query('mode') mode: 'light' | 'deep',
+    @Body() body: { password?: string },
     @CurrentUser() user: AuthUser,
   ) {
     if (user.role !== 'admin') {
       throw new BadRequestException('仅管理员可执行系统重置');
+    }
+    if (!body.password) {
+      throw new BadRequestException('请输入当前登录密码');
+    }
+    const admin = await this.prisma.user.findUnique({ where: { id: user.sub } });
+    if (!admin?.passwordHash) {
+      throw new BadRequestException('管理员账号异常');
+    }
+    const ok = await bcrypt.compare(body.password, admin.passwordHash);
+    if (!ok) {
+      throw new BadRequestException('当前密码错误');
     }
     await this.installService.reset(mode || 'light');
     return { success: true, message: `系统已重置（${mode || 'light'} 模式）` };

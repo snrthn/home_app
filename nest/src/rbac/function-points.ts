@@ -34,11 +34,13 @@ export const FUNCTION_POINTS: FunctionPoint[] = [
   { code: 'menu:orders', label: '订单管理', perm: 'orders:read', type: 'menu', path: '/admin/orders' },
   { code: 'btn:orders:edit', label: '订单·状态变更', perm: 'orders:edit', type: 'button' },
   { code: 'btn:orders:refund', label: '退款/售后', perm: 'orders:refund', type: 'button', path: '/admin/orders/refund' },
+  { code: 'menu:orders:aftersale', label: '售后工作台', perm: 'orders:refund', type: 'menu', path: '/admin/aftersale' },
   // 财务结算（补偿入账审核 + 提现审核打款）
   { code: 'menu:finance:settlements', label: '结算台账', perm: 'orders:read', type: 'menu', path: '/admin/settlements' },
   { code: 'btn:finance:settle', label: '补偿单·入账/驳回', perm: 'finance:manage', type: 'button' },
   { code: 'menu:finance:withdrawals', label: '提现管理', perm: 'finance:manage', type: 'menu', path: '/admin/withdrawals' },
   { code: 'btn:finance:withdraw_pay', label: '提现·打款/驳回', perm: 'finance:manage', type: 'button' },
+  { code: 'menu:finance:commission', label: '分账规则', perm: 'finance:manage', type: 'menu', path: '/admin/finance/commission' },
   // 评价客服
   { code: 'menu:reviews:ratings', label: '用户评价', perm: 'reviews:read', type: 'menu', path: '/admin/reviews/ratings' },
   { code: 'btn:reviews:moderate', label: '评价·处置', perm: 'reviews:moderate', type: 'button' },
@@ -51,4 +53,5 @@ export const FUNCTION_POINTS: FunctionPoint[] = [
   // 系统设置
   { code: 'menu:settings:roles', label: '角色权限', perm: 'settings:role_manage', type: 'menu', path: '/admin/settings/roles' },
   { code: 'menu:settings:logs', label: '操作日志', perm: 'logs:view', type: 'menu', path: '/admin/settings/logs' },
+  { code: 'menu:settings:system', label: '系统管理', perm: 'settings:role_manage', type: 'menu', path: '/admin/settings/system' },
 ];

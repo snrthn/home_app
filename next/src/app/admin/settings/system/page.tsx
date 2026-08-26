@@ -10,6 +10,7 @@ export default function SystemSettingsPage() {
   const [installedAt, setInstalledAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [confirmText, setConfirmText] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
   const [resetting, setResetting] = useState(false);
   const [pendingMode, setPendingMode] = useState<'light' | 'deep' | null>(null);
 
@@ -29,14 +30,16 @@ export default function SystemSettingsPage() {
   const handleReset = (mode: 'light' | 'deep') => {
     setPendingMode(mode);
     setConfirmText('');
+    setAdminPassword('');
   };
 
   const confirmReset = async () => {
     if (confirmText !== '确认重置') return;
     if (!pendingMode) return;
+    if (!adminPassword) return;
     setResetting(true);
     try {
-      await resetSystem(pendingMode);
+      await resetSystem(pendingMode, adminPassword);
       toast.success('系统已重置，即将跳转到安装页面');
       setTimeout(() => { window.location.href = '/install'; }, 2000);
     } catch (e) {
@@ -118,6 +121,13 @@ export default function SystemSettingsPage() {
               value={confirmText}
               onChange={(e) => setConfirmText(e.target.value)}
               placeholder='请输入"确认重置"'
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-red-500 mb-3"
+            />
+            <input
+              type="password"
+              value={adminPassword}
+              onChange={(e) => setAdminPassword(e.target.value)}
+              placeholder="请输入当前登录密码"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-red-500"
             />
             <div className="flex gap-3 mt-4">
@@ -129,7 +139,7 @@ export default function SystemSettingsPage() {
               </button>
               <button
                 onClick={confirmReset}
-                disabled={confirmText !== '确认重置' || resetting}
+                disabled={confirmText !== '确认重置' || !adminPassword || resetting}
                 className="flex-1 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {resetting ? '重置中…' : '确认'}

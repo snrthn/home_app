@@ -247,7 +247,7 @@ export function initSystem(phone: string, password: string, nickname?: string) {
   return api.post('/install/init', { phone, password, nickname });
 }
 
-// POST /install/reset — 管理员，重置系统到未安装状态
-export function resetSystem(mode: 'light' | 'deep' = 'light') {
-  return api.post('/install/reset', null, { params: { mode } });
+// POST /install/reset — 管理员，重置系统到未安装状态（需校验当前密码）
+export function resetSystem(mode: 'light' | 'deep' = 'light', password: string) {
+  return api.post('/install/reset', { password }, { params: { mode } });
 }
