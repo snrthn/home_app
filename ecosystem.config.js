@@ -4,7 +4,8 @@
 //   - exec_mode: fork（next start / nest 均为单进程，不适合 cluster）
 //   - PORT 显式 3721（三七二十一），前端 3824（三八二十四）—— 九九乘法表品牌端口，与开发环境一致
 //   - 日志：nest 用 Pino 输出结构化 JSON 到 stdout/stderr，PM2 捕获落盘 + 轮转；
-//     安装 pm2-logrotate 后配置：pm2 install pm2-logrotate && pm2 set pm2-logrotate:max_size 50M
+//     日志轮转通过 pm2-logrotate 实现，首次部署执行：bash scripts/setup-pm2.sh
+//     策略：单文件超过 50M 轮转，保留最近 14 份，自动 gzip 压缩
 module.exports = {
   apps: [
     {

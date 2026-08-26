@@ -8,6 +8,7 @@ import {
 import { PrismaClientKnownRequestError, PrismaClientValidationError } from '@prisma/client/runtime/library';
 import { Request, Response } from 'express';
 import type { Logger } from 'pino';
+import * as Sentry from '@sentry/node';
 
 /**
  * 全局异常过滤器：
@@ -77,6 +78,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
       error: exception instanceof Error ? exception.message : String(exception),
       stack: exception instanceof Error ? exception.stack : undefined,
     });
+
+    if (status >= 500) {
+      Sentry.captureException(exception);
+    }
 
     res.status(status).json({
       code,

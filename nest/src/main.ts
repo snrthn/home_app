@@ -9,8 +9,16 @@ import { PinoLoggerService, pinoLogger } from './common/logger/pino-logger.servi
 import { requestIdMiddleware } from './common/middleware/request-id.middleware';
 import { Request, Response, NextFunction } from 'express';
 import helmet from 'helmet';
+import * as Sentry from '@sentry/node';
 
 async function bootstrap() {
+  if (process.env.SENTRY_DSN) {
+    Sentry.init({
+      dsn: process.env.SENTRY_DSN,
+      environment: process.env.NODE_ENV || 'development',
+      tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE ?? 0.2),
+    });
+  }
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: new PinoLoggerService(),
   });
