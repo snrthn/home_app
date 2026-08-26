@@ -1,7 +1,7 @@
 ﻿'use client';
 
 import { PortalNavSetter } from '@/components/PortalShell';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getOrderPool, grabOrder, type OrderLite } from '@/lib/orders-api';
 import { QK } from '@/lib/query-keys';
@@ -31,15 +31,36 @@ export default function MasterPoolPage() {
   const qc = useQueryClient();
   const [grabTargetId, setGrabTargetId] = useState<string | null>(null);
 
-  const openMap = (addr: string) => {
-    const url = `https://api.map.baidu.com/geocoder?address=${encodeURIComponent(addr)}&output=html&src=webapp.baidu.openAPIdemo`;
-    window.open(url, '_blank');
-  };
+  const addAudioRef = useRef<HTMLAudioElement>(null);
+  const reduceAudioRef = useRef<HTMLAudioElement>(null);
+  const prevPoolLenRef = useRef<number | null>(null);
+
   const { data: pool = [], isLoading, refetch } = useQuery({
     queryKey: QK.orderPool,
     queryFn: () => getOrderPool(),
     refetchOnMount: 'always',
   });
+
+  useEffect(() => {
+    if (prevPoolLenRef.current === null) {
+      prevPoolLenRef.current = pool.length;
+      return;
+    }
+    const prev = prevPoolLenRef.current;
+    if (pool.length > prev && addAudioRef.current) {
+      addAudioRef.current.currentTime = 0;
+      addAudioRef.current.play().catch(() => {});
+    } else if (pool.length < prev && reduceAudioRef.current) {
+      reduceAudioRef.current.currentTime = 0;
+      reduceAudioRef.current.play().catch(() => {});
+    }
+    prevPoolLenRef.current = pool.length;
+  }, [pool.length]);
+
+  const openMap = (addr: string) => {
+    const url = `https://api.map.baidu.com/geocoder?address=${encodeURIComponent(addr)}&output=html&src=webapp.baidu.openAPIdemo`;
+    window.open(url, '_blank');
+  };
 
   // 实时推送：新订单入池 / 池中订单被接走，均刷新接单池
   useOrderSocket(
@@ -68,13 +89,15 @@ export default function MasterPoolPage() {
 
   return (
     <>
+      <audio ref={addAudioRef} src="/audio/add.mp3" preload="auto" />
+      <audio ref={reduceAudioRef} src="/audio/reduce.mp3" preload="auto" />
       <PortalNavSetter
         title="接单池"
         menu={[{ label: '我的订单', href: '/master/orders/mine' }]}
       />
       <div className="laoma-container order-mod">
         {isLoading ? (
-          <p className="field-hint">加载中…</p>
+          <p className="data-loading">加载中…</p>
         ) : pool.length === 0 ? (
           <div className="card">
             <EmptyState text="暂无待接订单，新订单会实时出现在这里。" />
