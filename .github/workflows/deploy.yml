@@ -97,7 +97,7 @@ jobs:
       - name: 打包源码（git archive 只含 tracked 文件，自动排除 node_modules/.git/.env）
         run: git archive --format=tar.gz HEAD -o deploy-src.tar.gz
       - name: 上传源码到 ECS
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
