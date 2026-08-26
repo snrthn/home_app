@@ -477,7 +477,7 @@ cp next/.env.example next/.env.local  # 前端配置（开发环境可全留默�
 ```bash
 pnpm prisma:generate   # 生成 Prisma Client
 pnpm prisma:migrate    # 执行迁移建表
-pnpm --filter @laoma/backend seed   # 写入种子数据（角色/权限/类目/区域）
+# 种子数据通过安装向导初始化，无需手动执行 seed
 ```
 
 #### 5. 启动开发服务
@@ -489,6 +489,8 @@ pnpm dev    # turbo run dev，并行启动前端(:3824) + 后端(:3721)
 - 前端：http://localhost:3824
 - 后端 API：http://localhost:3721/api/v1
 - Swagger 文档：http://localhost:3721/api/docs
+
+> **首次访问**：打开前端后会自动跳转到安装向导（/install），按提示设置管理员手机号和密码，系统会自动执行种子数据初始化（权限/类目/服务项目/运营内容/管理员账号）。完成后后续访问不再触发安装流程。
 
 #### 6. 类型检查 / 生产构建
 
@@ -516,7 +518,7 @@ pnpm build       # 两端分别 build
               │ backend:3721  │  │ frontend:3824    │
               │ NestJS + Prisma│  │ Next.js SSR      │
               │ 入口脚本自动   │  └──────────────────┘
-              │ db push+seed  │
+              │ db push       │
               └──────┬────────┘
                      │
               ┌──────▼──────┐
@@ -542,10 +544,14 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml build
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
 
 # 5. 查看日志
-docker compose -f docker-compose.prod.yml logs -f backend   # 后端（含 db push + seed 输出）
+docker compose -f docker-compose.prod.yml logs -f backend   # 后端（含 db push 输出）
 docker compose -f docker-compose.prod.yml logs -f nginx      # nginx 访问日志
 
-# 6. 验证
+# 6. 首次访问域名 → 自动跳转安装向导（/install）
+#    设置管理员手机号和密码后，系统自动执行种子数据初始化
+#    完成后后续访问不再触发安装流程
+
+# 7. 验证
 curl https://localhost/api/v1/config/public    # API 健康
 curl https://localhost/                          # 前端首页
 ```
@@ -555,10 +561,10 @@ curl https://localhost/                          # 前端首页
 | 容器 | 端口 | 说明 |
 |------|------|------|
 | `laoma-nginx` | 80→HTTPS跳转 / 443→SSL | 反向代理 + 静态资源 |
-| `laoma-backend` | 3721（内部） | NestJS，入口脚本自动 `prisma db push` + 4 个种子脚本 + init-admin |
+| `laoma-backend` | 3721（内部） | NestJS，入口脚本自动 `prisma db push`，种子数据通过安装向导初始化 |
 | `laoma-frontend` | 3824（内部） | Next.js SSR（standalone） |
 
-> 后端容器启动时自动执行数据库同步和种子初始化（幂等，安全重复执行），无需手动跑迁移。MySQL 不容器化，宿主机 MySQL 通过 `host.docker.internal` 访问。
+> 后端容器启动时自动执行数据库表结构同步（db push），种子数据通过首次访问域名的安装向导初始化。MySQL 不容器化，宿主机 MySQL 通过 `host.docker.internal` 访问。
 
 ### 更新部署
 
@@ -625,7 +631,7 @@ docker compose -f docker-compose.prod.yml down
 | `pnpm test` | 单元测试（P0 纯函数 + P1 金额守卫，195 tests） |
 | `pnpm test:e2e` | E2E 测试（正向全链 + 售后链，16 tests） |
 | `pnpm lint` | ESLint |
-| `pnpm seed` | 写入种子数据 |
+| `pnpm seed` | 写入权限种子数据（安装向导自动调用） |
 
 > `start`（非 `start:prod`）是开发式 runner，**勿用于生产部署**。
 

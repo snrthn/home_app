@@ -17,9 +17,11 @@ export class UploadService {
     mimetype: string;
   }) {
     // 落盘前校验（规则来自共享 upload-rules，前后端单一事实来源）
+    const rawExt = file.originalname.split('.').pop() || '';
     const v = validateUploadFile({
       sizeBytes: file.size,
       mime: file.mimetype,
+      ext: rawExt,
     });
     if (!v.ok) throw new BadRequestException(v.error);
 
@@ -29,7 +31,7 @@ export class UploadService {
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     const sub = join(this.dir, yyyy, mm);
     await fs.mkdir(sub, { recursive: true });
-    const ext = (file.originalname.split('.').pop() || 'bin').toLowerCase();
+    const ext = rawExt.toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin';
     const name = crypto.randomBytes(12).toString('hex') + '.' + ext;
     const full = join(sub, name);
     await fs.writeFile(full, file.buffer);

@@ -691,7 +691,82 @@ pnpm test:e2e      # E2E 测试（需先启动后端 3721 端口）
 
 ### 22.7 部署脚本同步
 
-- `scripts/deploy.sh` + `scripts/db-setup.sh` 新增三个 seed 命令调用（部署时自动跑种子，保证生产环境有基线数据）
+- `scripts/deploy.sh` 仅执行 `prisma db push`（表结构同步），**不再自动执行种子脚本**
+- 种子数据通过**安装向导**初始化：首次访问域名 → 跳转 `/install` → 设置管理员账号 → 自动执行全部种子脚本 → 标记 `systemconfig.installed = true`
+
+---
+
+## 23. 系统安装向导与一键重置（2026-08-26 落地）
+
+> 覆盖：首次部署安装向导、种子脚本重构为可导出函数、管理后台系统重置、批量开通区域接口、文件上传安全加固
+
+### 23.1 数据库变更
+
+- `SystemConfig` 模型新增 `installed Boolean @default(false)` + `installedAt DateTime?`
+- `installed = false` 时：前端根路由跳转 `/install`，后端 InstallGuard 拦截非安装相关 API（返回 503）
+- `installed = true` 时：正常运营
+
+### 23.2 种子脚本重构
+
+5 个种子脚本统一导出函数，供 `InstallService.init()` 调用，同时保留独立运行能力：
+
+| 脚本 | 导出函数 | 独立运行时 |
+|---|---|---|
+| `prisma/seed.js` | `seedPermissions(prisma)` | 额外标记 `installed=true` |
+| `prisma/seed-categories.js` | `seedCategories(prisma)` | 仅种子类目 |
+| `prisma/seed-items.js` | `seedItems(prisma)` | 仅种子服务项目（已存在记录只更新 sort，不覆盖业务字段） |
+| `prisma/seed-content.js` | `seedContent(prisma)` | 仅种子运营内容 |
+| `scripts/init-admin.cjs` | `initAdmin(prisma, phone, password, nickname)` | 需传参 |
+
+### 23.3 后端模块
+
+- `nest/src/install/install.service.ts`：`isInstalled()`（带 10s 缓存）、`getStatus()`、`init(phone, password, nickname)`、`reset(mode)`
+- `nest/src/install/install.guard.ts`：全局守卫，未安装时仅放行 install/health/metrics 路由
+- `nest/src/install/install.controller.ts`：`GET /install/status`、`POST /install/init`、`POST /install/reset`（需 JWT + admin 角色）
+- `nest/src/install/install.module.ts`：注册模块，导出 InstallService
+
+### 23.4 前端页面
+
+- `/install`：安装向导，设置管理员手机号/密码/昵称，调用 `POST /install/init` 完成初始化
+- `/admin/settings/system`：管理后台系统重置页，支持轻度（重置种子数据）和深度（清空所有数据）两种模式
+- 根路由 `page.tsx`：优先检查安装状态，未安装时 `redirect('/install')`
+- `middleware.ts` + `route-guards.ts`：`/install` 加入公共路由白名单
+- `admin-menu.ts`：系统设置下新增"系统管理"入口
+
+### 23.5 批量开通区域接口
+
+解决勾选多省份保存时逐条 POST 触发限流的问题：
+
+- `POST /admin/services/areas/batch`：批量创建区域（单次事务）
+- `POST /admin/services/areas/batch-delete`：批量软删除区域
+- 前端 `areas/page.tsx`：保存时从 N 次 POST 改为 2 次批量请求（1 创建 + 1 删除）
+
+### 23.6 文件上传安全加固
+
+- `shared/src/upload-rules.ts`：新增 `UPLOAD_ALLOWED_EXT` 扩展名白名单 + `sanitizeExt()` 过滤非字母数字字符
+- `nest/src/upload/upload.service.ts`：传递 `ext` 给 `validateUploadFile`，落盘前过滤扩展名
+- `next/src/components/admin/RichTextEditor.tsx`：图片和文件上传增加 `validateUploadFile` 客户端校验 + `accept` 属性
+- `next/src/app/admin/settings/global/page.tsx`：Logo 上传增加 `validateUploadFile` 校验
+
+### 23.7 Swagger 文档补全
+
+- `install.controller.ts`：补 `@ApiBody`、`@ApiQuery`、`@ApiBearerAuth` 装饰器
+- `areas.controller.ts`：批量接口补 `@ApiBody` 装饰器
+
+### 23.8 部署脚本变更
+
+- `scripts/deploy.sh`：移除 `seed` / `seed:categories` / `seed:items` / `seed:content` 调用，仅保留 `prisma db push`
+- `.github/workflows/deploy.yml`：E2E 测试步骤保留 seed 调用（CI 环境需要种子数据）
+
+### 23.9 已有系统兼容
+
+对于部署前已在运营的系统，`db push` 会给 `systemconfig` 表新增 `installed` 列（默认 `false`），需手动执行：
+
+```sql
+UPDATE systemconfig SET installed = 1, installedAt = NOW() WHERE id = 1;
+```
+
+然后重启后端清除缓存即可。
 
 ---
 

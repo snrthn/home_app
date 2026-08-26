@@ -62,6 +62,17 @@ export class AreasAdminController {
   @RequirePerm('services:area_manage')
   @ApiBearerAuth()
   @ApiOperation({ summary: '批量开通区域' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/CreateServiceAreaDto' },
+        },
+      },
+    },
+  })
   @Post('batch')
   batchCreate(@Body() body: { items: CreateServiceAreaDto[] }) {
     return this.s.batchCreate(body.items ?? []);
@@ -73,6 +84,14 @@ export class AreasAdminController {
   @RequirePerm('services:area_manage')
   @ApiBearerAuth()
   @ApiOperation({ summary: '批量删除区域' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        ids: { type: 'array', items: { type: 'string' } },
+      },
+    },
+  })
   @Post('batch-delete')
   batchRemove(@Body() body: { ids: string[] }) {
     return this.s.batchRemove(body.ids ?? []);

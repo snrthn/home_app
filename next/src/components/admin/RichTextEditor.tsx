@@ -17,6 +17,7 @@ import TableHeader from '@tiptap/extension-table-header';
 import TableCell from '@tiptap/extension-table-cell';
 import { FontSize } from './font-size-extension';
 import { uploadAvatar, resolveAsset, getApiErrorMsg } from '@/lib/api';
+import { validateUploadFile } from '@laoma/shared';
 import { useToast } from '@/components/Toast';
 import { Modal } from '@/components/Modal';
 
@@ -104,6 +105,8 @@ export default function RichTextEditor({
   });
 
   const uploadAndInsertImage = async (file: File) => {
+    const v = validateUploadFile({ sizeBytes: file.size, mime: file.type, ext: file.name.split('.').pop() });
+    if (!v.ok) { toast.warning(v.error); return; }
     try {
       const url = await uploadAvatar(file);
       editor?.chain().focus().setImage({ src: resolveAsset(url) }).run();
@@ -113,6 +116,8 @@ export default function RichTextEditor({
   };
 
   const uploadAndInsertFile = async (file: File) => {
+    const v = validateUploadFile({ sizeBytes: file.size, mime: file.type, ext: file.name.split('.').pop() });
+    if (!v.ok) { toast.warning(v.error); return; }
     try {
       const url = await uploadAvatar(file);
       const href = resolveAsset(url);
@@ -325,6 +330,7 @@ export default function RichTextEditor({
       <input
         ref={fileInputRef}
         type="file"
+        accept="image/jpeg,image/png,image/gif,image/webp"
         hidden
         onChange={(e) => {
           const f = e.target.files?.[0];

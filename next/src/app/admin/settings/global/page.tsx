@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getGlobalConfig, updateGlobalConfig, uploadFile, resolveAsset, getApiErrorMsg } from '@/lib/api';
+import { validateUploadFile } from '@laoma/shared';
 import { QK } from '@/lib/query-keys';
 import { Field } from '@/components/form';
 import { useToast } from '@/components/Toast';
@@ -88,6 +89,8 @@ export default function GlobalConfigPage() {
   const onLogoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      const v = validateUploadFile({ sizeBytes: file.size, mime: file.type, ext: file.name.split('.').pop() });
+      if (!v.ok) { toast.warning(v.error); return; }
       setUploading(true);
       try {
         const url = await uploadFile(file);
