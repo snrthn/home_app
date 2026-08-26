@@ -98,7 +98,9 @@ api.interceptors.response.use(
           typeof window !== 'undefined' &&
           window.location.pathname !== '/login'
         ) {
-          window.location.href = '/login';
+          const role = roleFromPath();
+          const loginUrl = role === 'admin' ? '/login?mode=admin&role=customer' : '/login';
+          window.location.href = loginUrl;
         }
       }
     }

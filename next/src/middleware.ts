@@ -50,9 +50,16 @@ export function middleware(req: NextRequest) {
   const token = map[role];
 
   // 4) 未登录（无该角色 token）：重定向到登录页
+  //    管理端被踢时拼 ?mode=admin&role=customer，登录页自动切到管理员 tab
   if (!token) {
     const url = req.nextUrl.clone();
     url.pathname = '/login';
+    if (role === 'admin') {
+      url.searchParams.set('mode', 'admin');
+      url.searchParams.set('role', 'customer');
+    } else {
+      url.search = '';
+    }
     return NextResponse.redirect(url);
   }
 
