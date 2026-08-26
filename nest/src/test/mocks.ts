@@ -6,6 +6,7 @@ export function createMockPrisma() {
     order: {
       findUnique: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
       findMany: jest.fn(),
       count: jest.fn(),
       aggregate: jest.fn(),

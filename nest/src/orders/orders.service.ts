@@ -142,12 +142,11 @@ export class OrdersService {
     });
     // 未带师傅上下文（理论上 Guard 已保证，这里兜底宽松）：返回全部
     if (!masterId) return orders;
-    // 地域匹配：所在地 ∪ 接单范围 并集判定（与公告过滤语义一致）。
-    // 两者皆空才视为「未配置」严格不可见。
     const master = await this.prisma.master.findUnique({
       where: { userId: masterId },
-      select: { serviceAreas: true, provinceCode: true, cityCode: true, districtCode: true },
+      select: { status: true, serviceAreas: true, provinceCode: true, cityCode: true, districtCode: true },
     });
+    if (master?.status !== 'active') return [];
     return orders.filter((o) => masterCoversOrder(master, o.address));
   }
 
@@ -225,15 +224,18 @@ export class OrdersService {
 
   async grab(orderId: string, userId: string) {
     const mid = await this.masterIdOf(userId);
+    const master = await this.prisma.master.findUnique({
+      where: { userId },
+      select: { status: true, serviceAreas: true, provinceCode: true, cityCode: true, districtCode: true },
+    });
+    if (master?.status !== 'active') {
+      throw new ForbiddenException('账号尚未通过审核，无法接单');
+    }
     // 区域二次校验：师傅必须覆盖订单地址才能抢单（与接单池过滤同口径）。
     // 防止池子外直接调 API 越界抢单。
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       select: { address: { select: { provinceCode: true, cityCode: true, districtCode: true } } },
-    });
-    const master = await this.prisma.master.findUnique({
-      where: { userId },
-      select: { serviceAreas: true, provinceCode: true, cityCode: true, districtCode: true },
     });
     if (!masterCoversOrder(master, order?.address)) {
       throw new BadRequestException('您不在该订单的服务区域');
