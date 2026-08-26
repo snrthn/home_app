@@ -499,9 +499,9 @@ export default function LoginPage() {
             <p className="mb-1 font-medium text-[var(--color-primary)]">怎么登录？</p>
             {mode === 'admin' ? (
               <ul className="list-disc space-y-0.5 pl-4">
-                <li>管理员账号：admin</li>
-                <li>默认密码：admin123</li>
-                <li>首次使用请确保已执行 init-admin.sql</li>
+                <li>使用系统安装时设置的手机号和密码登录</li>
+                <li>首次部署请先访问域名完成系统安装向导</li>
+                <li>忘记密码请联系系统管理员重置</li>
               </ul>
             ) : mode === 'password' ? (
               <ul className="list-disc space-y-0.5 pl-4">
