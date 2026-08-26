@@ -11,7 +11,24 @@ const config = {
   moduleNameMapper: {
     '^@laoma/shared$': '<rootDir>/../../shared/dist/index.js',
   },
-  collectCoverageFrom: ['**/*.(t|j)s'],
+  collectCoverageFrom: [
+    '**/*.(t|j)s',
+    '!**/*.module.ts',
+    '!**/*.dto.ts',
+    '!**/main.ts',
+    '!**/*.e2e.spec.ts',
+    '!**/e2e/**',
+    '!**/test/**',
+  ],
+  coverageDirectory: '../coverage',
+  coverageThreshold: {
+    global: {
+      statements: 12,
+      branches: 10,
+      functions: 8,
+      lines: 12,
+    },
+  },
   testEnvironment: 'node',
 };
 

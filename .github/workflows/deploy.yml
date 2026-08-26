@@ -28,6 +28,8 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
+      - name: 单元测试覆盖率
+        run: pnpm --filter @laoma/backend test:cov
       - name: 依赖安全扫描
         run: pnpm audit --audit-level=high
         continue-on-error: true
