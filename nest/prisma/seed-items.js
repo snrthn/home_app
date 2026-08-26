@@ -52,9 +52,8 @@ ${stepsHtml}
 `.trim();
 }
 
-// 用 placeholder 图（picsum.photos 随机占位，替换为更稳定的 picsum seed 图）
-// 按类目使用固定 seed，保证每次展示同一张
-const cover = (seed, w = 800, h = 450) => `https://picsum.photos/seed/${seed}/${w}/${h}`;
+// 按服务内容生成对应图片，保证图片与服务相关
+const cover = (prompt) => `https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=${encodeURIComponent(prompt)}&image_size=landscape_16_9`;
 
 /**
  * 数据结构：按一级→二级→三级 嵌套查找类目，
@@ -73,8 +72,8 @@ const DATA = [
         price: 99,
         unit: '台',
         estimatedDuration: 60,
-        sort: 10,
-        cover: cover('ac-wall-clean'),
+        sort: 1,
+        cover: cover('Professional technician performing deep cleaning service on a wall-mounted air conditioner, indoor home setting, clean tools'),
         desc: buildDescription({
           summary: '专业师傅上门，对壁挂式空调进行整机深度清洗，有效去除蒸发器灰尘、滤网细菌、风轮油污，出风更清新。',
           steps: [
@@ -93,8 +92,8 @@ const DATA = [
         price: 169,
         unit: '台',
         estimatedDuration: 90,
-        sort: 10,
-        cover: cover('ac-floor-clean'),
+        sort: 1,
+        cover: cover('Professional technician deep cleaning a floor-standing air conditioner unit, indoor home environment'),
         desc: buildDescription({
           summary: '立柜式空调整机拆洗，适合 2-3 匹柜机，深度去污除菌，出风更干净。',
           steps: [
@@ -113,8 +112,8 @@ const DATA = [
         price: 149,
         unit: '台',
         estimatedDuration: 75,
-        sort: 20,
-        cover: cover('ac-sterilize'),
+        sort: 2,
+        cover: cover('Air conditioner deep sterilization and disinfection service with specialized equipment, professional cleaning'),
         desc: buildDescription({
           summary: '在常规深度清洗基础上，增加专业消毒剂除菌步骤，适合换季开机前、母婴家庭、过敏体质人群。',
           steps: [
@@ -139,8 +138,8 @@ const DATA = [
         price: 159,
         unit: '台',
         estimatedDuration: 90,
-        sort: 10,
-        cover: cover('range-hood-clean'),
+        sort: 1,
+        cover: cover('Kitchen range hood fully disassembled for deep cleaning, professional appliance cleaning service'),
         desc: buildDescription({
           summary: '油烟机风轮、网罩、蜗壳全拆洗，深度去除重油污，恢复吸力，延长使用寿命。',
           steps: [
@@ -159,8 +158,8 @@ const DATA = [
         price: 89,
         unit: '台',
         estimatedDuration: 45,
-        sort: 20,
-        cover: cover('range-hood-steam'),
+        sort: 2,
+        cover: cover('High-temperature steam cleaning of kitchen range hood, professional appliance maintenance'),
         desc: buildDescription({
           summary: '无需拆洗风轮，采用高温蒸汽对油烟机内部进行软化清洁，适合日常保养、轻度油污。',
           steps: [
@@ -185,8 +184,8 @@ const DATA = [
         price: 129,
         unit: '台',
         estimatedDuration: 90,
-        sort: 10,
-        cover: cover('washer-top-load'),
+        sort: 1,
+        cover: cover('Top-loading washing machine disassembled for deep drum cleaning, professional appliance service'),
         desc: buildDescription({
           summary: '拆卸波轮盘、内筒，彻底清洁内外筒夹层污垢、洗剂残留与霉菌，告别"越洗越脏"。',
           steps: [
@@ -205,8 +204,8 @@ const DATA = [
         price: 99,
         unit: '台',
         estimatedDuration: 60,
-        sort: 10,
-        cover: cover('washer-front-load'),
+        sort: 1,
+        cover: cover('Front-loading washing machine interior drum cleaning service, professional maintenance'),
         desc: buildDescription({
           summary: '滚筒式洗衣机免拆清洗，采用专用清洁剂+高温除菌程序，有效去除门封圈霉菌与筒内异味。',
           steps: [
@@ -231,8 +230,8 @@ const DATA = [
         price: 119,
         unit: '台',
         estimatedDuration: 60,
-        sort: 10,
-        cover: cover('fridge-clean'),
+        sort: 1,
+        cover: cover('Refrigerator interior deep cleaning and sanitizing service, professional home appliance maintenance'),
         desc: buildDescription({
           summary: '冰箱内胆、搁架、门封条、接水盘全方位清洁，去除食物残渣、异味、细菌，守护家人饮食健康。',
           steps: [
@@ -257,8 +256,8 @@ const DATA = [
         price: 139,
         unit: '台',
         estimatedDuration: 75,
-        sort: 10,
-        cover: cover('water-heater-electric'),
+        sort: 1,
+        cover: cover('Electric water heater tank descaling and cleaning service, professional maintenance'),
         desc: buildDescription({
           summary: '电热水器内胆除垢、镁棒检查更换，提升加热效率，延长使用寿命，保障用水健康。',
           steps: [
@@ -285,8 +284,8 @@ const DATA = [
         price: 50,
         unit: '次',
         estimatedDuration: 45,
-        sort: 10,
-        cover: cover('ac-repair-cooling'),
+        sort: 1,
+        cover: cover('Air conditioner repair technician using pressure gauge to check cooling system, professional HVAC service'),
         desc: buildDescription({
           summary: '师傅上门检测空调不制冷/不制热原因，检测费可抵扣维修费，不修只收上门检测费。',
           steps: [
@@ -305,8 +304,8 @@ const DATA = [
         price: 80,
         unit: '压',
         estimatedDuration: 30,
-        sort: 20,
-        cover: cover('ac-refill'),
+        sort: 2,
+        cover: cover('Air conditioner refrigerant recharge service, technician adding freon with pressure gauge'),
         desc: buildDescription({
           summary: '空调冷媒补充（加氟），适用于制冷效果下降、细管结霜等缺氟症状，按压力计费。',
           steps: [
@@ -331,8 +330,8 @@ const DATA = [
         price: 50,
         unit: '次',
         estimatedDuration: 45,
-        sort: 10,
-        cover: cover('washer-drain-repair'),
+        sort: 1,
+        cover: cover('Washing machine repair service, technician inspecting drain pump and water inlet'),
         desc: buildDescription({
           summary: '洗衣机不排水、排水慢故障上门检测维修，常见为排水泵堵塞、排水泵损坏或电脑板故障。',
           steps: [
@@ -357,8 +356,8 @@ const DATA = [
         price: 50,
         unit: '次',
         estimatedDuration: 45,
-        sort: 10,
-        cover: cover('fridge-repair-cooling'),
+        sort: 1,
+        cover: cover('Refrigerator repair service, technician checking compressor and cooling system with tools'),
         desc: buildDescription({
           summary: '冰箱不制冷、制冷差、压缩机不启动等故障上门检测，检测费可抵扣维修费。',
           steps: [
@@ -385,8 +384,8 @@ const DATA = [
         price: 150,
         unit: '台',
         estimatedDuration: 90,
-        sort: 10,
-        cover: cover('ac-install'),
+        sort: 1,
+        cover: cover('New air conditioner installation service, technician mounting wall-mounted AC unit with tools'),
         desc: buildDescription({
           summary: '全新挂机空调标准安装服务，含打孔（普通墙）、挂板、接水管、抽真空、试机。',
           steps: [
@@ -405,8 +404,8 @@ const DATA = [
         price: 200,
         unit: '台',
         estimatedDuration: 120,
-        sort: 20,
-        cover: cover('ac-move'),
+        sort: 2,
+        cover: cover('Air conditioner relocation service, technician carefully removing AC unit from wall'),
         desc: buildDescription({
           summary: '空调整套移机服务（拆机+装机），含冷媒回收、拆机、装机、抽真空、试机。',
           steps: [
@@ -431,8 +430,8 @@ const DATA = [
         price: 100,
         unit: '台',
         estimatedDuration: 75,
-        sort: 10,
-        cover: cover('water-heater-install'),
+        sort: 1,
+        cover: cover('Electric water heater installation service, professional mounting and pipe connection'),
         desc: buildDescription({
           summary: '储水式电热水器标准安装，含挂架固定、水路连接、通电试机，安全可靠。',
           steps: [
@@ -459,8 +458,8 @@ const DATA = [
         price: 500,
         unit: '次（起）',
         estimatedDuration: 240,
-        sort: 10,
-        cover: cover('commercial-hood'),
+        sort: 1,
+        cover: cover('Commercial kitchen exhaust hood and duct deep cleaning service, restaurant kitchen maintenance'),
         desc: buildDescription({
           summary: '饭店/食堂商用油烟机整套清洗，含烟罩、管道、净化器、风机，满足消防检查要求。',
           steps: [
