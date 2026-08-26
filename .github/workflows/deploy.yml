@@ -28,6 +28,9 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
+      - name: 依赖安全扫描
+        run: pnpm audit --audit-level=high
+        continue-on-error: true
       - name: 校验提交信息格式（commitlint）
         run: |
           FROM="${{ github.event.before }}"

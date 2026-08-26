@@ -19,3 +19,9 @@ coverage
 nginx/ssl/*.pem
 nginx/ssl/*.key
 nginx/ssl/*.crt
+
+# 数据库备份
+backups/
+
+# 商户支付配置
+config/merchant.json

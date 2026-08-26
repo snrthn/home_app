@@ -25,12 +25,14 @@ import { GatewayModule } from './gateway/gateway.module';
 import { AuditModule } from './audit/audit.module';
 import { ReportsModule } from './reports/reports.module';
 import { TicketsModule } from './tickets/tickets.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     PrismaModule,
+    HealthModule,
     AuthModule,
     UsersModule,
     RbacModule,

@@ -1,0 +1,66 @@
+# Dependabot 依赖更新配置
+# 每周检查 npm 和 GitHub Actions 依赖更新，自动创建 PR
+# 生产的合并策略：Dependabot 创建 PR → CI 验证通过 → 人工合并到 develop → 再合并到 main
+version: 2
+updates:
+  # 根工作区（pnpm workspace 根包）
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "chore"
+
+  # 后端
+  - package-ecosystem: "npm"
+    directory: "/nest"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "backend"
+    commit-message:
+      prefix: "chore"
+
+  # 前端
+  - package-ecosystem: "npm"
+    directory: "/next"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "frontend"
+    commit-message:
+      prefix: "chore"
+
+  # 共享包
+  - package-ecosystem: "npm"
+    directory: "/shared"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "shared"
+    commit-message:
+      prefix: "chore"
+
+  # GitHub Actions 版本更新
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "ci"
+    commit-message:
+      prefix: "chore"
