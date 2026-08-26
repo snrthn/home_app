@@ -1,17 +1,16 @@
-import { promises as fs } from 'node:fs';
+import { Injectable } from '@nestjs/common';
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
-import { dirname, join } from 'node:path';
+import { PrismaService } from '../prisma/prisma.service';
 
 // 商户配置存储（管理员在后台配置，用于「一键接入」真实支付通道）。
-// 骨架阶段：存于服务端 JSON 文件（加密敏感字段），避免引入迁移；
-// 后期可平滑替换为数据库表（SystemConfig），接口不变。
+// 原为 JSON 文件存储，现迁移到 DB（MerchantConfig 表），敏感字段加密后存库。
 
 export interface MerchantConfig {
   provider: 'mock' | 'wechat' | 'alipay';
   enabled: boolean; // 真实通道是否启用（false = 全局走 mock）
   appId?: string;
   mchId?: string;
-  // 敏感字段：加密落盘，绝不返回给前端明文
+  // 敏感字段：加密落库，绝不返回给前端明文
   appSecret?: string;
   apiKey?: string;
   certContent?: string;
@@ -21,12 +20,8 @@ export interface MerchantConfig {
 const SECRET_FIELDS = ['appSecret', 'apiKey', 'certContent'] as const;
 
 const ALGO = 'aes-256-gcm';
-// 密钥取自环境变量，缺失时回退到开发默认值（生产必须配置 MERCHANT_ENC_KEY）
 const ENC_KEY =
   process.env.MERCHANT_ENC_KEY ?? 'dev-only-merchant-enc-key-change-me';
-const CONFIG_PATH =
-  process.env.MERCHANT_CONFIG_PATH ??
-  join(process.cwd(), 'config', 'merchant.json');
 
 function getKey(): Buffer {
   return Buffer.from(ENC_KEY.padEnd(32, '0').slice(0, 32));
@@ -59,27 +54,55 @@ function mask(cfg: MerchantConfig): MerchantConfig {
   return out;
 }
 
+@Injectable()
 export class MerchantConfigStore {
+  constructor(private readonly prisma: PrismaService) {}
+
   async read(): Promise<MerchantConfig> {
-    try {
-      const raw = await fs.readFile(CONFIG_PATH, 'utf8');
-      const parsed = JSON.parse(raw);
-      for (const f of SECRET_FIELDS) {
-        if (parsed[f]) parsed[f] = decrypt(parsed[f]);
-      }
-      return { provider: 'mock', enabled: false, ...parsed };
-    } catch {
-      return { provider: 'mock', enabled: false };
+    const row = await this.prisma.merchantConfig.findUnique({ where: { id: 1 } });
+    if (!row) return { provider: 'mock', enabled: false };
+
+    const cfg: MerchantConfig = {
+      provider: row.provider as MerchantConfig['provider'],
+      enabled: row.enabled,
+      appId: row.appId ?? undefined,
+      mchId: row.mchId ?? undefined,
+      remark: row.remark ?? undefined,
+    };
+    const secrets: Record<string, string | null> = {
+      appSecret: row.appSecret,
+      apiKey: row.apiKey,
+      certContent: row.certContent,
+    };
+    for (const f of SECRET_FIELDS) {
+      const raw = secrets[f];
+      if (raw) (cfg as unknown as Record<string, unknown>)[f] = decrypt(raw);
     }
+    return cfg;
   }
 
   async write(cfg: MerchantConfig): Promise<MerchantConfig> {
-    const toSave: Record<string, any> = { ...cfg };
+    const secretVals: Record<string, string | undefined> = {
+      appSecret: cfg.appSecret,
+      apiKey: cfg.apiKey,
+      certContent: cfg.certContent,
+    };
+    const data: Record<string, unknown> = {
+      provider: cfg.provider,
+      enabled: cfg.enabled,
+      appId: cfg.appId ?? null,
+      mchId: cfg.mchId ?? null,
+      remark: cfg.remark ?? null,
+    };
     for (const f of SECRET_FIELDS) {
-      if (toSave[f]) toSave[f] = encrypt(String(toSave[f]));
+      const val = secretVals[f];
+      data[f] = val ? encrypt(String(val)) : null;
     }
-    await fs.mkdir(dirname(CONFIG_PATH), { recursive: true });
-    await fs.writeFile(CONFIG_PATH, JSON.stringify(toSave, null, 2), 'utf8');
-    return mask(cfg); // 回显脱敏副本
+    await this.prisma.merchantConfig.upsert({
+      where: { id: 1 },
+      create: { id: 1, ...data },
+      update: data,
+    });
+    return mask(cfg);
   }
 }

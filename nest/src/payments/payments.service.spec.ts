@@ -10,6 +10,13 @@ import {
   createMockProvider,
 } from '../test/mocks';
 
+function createMockMerchantStore() {
+  return {
+    read: jest.fn().mockResolvedValue({ provider: 'mock' as const, enabled: false }),
+    write: jest.fn().mockResolvedValue({ provider: 'mock', enabled: false }),
+  };
+}
+
 const ORDER_ID = 'order-1';
 const CUSTOMER_ID = 'user-1';
 const MASTER_ID = 'master-1';
@@ -62,7 +69,7 @@ function setupService(opts?: {
     provider.refund.mockResolvedValue(opts.providerRefund);
   }
 
-  const service = new PaymentsService(prisma, gateway, settlements, commission, orders);
+  const service = new PaymentsService(prisma, gateway, settlements, commission, orders, createMockMerchantStore() as any);
   jest.spyOn(service as any, 'getProvider').mockResolvedValue(provider);
 
   return { service, prisma, commission, orders, settlements, gateway, provider };
@@ -253,7 +260,7 @@ describe('PaymentsService.mockNotify - 模拟支付回调', () => {
     prisma.payment.updateMany.mockResolvedValue({ count: 1 });
     prisma.orderLog.create.mockResolvedValue({ id: 'log-1' });
 
-    const service = new PaymentsService(prisma, gateway, settlements, commission, orders);
+    const service = new PaymentsService(prisma, gateway, settlements, commission, orders, createMockMerchantStore() as any);
 
     return { service, prisma, gateway };
   }

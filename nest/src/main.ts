@@ -68,6 +68,8 @@ async function bootstrap() {
     new ValidationPipe({ whitelist: true, transform: true }),
   );
   app.useGlobalFilters(new AllExceptionsFilter(pinoLogger));
+  // 优雅停机：PM2 reload 时先收连接、释放资源，再关闭进程
+  app.enableShutdownHooks();
   const port = process.env.PORT || 3721;
   await app.listen(port);
   pinoLogger.info(`[老马家电] backend listening on http://localhost:${port}`);

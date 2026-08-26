@@ -40,7 +40,6 @@ export interface RefundListFilter {
 
 @Injectable()
 export class PaymentsService {
-  private store = new MerchantConfigStore();
   private mock = new MockPaymentProvider();
 
   constructor(
@@ -50,6 +49,7 @@ export class PaymentsService {
     private commission: CommissionService,
     @Inject(forwardRef(() => OrdersService))
     private orders: OrdersService,
+    private store: MerchantConfigStore,
   ) {}
 
   /** 当前启用的支付通道：读 MerchantConfig，enabled 且 provider!=mock 时返回对应真实实现，否则 mock。 */

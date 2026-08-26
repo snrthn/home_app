@@ -17,6 +17,10 @@
 - Dependabot 依赖漏洞扫描（每周一检查 npm + GitHub Actions 版本）
 - CI 安全扫描 `pnpm audit --audit-level=high`
 
+### Added — 架构演进
+- 优雅停机：`app.enableShutdownHooks()`，PM2 reload 时 WebSocket 平滑断开
+- 密钥管理：商户支付配置从 JSON 文件迁移到 DB（`MerchantConfig` 表），消除敏感文件落盘风险
+
 ### Added — 工程规范
 - `nest/.env.example` 环境变量模板
 - Jest 覆盖率收集 + CI 门禁阈值（statements 30% / branches 20%）

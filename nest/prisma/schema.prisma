@@ -654,6 +654,23 @@ model SystemConfig {
   @@map("systemconfig")
 }
 
+// 商户支付配置：替代原 JSON 文件存储，敏感字段加密后存 DB
+model MerchantConfig {
+  id          Int      @id @default(1)
+  provider    String   @default("mock") // mock | wechat | alipay
+  enabled     Boolean  @default(false) // 真实通道是否启用（false=全局走 mock）
+  appId       String?
+  mchId       String?
+  // 敏感字段：加密存储，绝不返回给前端明文
+  appSecret   String?
+  apiKey      String?
+  certContent String?
+  remark      String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("merchantconfig")
+}
+
 // ---------------- 管理端 RBAC（角色权限，2026-08-11 新增，对应 docs/rbac-design.md） ----------------
 // 设计要点：权限定义放 DB（运行时可改角色不碰代码）；功能点(菜单/按钮/接口)走代码注册表，不在此建表。
 // 两层角色分离：① 账号类型 Role 枚举(admin/master/customer) 仅作入口闸门；② 内部岗位角色 StaffRole 决定管理端内能干什么。

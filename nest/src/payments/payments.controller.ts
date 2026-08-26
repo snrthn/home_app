@@ -9,7 +9,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
-import { MerchantConfigStore, type MerchantConfig } from './merchant-config.store';
+import { type MerchantConfig } from './merchant-config.store';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthUser } from '../auth/auth-user.interface';
