@@ -35,6 +35,8 @@ echo "==> [3/7] 生成 Prisma Client"
 pnpm --filter @laoma/backend exec prisma generate
 
 echo "==> [4/7] 构建各包 (turbo)"
+# ECS 内存有限(7G)，Next.js 构建容易 OOM，限制 Node 内存 + swap 兜底
+export NODE_OPTIONS="${NODE_OPTIONS:-} --max-old-space-size=2048"
 pnpm build
 
 echo "==> [5/7] 加载 nest/.env 到当前 shell 环境"
