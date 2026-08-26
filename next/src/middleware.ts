@@ -99,5 +99,6 @@ export const config = {
     '/admin/:path*',
     '/login/:path*',
     '/forgot-password/:path*',
+    '/install/:path*',
   ],
 };

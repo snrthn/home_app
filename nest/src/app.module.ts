@@ -27,6 +27,8 @@ import { ReportsModule } from './reports/reports.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { HealthModule } from './health/health.module';
 import { MetricsModule } from './metrics/metrics.module';
+import { InstallModule } from './install/install.module';
+import { InstallGuard } from './install/install.guard';
 
 @Module({
   imports: [
@@ -57,7 +59,11 @@ import { MetricsModule } from './metrics/metrics.module';
     AuditModule,
   ReportsModule,
   TicketsModule,
+  InstallModule,
   ],
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: InstallGuard },
+  ],
 })
 export class AppModule {}

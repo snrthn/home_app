@@ -5,7 +5,7 @@ import type { AppRole } from './auth';
 
 // 1) 公共白名单：登录前即可访问的路由（无需 token）。
 //    新增"登录前可访问"的页面（如找回密码）在此追加即可。
-export const PUBLIC_ROUTES: string[] = ['/login', '/forgot-password'];
+export const PUBLIC_ROUTES: string[] = ['/login', '/forgot-password', '/install'];
 
 // 2) 各角色允许访问的路由前缀白名单。
 //    客户只能进 /client*，师傅只能进 /master*，管理员只能进 /admin*，

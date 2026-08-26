@@ -16,7 +16,9 @@
  * 前置：需先跑 seed-categories.js（无直接依赖，但业务上下文一致）。
  */
 const { PrismaClient } = require('../node_modules/.prisma/client');
-const prisma = new PrismaClient();
+
+// 导出供 InstallService 调用；独立运行时自动创建 prisma 实例
+async function seedContent(prisma) {
 
 /* ========================================================================== */
 /*                           1. 关于我们（三端）                               */
@@ -545,7 +547,6 @@ async function seedNotices() {
 /*                                  主入口                                     */
 /* ========================================================================== */
 
-async function main() {
   console.log('========== 内容种子开始 ==========');
   await seedAbout();
   await seedAgreements();
@@ -553,9 +554,14 @@ async function main() {
   console.log('========== 内容种子完成 ==========');
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+module.exports = { seedContent };
+
+if (require.main === module) {
+  const prisma = new PrismaClient();
+  seedContent(prisma)
+    .catch((e) => {
+      console.error(e);
+      process.exit(1);
+    })
+    .finally(() => prisma.$disconnect());
+}

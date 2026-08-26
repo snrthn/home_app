@@ -10,7 +10,9 @@
  * 幂等：permission 用 code upsert；角色权限每次重建绑定，可重复执行。
  */
 const { PrismaClient } = require('../node_modules/.prisma/client');
-const prisma = new PrismaClient();
+
+// 导出供 InstallService 调用；独立运行时自动创建 prisma 实例
+async function seedPermissions(prisma) {
 
 // 资源 -> 权限分组（管理页展示用）
 const GROUP = {
@@ -76,7 +78,6 @@ const ROLES = {
   },
 };
 
-async function main() {
   // 1) upsert 全部权限码
   const permIds = {};
   for (const code of CODES) {
@@ -118,9 +119,19 @@ async function main() {
   console.log('SEED DONE');
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+module.exports = { seedPermissions };
+
+if (require.main === module) {
+  const prisma = new PrismaClient();
+  seedPermissions(prisma)
+    .then(() => prisma.systemConfig.upsert({
+      where: { id: 1 },
+      update: { installed: true, installedAt: new Date() },
+      create: { id: 1, siteName: '老马家电', smsMode: 'mock', installed: true, installedAt: new Date() },
+    }))
+    .then(() => { console.log('installed=true (standalone seed)'); return prisma.$disconnect(); })
+    .catch((e) => {
+      console.error(e);
+      process.exit(1);
+    });
+}

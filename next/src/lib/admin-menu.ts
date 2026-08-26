@@ -45,6 +45,7 @@ export const ADMIN_MENU: AdminMenuItem[] = [
       { key: 'payment', label: '支付配置', path: '/admin/settings/payment' },
       { key: 'roles', label: '角色权限', path: '/admin/settings/roles', perm: 'settings:role_manage' },
       { key: 'logs', label: '操作日志', path: '/admin/settings/logs', perm: 'logs:view' },
+      { key: 'system', label: '系统管理', path: '/admin/settings/system', perm: 'settings:role_manage' },
     ],
   },
   {

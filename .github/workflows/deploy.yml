@@ -84,6 +84,7 @@ jobs:
       - run: pnpm --filter @laoma/backend run seed
       - run: pnpm --filter @laoma/backend run seed:categories
       - run: pnpm --filter @laoma/backend run seed:items
+      - run: pnpm --filter @laoma/backend run seed:content
       - run: pnpm test:e2e
 
   # 3) 部署：runner checkout → git archive 打包 → scp 推代码到 ECS → ssh 构建

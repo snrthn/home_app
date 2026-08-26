@@ -649,6 +649,9 @@ model SystemConfig {
   smsTemplateCode      String?
   // Sentry DSN：运营平台配置后前端自动初始化错误监控；留空=关闭监控
   sentryDsn            String?
+  // 系统安装状态：false=未安装（首次访问跳安装向导），true=已安装（正常运营）
+  installed            Boolean  @default(false)
+  installedAt          DateTime?
   updatedAt            DateTime @updatedAt
 
   @@map("systemconfig")

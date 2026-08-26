@@ -236,3 +236,18 @@ export function notifySmsResult(
     toast.success('验证码已发送');
   }
 }
+
+// GET /install/status — 公开，检查系统是否已初始化
+export function getInstallStatus() {
+  return api.get<{ installed: boolean; installedAt: string | null }>('/install/status').then(r => r.data);
+}
+
+// POST /install/init — 公开，执行系统初始化（创建管理员+灌入种子数据）
+export function initSystem(phone: string, password: string, nickname?: string) {
+  return api.post('/install/init', { phone, password, nickname });
+}
+
+// POST /install/reset — 管理员，重置系统到未安装状态
+export function resetSystem(mode: 'light' | 'deep' = 'light') {
+  return api.post('/install/reset', null, { params: { mode } });
+}

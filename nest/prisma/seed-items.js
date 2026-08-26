@@ -15,7 +15,9 @@
  * 前置：需先跑 seed-categories.js（类目存在才能挂项目）。
  */
 const { PrismaClient } = require('../node_modules/.prisma/client');
-const prisma = new PrismaClient();
+
+// 导出供 InstallService 调用；独立运行时自动创建 prisma 实例
+async function seedItems(prisma) {
 
 // 富文本模板生成器：统一风格的服务介绍，含 服务流程 / 服务亮点 / 注意事项
 function buildDescription({
@@ -509,7 +511,6 @@ function findByName(nodes, name) {
   return null;
 }
 
-async function main() {
   // 加载类目树（含 id）
   const cats = await prisma.serviceCategory.findMany({
     where: { deletedAt: null },
@@ -591,9 +592,14 @@ async function main() {
   console.log(`服务项目种子完成：新增 ${created} 条，更新 ${updated} 条，跳过 ${skipped} 条（类目未找到），当前有效项目共 ${total} 条`);
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+module.exports = { seedItems };
+
+if (require.main === module) {
+  const prisma = new PrismaClient();
+  seedItems(prisma)
+    .catch((e) => {
+      console.error(e);
+      process.exit(1);
+    })
+    .finally(() => prisma.$disconnect());
+}

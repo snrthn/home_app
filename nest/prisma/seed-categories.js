@@ -14,7 +14,9 @@
  * ServiceItem 挂在三级叶子上，由后台或另一份 seed 创建。
  */
 const { PrismaClient } = require('../node_modules/.prisma/client');
-const prisma = new PrismaClient();
+
+// 导出供 InstallService 调用；独立运行时自动创建 prisma 实例
+async function seedCategories(prisma) {
 
 // 数据：children 递归嵌套；顶层为一级类目。
 const TREE = [
@@ -270,15 +272,19 @@ async function upsertLevel(nodes, parentId, level) {
   return { created, updated };
 }
 
-async function main() {
   const stats = await upsertLevel(TREE, null, 1);
   const total = await prisma.serviceCategory.count({ where: { deletedAt: null } });
   console.log(`类目种子完成：新增 ${stats.created} 条，更新 ${stats.updated} 条，当前有效类目共 ${total} 条`);
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+module.exports = { seedCategories };
+
+if (require.main === module) {
+  const prisma = new PrismaClient();
+  seedCategories(prisma)
+    .catch((e) => {
+      console.error(e);
+      process.exit(1);
+    })
+    .finally(() => prisma.$disconnect());
+}

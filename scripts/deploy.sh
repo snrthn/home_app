@@ -51,12 +51,9 @@ else
   exit 1
 fi
 
-echo "==> [6/7] 数据库迁移 + 种子（均幂等，可重复执行）"
+echo "==> [6/7] 数据库迁移（表结构同步，不灌种子数据）"
 ( cd nest && npx prisma db push )
-node nest/prisma/seed.js
-node nest/prisma/seed-categories.js
-node nest/prisma/seed-items.js
-node nest/prisma/seed-content.js
+echo "    种子数据通过安装向导初始化（首次访问域名 → /install）"
 
 echo "==> [7/7] 重载 PM2 进程"
 pm2 startOrReload ecosystem.config.js
