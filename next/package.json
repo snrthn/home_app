@@ -2,6 +2,8 @@
   "name": "@laoma/frontend",
   "version": "0.0.1",
   "private": true,
+  "author": "yanghuning <185471581@qq.com>",
+  "license": "Apache-2.0",
   "scripts": {
     "dev": "next dev -p 3824",
     "build": "next build",

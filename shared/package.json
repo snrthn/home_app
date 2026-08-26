@@ -2,6 +2,8 @@
   "name": "@laoma/shared",
   "version": "0.0.1",
   "private": true,
+  "author": "yanghuning <185471581@qq.com>",
+  "license": "Apache-2.0",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
