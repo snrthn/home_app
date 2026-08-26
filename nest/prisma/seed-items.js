@@ -7,9 +7,9 @@
  *
  * 幂等策略：
  *   - 用「类目 id + 项目名称」定位已存在项目
- *   - 已存在：只更新 price/unit/estimatedDuration/coverImage/description/sort/isActive
- *             （不覆盖管理员后台可能改过的字段）
- *   - 不存在：创建
+ *   - 已存在：只更新 sort（排序），不覆盖 price/coverImage/description 等业务字段
+ *             （管理员后台修改优先，避免每次部署覆盖线上数据）
+ *   - 不存在：创建（含全部字段）
  *   - 只处理本脚本里列出的项目，不删除管理员自建的其他项目
  *
  * 前置：需先跑 seed-categories.js（类目存在才能挂项目）。
@@ -268,6 +268,27 @@ const DATA = [
           ],
           highlights: ['专业除垢剂', '加热效率提升 30%', '镁棒状态检测', '7 天质保'],
           notices: ['适用于储水式电热水器', '镁棒如需更换费用另计', '建议每 1-2 年清洗一次'],
+        }),
+      },
+      {
+        l3: '燃气热水器清洗',
+        name: '燃气热水器燃烧舱清洗',
+        price: 119,
+        unit: '台',
+        estimatedDuration: 60,
+        sort: 2,
+        cover: cover('water-heater.jpg'),
+        desc: buildDescription({
+          summary: '燃气热水器燃烧舱、换热器、水路清洁，去除碳积与水垢，恢复热水效率，保障使用安全。',
+          steps: [
+            { title: '关阀断气', desc: '关闭燃气阀与进水阀，断电，确认管路无泄漏。' },
+            { title: '拆检燃烧舱', desc: '拆卸外壳，检查燃烧器、换热器积碳与腐蚀情况。' },
+            { title: '清洁去碳', desc: '专业清洁剂清洗燃烧舱、换热器翅片，去除碳积与水垢。' },
+            { title: '水路冲洗', desc: '高压水冲洗管路与阀门，检查燃气密封性。' },
+            { title: '装机试机', desc: '装回部件，通气通水试机，确认点火正常、无泄漏。' },
+          ],
+          highlights: ['燃烧舱深度去碳', '换热器效率恢复', '燃气密封检测', '7 天质保'],
+          notices: ['适用于燃气热水器（强排/平衡式）', '建议每年清洗一次', '如需更换配件费用另计'],
         }),
       },
     ],
@@ -550,17 +571,12 @@ async function main() {
       };
 
       if (existing) {
-        // 已存在：更新可变化字段，保留管理员可能手动改的（只动描述/价格/时长/封面/排序/状态）
+        // 已存在：只更新 sort（排序），不覆盖 price/coverImage/description 等业务字段
+        // 管理员后台修改优先，避免每次部署覆盖线上数据
         await prisma.serviceItem.update({
           where: { id: existing.id },
           data: {
-            price: item.price,
-            unit: item.unit,
-            estimatedDuration: item.estimatedDuration,
-            coverImage: item.cover,
-            description: item.desc,
             sort: item.sort,
-            // isActive 不强制覆盖：管理员可能手动停用
           },
         });
         updated++;

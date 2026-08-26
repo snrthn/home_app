@@ -6,7 +6,8 @@
  *
  * 幂等策略：
  *   - 用「层级 + 名称 + 父级名称」定位已有类目（三字段组合唯一）
- *   - 存在则 update（description/icon/sort/isActive），不存在则 create
+ *   - 存在则只更新 sort（排序），不覆盖 name/icon/description/isActive
+ *   - 不存在则 create（含全部字段）
  *   - 不会删除已存在的其他类目（管理员自建的保留）
  *
  * 结构：一级 4 个 / 二级 12 个 / 三级 37 个，共 53 条。
@@ -236,16 +237,15 @@ async function upsertLevel(nodes, parentId, level) {
       sort: node.sort ?? 0,
       isActive: true,
     };
-    // 已存在时只更新描述/排序等元信息，不动 name/icon/isActive/父子关系。
-    // name/icon/isActive 由后台人工维护，seed 不覆盖，避免每次部署都把手动修改刷回去。
+    // 已存在时只更新 sort（排序），不动 name/icon/description/isActive/父子关系。
+    // 管理员后台修改优先，避免每次部署覆盖线上数据。
     const updateData = {
-      description: node.description ?? null,
       sort: node.sort ?? 0,
     };
 
     let id;
     if (existing) {
-      // 已存在：只更新描述/排序，不覆盖 name/icon/isActive（后台可能改过）
+      // 已存在：只更新 sort，不覆盖 name/icon/description/isActive（后台可能改过）
       await prisma.serviceCategory.update({
         where: { id: existing.id },
         data: updateData,
