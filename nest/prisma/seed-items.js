@@ -52,8 +52,8 @@ ${stepsHtml}
 `.trim();
 }
 
-// 服务项目封面图：使用本地静态图片，部署后可靠访问
-const cover = (filename) => `/images/services/${filename}`;
+// 服务项目封面图：使用线上 CDN 图片 URL
+const cover = (url) => url;
 
 /**
  * 数据结构：按一级→二级→三级 嵌套查找类目，
@@ -73,7 +73,7 @@ const DATA = [
         unit: '台',
         estimatedDuration: 60,
         sort: 1,
-        cover: cover('ac-cleaning.jpg'),
+        cover: cover('https://pic.rmb.bdstatic.com/bjh/news/2d1660ee89264a914989ee3f9b1fe04e.jpeg'),
         desc: buildDescription({
           summary: '专业师傅上门，对壁挂式空调进行整机深度清洗，有效去除蒸发器灰尘、滤网细菌、风轮油污，出风更清新。',
           steps: [
@@ -93,7 +93,7 @@ const DATA = [
         unit: '台',
         estimatedDuration: 90,
         sort: 1,
-        cover: cover('ac-cleaning.jpg'),
+        cover: cover('https://img1.baidu.com/it/u=3841546479,1039447448&fm=253&fmt=auto&app=138&f=JPEG?w=500&h=500'),
         desc: buildDescription({
           summary: '立柜式空调整机拆洗，适合 2-3 匹柜机，深度去污除菌，出风更干净。',
           steps: [
@@ -113,7 +113,7 @@ const DATA = [
         unit: '台',
         estimatedDuration: 75,
         sort: 2,
-        cover: cover('ac-cleaning.jpg'),
+        cover: cover('https://p9.itc.cn/q_70/images03/20220525/e6508a8cddf0434caa25e92a268e6413.jpeg'),
         desc: buildDescription({
           summary: '在常规深度清洗基础上，增加专业消毒剂除菌步骤，适合换季开机前、母婴家庭、过敏体质人群。',
           steps: [
@@ -139,7 +139,7 @@ const DATA = [
         unit: '台',
         estimatedDuration: 90,
         sort: 1,
-        cover: cover('range-hood.jpg'),
+        cover: cover('https://q5.itc.cn/q_70/images01/20250829/2e11eb14fcc14506806d720df094d945.png'),
         desc: buildDescription({
           summary: '油烟机风轮、网罩、蜗壳全拆洗，深度去除重油污，恢复吸力，延长使用寿命。',
           steps: [
@@ -159,7 +159,7 @@ const DATA = [
         unit: '台',
         estimatedDuration: 45,
         sort: 2,
-        cover: cover('range-hood.jpg'),
+        cover: cover('https://img2.baidu.com/it/u=3307204517,4006042948&fm=253&fmt=auto&app=120&f=JPEG?w=515&h=500'),
         desc: buildDescription({
           summary: '无需拆洗风轮，采用高温蒸汽对油烟机内部进行软化清洁，适合日常保养、轻度油污。',
           steps: [
@@ -185,7 +185,7 @@ const DATA = [
         unit: '台',
         estimatedDuration: 90,
         sort: 1,
-        cover: cover('washer-cleaning.jpg'),
+        cover: cover('https://uimg.liecdn.cn/image/post/09/06/1d/25/09061d256c1ddf891e874b4372758674.jpg'),
         desc: buildDescription({
           summary: '拆卸波轮盘、内筒，彻底清洁内外筒夹层污垢、洗剂残留与霉菌，告别"越洗越脏"。',
           steps: [
@@ -205,7 +205,7 @@ const DATA = [
         unit: '台',
         estimatedDuration: 60,
         sort: 1,
-        cover: cover('washer-cleaning.jpg'),
+        cover: cover('https://pic.midea.cn/ImageStore/151824/pic/dff48d60c81c929eA16101/dff48d60c81c929eA16101_640*640_50.jpg'),
         desc: buildDescription({
           summary: '滚筒式洗衣机免拆清洗，采用专用清洁剂+高温除菌程序，有效去除门封圈霉菌与筒内异味。',
           steps: [
@@ -231,7 +231,7 @@ const DATA = [
         unit: '台',
         estimatedDuration: 60,
         sort: 1,
-        cover: cover('fridge.jpg'),
+        cover: cover('https://p9.toutiaoimg.com/origin/pgc-image/48977d05a73b4e4081910f66976d1d9c?from=pc'),
         desc: buildDescription({
           summary: '冰箱内胆、搁架、门封条、接水盘全方位清洁，去除食物残渣、异味、细菌，守护家人饮食健康。',
           steps: [
@@ -257,7 +257,7 @@ const DATA = [
         unit: '台',
         estimatedDuration: 75,
         sort: 1,
-        cover: cover('water-heater.jpg'),
+        cover: cover('https://nimg.ws.126.net/?url=http%3A%2F%2Fdingyue.ws.126.net%2F2025%2F0713%2Fd494949bj00szbwcf00o8d000u0013zm.jpg&thumbnail=660x2147483647&quality=80&type=jpg'),
         desc: buildDescription({
           summary: '电热水器内胆除垢、镁棒检查更换，提升加热效率，延长使用寿命，保障用水健康。',
           steps: [
@@ -277,7 +277,7 @@ const DATA = [
         unit: '台',
         estimatedDuration: 60,
         sort: 2,
-        cover: cover('water-heater.jpg'),
+        cover: cover('https://miaobi-lite.bj.bcebos.com/miaobi/5mao/b%2754Ot5rC05Zmo5riF5rSX5Lu35qC85LiA6KeI6KGoXzE3MzQ4ODc0MTYuODQ0Njk4%27/0.png'),
         desc: buildDescription({
           summary: '燃气热水器燃烧舱、换热器、水路清洁，去除碳积与水垢，恢复热水效率，保障使用安全。',
           steps: [
@@ -306,7 +306,7 @@ const DATA = [
         unit: '次',
         estimatedDuration: 45,
         sort: 1,
-        cover: cover('ac-repair.jpg'),
+        cover: cover('https://pic.rmb.bdstatic.com/bjh/3f173dbe0bf/240706/863d21d882ab69f74292456c0188881b.png'),
         desc: buildDescription({
           summary: '师傅上门检测空调不制冷/不制热原因，检测费可抵扣维修费，不修只收上门检测费。',
           steps: [
@@ -326,7 +326,7 @@ const DATA = [
         unit: '压',
         estimatedDuration: 30,
         sort: 2,
-        cover: cover('ac-repair.jpg'),
+        cover: cover('https://miaobi-lite.bj.bcebos.com/miaobi/5mao/b%27LV8xNzM2MTM3OTUyLjk0MTAzMTJfMTczNjEzNzk1Mi45OTk0NDg1%27/1.png'),
         desc: buildDescription({
           summary: '空调冷媒补充（加氟），适用于制冷效果下降、细管结霜等缺氟症状，按压力计费。',
           steps: [
@@ -352,7 +352,7 @@ const DATA = [
         unit: '次',
         estimatedDuration: 45,
         sort: 1,
-        cover: cover('washer-cleaning.jpg'),
+        cover: cover('https://img1.baidu.com/it/u=1277675655,2446823753&fm=253&fmt=auto&app=138&f=JPEG?w=667&h=500'),
         desc: buildDescription({
           summary: '洗衣机不排水、排水慢故障上门检测维修，常见为排水泵堵塞、排水泵损坏或电脑板故障。',
           steps: [
@@ -378,7 +378,7 @@ const DATA = [
         unit: '次',
         estimatedDuration: 45,
         sort: 1,
-        cover: cover('fridge.jpg'),
+        cover: cover('https://pic.rmb.bdstatic.com/bjh/c64d4a1e0aab2e96d5c62e221ca5def48501.jpeg'),
         desc: buildDescription({
           summary: '冰箱不制冷、制冷差、压缩机不启动等故障上门检测，检测费可抵扣维修费。',
           steps: [
@@ -406,7 +406,7 @@ const DATA = [
         unit: '台',
         estimatedDuration: 90,
         sort: 1,
-        cover: cover('ac-installation.jpg'),
+        cover: cover('https://gimg2.baidu.com/image_search/src=http%3A%2F%2Fimg.alicdn.com%2Fimgextra%2Fi1%2FO1CN01fXA5bU1qBMMNQ4RxH_%21%214611686018427387121-0-rate.jpg&refer=http%3A%2F%2Fimg.alicdn.com&app=2002&size=f9999,10000&q=a80&n=0&g=0n&fmt=auto?sec=1790322566&t=b95260e9a1ce0e0b8980473c375b91a1'),
         desc: buildDescription({
           summary: '全新挂机空调标准安装服务，含打孔（普通墙）、挂板、接水管、抽真空、试机。',
           steps: [
@@ -426,7 +426,7 @@ const DATA = [
         unit: '台',
         estimatedDuration: 120,
         sort: 2,
-        cover: cover('ac-installation.jpg'),
+        cover: cover('https://img2.baidu.com/it/u=1085180211,2197586790&fm=253&fmt=auto&app=138&f=JPEG?w=667&h=500'),
         desc: buildDescription({
           summary: '空调整套移机服务（拆机+装机），含冷媒回收、拆机、装机、抽真空、试机。',
           steps: [
@@ -452,7 +452,7 @@ const DATA = [
         unit: '台',
         estimatedDuration: 75,
         sort: 1,
-        cover: cover('water-heater.jpg'),
+        cover: cover('https://k.sinaimg.cn/n/sinakd20120/683/w640h843/20240510/9906-2f30023b90e5c1ca334c0669a3f69c7b.jpg/w700d1q75cms.jpg'),
         desc: buildDescription({
           summary: '储水式电热水器标准安装，含挂架固定、水路连接、通电试机，安全可靠。',
           steps: [
@@ -480,7 +480,7 @@ const DATA = [
         unit: '次（起）',
         estimatedDuration: 240,
         sort: 1,
-        cover: cover('commercial-kitchen.jpg'),
+        cover: cover('https://img2.baidu.com/it/u=827537065,2267192707&fm=253&fmt=auto&app=138&f=JPEG?w=569&h=427'),
         desc: buildDescription({
           summary: '饭店/食堂商用油烟机整套清洗，含烟罩、管道、净化器、风机，满足消防检查要求。',
           steps: [
