@@ -8,6 +8,8 @@ import {
   createServiceArea,
   deleteServiceArea,
   setAreaActive,
+  batchCreateServiceAreas,
+  batchDeleteServiceAreas,
   type ServiceArea,
 } from '@/lib/admin-api';
 import { QK } from '@/lib/query-keys';
@@ -406,22 +408,27 @@ export default function ServiceAreasPage() {
     }
     setSaving(true);
     try {
-      for (const code of toCreate) {
-        const n = nodeMap.get(code);
-        if (!n) continue;
-        await createServiceArea({
-          province: n.province,
-          provinceCode: n.provinceCode,
-          city: n.city,
-          cityCode: n.cityCode,
-          district: n.district,
-          districtCode: n.districtCode,
-          isActive: true,
-          sort: 0,
-        });
+      if (toCreate.length) {
+        const items = toCreate
+          .map((code) => {
+            const n = nodeMap.get(code);
+            if (!n) return null;
+            return {
+              province: n.province,
+              provinceCode: n.provinceCode,
+              city: n.city,
+              cityCode: n.cityCode,
+              district: n.district,
+              districtCode: n.districtCode,
+              isActive: true,
+              sort: 0,
+            };
+          })
+          .filter((x): x is NonNullable<typeof x> => x !== null);
+        await batchCreateServiceAreas(items);
       }
-      for (const a of toDelete) {
-        await deleteServiceArea(a.id);
+      if (toDelete.length) {
+        await batchDeleteServiceAreas(toDelete.map((a) => a.id));
       }
       toast.success(`已开通 ${toCreate.length} 个、关闭 ${toDelete.length} 个区域`);
       refresh();

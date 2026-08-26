@@ -41,6 +41,51 @@ export class AreasService {
     return { code, level, name, parentCode };
   }
 
+  // 批量开通区域节点（单次事务，避免逐条请求触发限流）
+  async batchCreate(dtos: {
+    province: string;
+    provinceCode: string;
+    city?: string;
+    cityCode?: string;
+    district?: string;
+    districtCode?: string;
+    isActive?: boolean;
+    sort?: number;
+  }[]): Promise<{ created: number; updated: number }> {
+    let created = 0;
+    let updated = 0;
+    await this.prisma.$transaction(async (tx) => {
+      for (const dto of dtos) {
+        const { code, level, name, parentCode } = this.derive(dto);
+        const data = {
+          code, level, name, parentCode,
+          province: dto.province, provinceCode: dto.provinceCode,
+          city: dto.city ?? null, cityCode: dto.cityCode ?? null,
+          district: dto.district ?? null, districtCode: dto.districtCode ?? null,
+          isActive: dto.isActive ?? true, deletedAt: null, sort: dto.sort ?? 0,
+        };
+        const existing = await tx.serviceArea.findFirst({ where: { code } });
+        if (existing) {
+          await tx.serviceArea.update({ where: { id: existing.id }, data });
+          updated++;
+        } else {
+          await tx.serviceArea.create({ data });
+          created++;
+        }
+      }
+    });
+    return { created, updated };
+  }
+
+  // 批量软删除区域节点（单次事务）
+  async batchRemove(ids: string[]): Promise<{ deleted: number }> {
+    const result = await this.prisma.serviceArea.updateMany({
+      where: { id: { in: ids } },
+      data: { isActive: false, deletedAt: new Date() },
+    });
+    return { deleted: result.count };
+  }
+
   // 开通一个区域节点。同 code 已存在（含曾被软删）则重新激活并更新字段，实现「关闭后再开通」。
   async createArea(dto: {
     province: string;

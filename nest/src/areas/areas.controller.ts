@@ -61,6 +61,28 @@ export class AreasAdminController {
   @Audit('services', 'services:area_manage')
   @RequirePerm('services:area_manage')
   @ApiBearerAuth()
+  @ApiOperation({ summary: '批量开通区域' })
+  @Post('batch')
+  batchCreate(@Body() body: { items: CreateServiceAreaDto[] }) {
+    return this.s.batchCreate(body.items ?? []);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
+  @Roles(Role.Admin)
+  @Audit('services', 'services:area_manage')
+  @RequirePerm('services:area_manage')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '批量删除区域' })
+  @Post('batch-delete')
+  batchRemove(@Body() body: { ids: string[] }) {
+    return this.s.batchRemove(body.ids ?? []);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
+  @Roles(Role.Admin)
+  @Audit('services', 'services:area_manage')
+  @RequirePerm('services:area_manage')
+  @ApiBearerAuth()
   @ApiOperation({ summary: '更新区域' })
   @ApiParam({ name: 'id', description: '区域 ID' })
   @ApiBody({ type: UpdateServiceAreaDto })

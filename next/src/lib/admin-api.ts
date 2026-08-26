@@ -645,6 +645,25 @@ export function createServiceArea(dto: {
   return api.post('/admin/services/areas', dto).then((r) => r.data);
 }
 
+// 批量开通区域（单次请求，避免逐条 POST 触发限流）
+export function batchCreateServiceAreas(items: {
+  province: string;
+  provinceCode: string;
+  city?: string;
+  cityCode?: string;
+  district?: string;
+  districtCode?: string;
+  isActive?: boolean;
+  sort?: number;
+}[]): Promise<{ created: number; updated: number }> {
+  return api.post('/admin/services/areas/batch', { items }).then((r) => r.data);
+}
+
+// 批量删除区域（单次请求）
+export function batchDeleteServiceAreas(ids: string[]): Promise<{ deleted: number }> {
+  return api.post('/admin/services/areas/batch-delete', { ids }).then((r) => r.data);
+}
+
 export function updateServiceArea(
   id: string,
   dto: { isActive?: boolean; sort?: number },
