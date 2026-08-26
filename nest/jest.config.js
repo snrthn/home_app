@@ -19,6 +19,7 @@ const config = {
     '!**/*.e2e.spec.ts',
     '!**/e2e/**',
     '!**/test/**',
+    '!**/install/**',
   ],
   coverageDirectory: '../coverage',
   coverageThreshold: {
