@@ -51,7 +51,7 @@ export default function MasterIncomeDetailsPage() {
             </span>
           </div>
           {isLoading ? (
-            <div className="field-hint" style={{ padding: '16px 0', textAlign: 'center' }}>
+            <div className="data-loading">
               加载中…
             </div>
           ) : list.length === 0 ? (

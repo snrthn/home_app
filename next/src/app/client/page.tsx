@@ -62,7 +62,7 @@ export default function ClientHome() {
         <h3 style={{ margin: '18px 4px 10px', fontSize: 16 }}>推荐服务</h3>
 
         {isLoading ? (
-          <p className="field-hint">加载中…</p>
+          <p className="data-loading">加载中…</p>
         ) : items.length === 0 ? (
           <div className="card">
             <EmptyState text="暂无可预约的服务项目。" />
