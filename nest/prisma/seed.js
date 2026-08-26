@@ -14,39 +14,46 @@ const { PrismaClient } = require('../node_modules/.prisma/client');
 // 导出供 InstallService 调用；独立运行时自动创建 prisma 实例
 async function seedPermissions(prisma) {
 
-// 资源 -> 权限分组（管理页展示用）
+// 资源 -> 权限分组（管理页展示用，与 admin-menu.ts 侧边栏分组名对齐）
 const GROUP = {
   users: '用户管理',
-  services: '服务管理',
+  services: '服务与类目',
   dispatch: '调度派单',
   orders: '订单管理',
   finance: '财务结算',
   reviews: '评价客服',
-  complaints: '投诉工单',
-  tickets: '投诉工单',
+  complaints: '评价客服',
+  tickets: '评价客服',
   content: '内容管理',
   reports: '数据报表',
   settings: '系统设置',
   logs: '系统设置',
 };
 
-// 动作 -> 中文名片段
+// 动作 -> 中文名片段（与 admin-menu.ts 菜单项文案对齐）
 const ACTION = {
   read: '查看',
   manage: '管理',
   toggle: '启停',
   verify: '审核',
   edit: '编辑',
-  refund: '退款',
-  moderate: '处置',
-  handle: '处理',
+  refund: '退款/售后',
+  moderate: '评价处置',
+  handle: '投诉处理',
   smart: '智能派单',
   pool: '抢单池',
-  category_manage: '类目管理',
-  item_manage: '项目管理',
-  area_manage: '区域管理',
-  role_manage: '角色权限',
+  category_manage: '服务类目',
+  item_manage: '服务项目',
+  area_manage: '服务区域',
+  role_manage: '角色与系统管理',
   view: '查看',
+  admin_read: '后台账号查看',
+  admin_manage: '后台账号管理',
+  customer_read: '客户管理查看',
+  customer_toggle: '客户启停',
+  master_read: '师傅管理查看',
+  master_toggle: '师傅启停',
+  master_verify: '师傅认证审核',
 };
 
 const CODES = [
