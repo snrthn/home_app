@@ -8,8 +8,6 @@ export default function ClientNoticesPage() {
     <>
       <PortalNavSetter
         title="平台公告"
-        showBack
-        backHref="/client"
         menu={[{ label: '关于我们', href: '/client/about' }]}
       />
       <div className="laoma-container">

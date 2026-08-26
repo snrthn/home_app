@@ -8,8 +8,6 @@ export default function MasterNoticesPage() {
     <>
       <PortalNavSetter
         title="平台公告"
-        showBack
-        backHref="/master"
         menu={[{ label: '关于我们', href: '/master/about' }]}
       />
       <div className="laoma-container">

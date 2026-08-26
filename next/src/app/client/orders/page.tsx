@@ -3,7 +3,6 @@
 import { useState, useCallback } from 'react';
 import { PortalNavSetter, StickyTabsSetter } from '@/components/PortalShell';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getMyOrders } from '@/lib/orders-api';
 import { QK } from '@/lib/query-keys';
@@ -14,7 +13,6 @@ import { formatDateTime } from '@/lib/format';
 import { CopyButton } from '@/components/CopyText';
 
 export default function ClientOrdersPage() {
-  const router = useRouter();
   const qc = useQueryClient();
   const [tab, setTab] = useState('all');
   const onTabChange = useCallback((key: string) => setTab(key), []);
@@ -38,12 +36,6 @@ export default function ClientOrdersPage() {
     <>
       <PortalNavSetter
         title="我的订单"
-        showBack
-        backHref="/client/me"
-        onBack={() => {
-          if (window.history.length > 1) router.back();
-          else router.push('/client/me');
-        }}
         menu={[{ label: '刷新数据', onClick: () => qc.invalidateQueries({ queryKey: QK.orderMine }) }]}
       />
       <StickyTabsSetter

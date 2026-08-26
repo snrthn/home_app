@@ -98,8 +98,6 @@ export default function ClientMe() {
     <>
       <PortalNavSetter
         title="我的"
-        showBack
-        backHref="/client"
         menu={[{ label: '关于我们', href: '/client/about' }]}
       />
 

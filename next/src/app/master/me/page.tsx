@@ -104,8 +104,6 @@ export default function MasterMe() {
     <>
       <PortalNavSetter
         title="我的"
-        showBack
-        backHref="/master"
         menu={[{ label: '关于我们', href: '/master/about' }]}
       />
 

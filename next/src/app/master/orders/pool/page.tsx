@@ -1,7 +1,6 @@
 'use client';
 
 import { PortalNavSetter } from '@/components/PortalShell';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getOrderPool, grabOrder, type OrderLite } from '@/lib/orders-api';
@@ -28,7 +27,6 @@ function fmtCreatedAt(s?: string) {
 }
 
 export default function MasterPoolPage() {
-  const router = useRouter();
   const toast = useToast();
   const qc = useQueryClient();
   const [grabTargetId, setGrabTargetId] = useState<string | null>(null);
@@ -72,12 +70,6 @@ export default function MasterPoolPage() {
     <>
       <PortalNavSetter
         title="接单池"
-        showBack
-        backHref="/master"
-        onBack={() => {
-          if (window.history.length > 1) router.back();
-          else router.push('/master');
-        }}
         menu={[{ label: '我的订单', href: '/master/orders/mine' }]}
       />
       <div className="laoma-container order-mod">
