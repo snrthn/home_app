@@ -73,6 +73,7 @@ export default function PortalTabBar({ role }: { role: AppRole }) {
             <Link
               key={tab.key}
               href={tab.href}
+              replace
               className={`portal-tab${active ? ' active' : ''}`}
               aria-current={active ? 'page' : undefined}
             >
