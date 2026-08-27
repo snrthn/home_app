@@ -80,6 +80,10 @@ model User {
   // 账号安全：改密/后台强制下线时 +1，JWT 校验比对使旧 token 失效
   tokenVersion  Int      @default(0)
 
+  // 登录失败锁定：连续失败 5 次锁定 15 分钟
+  failedLoginAttempts Int      @default(0)
+  lockedUntil          DateTime?
+
   // 登录审计
   lastLoginTime DateTime?
   lastLoginIp   String?  @db.Text
@@ -914,4 +918,16 @@ model TicketComment {
   @@index([ticketId])
 
   @@map("ticketcomment")
+}
+
+model SmsCode {
+  id        Int      @id @default(autoincrement())
+  phone     String
+  code      String
+  expires   DateTime
+  consumed  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([phone, consumed, expires])
+  @@map("smscode")
 }

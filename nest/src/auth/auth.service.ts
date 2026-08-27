@@ -23,8 +23,13 @@ interface CodeRecord {
 
 @Injectable()
 export class AuthService {
-  // MVP: 验证码存内存，不接真实短信网关，打印到控制台
+  // 内存缓存仅用于 dev mock 模式；生产模式验证码存 DB（SmsCode 表）
   private codes = new Map<string, CodeRecord>();
+  // per-phone 限流：记录上次发送时间
+  private lastSentAt = new Map<string, number>();
+  private readonly SMS_THROTTLE_MS = 60_000;
+  private readonly LOGIN_MAX_FAILURES = 5;
+  private readonly LOGIN_LOCK_MS = 15 * 60_000;
 
   constructor(
     private prisma: PrismaService,
@@ -37,12 +42,29 @@ export class AuthService {
   async sendSmsCode(
     phone: string,
   ): Promise<{ ok: boolean; code?: string; dev?: boolean }> {
+    // per-phone 限流：60 秒内不可重复发送
+    const lastSent = this.lastSentAt.get(phone);
+    if (lastSent && Date.now() - lastSent < this.SMS_THROTTLE_MS) {
+      const wait = Math.ceil((this.SMS_THROTTLE_MS - (Date.now() - lastSent)) / 1000);
+      throw new BadRequestException(`请 ${wait} 秒后再试`);
+    }
+    this.lastSentAt.set(phone, Date.now());
+
     const code = String(Math.floor(100000 + Math.random() * 900000));
-    this.codes.set(phone, { code, expires: Date.now() + 5 * 60 * 1000 });
+    const expires = new Date(Date.now() + 5 * 60 * 1000);
 
     // 读全局配置决定短信模式：mock=开发/演示（验证码回传前端 Toast）；real=真实阿里云下发
     const sysCfg = await this.sysConfig.getGlobal();
     if (sysCfg.smsMode === 'real') {
+      // 生产模式：验证码存 DB，支持多实例
+      await this.prisma.smsCode.create({
+        data: { phone, code, expires },
+      });
+      // 标记旧验证码为已消费（同手机号只保留最新一条有效）
+      await this.prisma.smsCode.updateMany({
+        where: { phone, consumed: false, id: { not: undefined } },
+        data: { consumed: true },
+      }).catch(() => {});
       try {
         await sendAliyunSms(
           {
@@ -64,12 +86,30 @@ export class AuthService {
     }
 
     // mock 模式：验证码随响应回传前端便于本地调试；后端日志保留
+    this.codes.set(phone, { code, expires: Date.now() + 5 * 60 * 1000 });
     // eslint-disable-next-line no-console
     console.log(`[SMS-MOCK] 验证码 ${code} (phone=${phone})`);
     return { ok: true, code, dev: true };
   }
 
-  private verifyCode(phone: string, code: string): boolean {
+  private async verifyCode(phone: string, code: string): Promise<boolean> {
+    const sysCfg = await this.sysConfig.getGlobal();
+
+    // 生产模式：从 DB 验证
+    if (sysCfg.smsMode === 'real') {
+      const record = await this.prisma.smsCode.findFirst({
+        where: { phone, consumed: false, expires: { gt: new Date() } },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (!record || record.code !== code) return false;
+      await this.prisma.smsCode.update({
+        where: { id: record.id },
+        data: { consumed: true },
+      });
+      return true;
+    }
+
+    // mock 模式：从内存验证
     const rec = this.codes.get(phone);
     if (!rec) return false;
     if (rec.expires < Date.now()) {
@@ -221,7 +261,7 @@ export class AuthService {
   }
 
   async registerCustomer(phone: string, code: string, nickname?: string) {
-    if (!this.verifyCode(phone, code))
+    if (!(await this.verifyCode(phone, code)))
       throw new BadRequestException('验证码无效或已过期');
     const exist = await this.prisma.user.findUnique({ where: { phone } });
     if (exist) throw new BadRequestException('该手机号已注册');
@@ -238,7 +278,7 @@ export class AuthService {
     if (!realName || !city) {
       throw new BadRequestException('师傅注册需填写真实姓名与所在城市');
     }
-    if (!this.verifyCode(phone, code))
+    if (!(await this.verifyCode(phone, code)))
       throw new BadRequestException('验证码无效或已过期');
     const exist = await this.prisma.user.findUnique({ where: { phone } });
     if (exist) throw new BadRequestException('该手机号已注册');
@@ -261,7 +301,7 @@ export class AuthService {
     code: string,
     role: 'customer' | 'master' = 'customer',
   ) {
-    if (!this.verifyCode(phone, code))
+    if (!(await this.verifyCode(phone, code)))
       throw new BadRequestException('验证码无效或已过期');
     let user = await this.prisma.user.findUnique({ where: { phone } });
     if (!user) {
@@ -274,6 +314,43 @@ export class AuthService {
     return await this.issueTokens(user);
   }
 
+  // 检查账号是否被锁定
+  private async checkLock(user: { id: string; failedLoginAttempts: number; lockedUntil: Date | null }) {
+    if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
+      const wait = Math.ceil((new Date(user.lockedUntil).getTime() - Date.now()) / 60000);
+      throw new BadRequestException(`账号已锁定，请 ${wait} 分钟后再试`);
+    }
+  }
+
+  // 登录失败：累加失败次数，达到阈值则锁定
+  private async recordLoginFailure(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return;
+    const attempts = (user.failedLoginAttempts ?? 0) + 1;
+    if (attempts >= this.LOGIN_MAX_FAILURES) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          failedLoginAttempts: 0,
+          lockedUntil: new Date(Date.now() + this.LOGIN_LOCK_MS),
+        },
+      });
+    } else {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { failedLoginAttempts: attempts },
+      });
+    }
+  }
+
+  // 登录成功：清空失败计数
+  private async recordLoginSuccess(userId: string) {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { failedLoginAttempts: 0, lockedUntil: null },
+    });
+  }
+
   async adminLogin(phone: string, password: string) {
     const user = await this.prisma.user.findUnique({ where: { phone } });
     if (!user || user.role !== Role.Admin)
@@ -281,8 +358,13 @@ export class AuthService {
     if (!user.passwordHash)
       throw new UnauthorizedException('管理员未设置密码');
     this.assertActive(user);
+    await this.checkLock(user);
     const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) throw new UnauthorizedException('密码错误');
+    if (!ok) {
+      await this.recordLoginFailure(user.id);
+      throw new UnauthorizedException('密码错误');
+    }
+    await this.recordLoginSuccess(user.id);
     return await this.issueTokens(user);
   }
 
@@ -292,10 +374,15 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { phone } });
     if (!user) throw new UnauthorizedException('账号不存在，请先使用验证码登录注册');
     this.assertActive(user);
+    await this.checkLock(user);
     if (!user.passwordHash)
       throw new UnauthorizedException('该账号尚未设置密码，请先登录后在个人中心设置');
     const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) throw new UnauthorizedException('密码错误');
+    if (!ok) {
+      await this.recordLoginFailure(user.id);
+      throw new UnauthorizedException('密码错误');
+    }
+    await this.recordLoginSuccess(user.id);
     return await this.issueTokens(user);
   }
 
@@ -322,7 +409,7 @@ export class AuthService {
   // 与 setPassword 区分：setPassword 用于「已登录且记得旧密码」改密；
   // 此方法用于「忘记密码」场景，OTP 本身即为身份凭证。
   async resetPasswordByCode(phone: string, code: string, newPassword: string) {
-    if (!this.verifyCode(phone, code)) {
+    if (!(await this.verifyCode(phone, code))) {
       throw new BadRequestException('验证码无效或已过期');
     }
     const user = await this.prisma.user.findUnique({ where: { phone } });

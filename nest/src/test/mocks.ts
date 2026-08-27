@@ -34,6 +34,7 @@ export function createMockPrisma() {
       findUnique: jest.fn(),
       findMany: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
     serviceItem: {
       findUnique: jest.fn(),
@@ -58,6 +59,16 @@ export function createMockPrisma() {
     },
     orderLog: {
       create: jest.fn(),
+    },
+    smsCode: {
+      create: jest.fn(),
+      findFirst: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+    },
+    user: {
+      findUnique: jest.fn(),
+      update: jest.fn(),
     },
     $transaction: jest.fn(),
   } as any;

@@ -17,15 +17,12 @@ import { SettlementsService } from '../settlements/settlements.service';
 import { PaymentsService } from '../payments/payments.service';
 import { CommissionService } from '../commission/commission.service';
 import type { CreateOrderDto } from './orders.dto';
+import { randomUUID } from 'node:crypto';
 
 function genOrderNo() {
-  return (
-    'LM' +
-    Date.now().toString(36).toUpperCase() +
-    Math.floor(Math.random() * 1000)
-      .toString()
-      .padStart(3, '0')
-  );
+  const ts = Date.now().toString(36).toUpperCase();
+  const rand = randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
+  return `LM${ts}${rand}`;
 }
 
 // 支付后（含平台托管）的状态：这些阶段取消都需走退款
@@ -235,12 +232,12 @@ export class OrdersService {
         note,
       },
     });
-    this.gateway?.broadcastOrderUpdate(updated);
+    this.gateway?.broadcastOrderUpdate(updated!);
     // 订单离开接单态（被接走/取消）：通知接单池刷新移除
     if (order.status === OrderStatus.PendingAccept && to !== OrderStatus.PendingAccept) {
-      this.gateway?.broadcastPoolUpdate(updated);
+      this.gateway?.broadcastPoolUpdate(updated!);
     }
-    return updated;
+    return updated!;
   }
 
   async grab(orderId: string, userId: string) {

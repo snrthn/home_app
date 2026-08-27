@@ -52,20 +52,38 @@ export class MastersService {
   }
 
   async approve(id: string, status: 'active' | 'disabled', reason?: string) {
-    // 审核通过时一并标记已实名认证（idVerified），使「已认证师傅」状态可体现
     const data: { status: 'active' | 'disabled'; idVerified?: boolean; rejectReason?: string | null } = { status };
     if (status === 'active') {
       data.idVerified = true;
-      data.rejectReason = null; // 通过时清空历史拒绝理由
+      data.rejectReason = null;
     } else if (reason !== undefined) {
       data.rejectReason = reason || null;
     }
-    return this.prisma.master.update({ where: { id }, data });
+    // 乐观锁：仅当仍为 pending 时才原子更新，防止并发审核
+    const locked = await this.prisma.master.updateMany({
+      where: { id, status: 'pending' },
+      data,
+    });
+    if (locked.count === 0) {
+      const existing = await this.prisma.master.findUnique({ where: { id } });
+      if (!existing) throw new NotFoundException('师傅不存在');
+      throw new BadRequestException(`该师傅当前状态为 ${existing.status}，不可重复审核`);
+    }
+    return this.prisma.master.findUnique({ where: { id } });
   }
 
   // 启用 / 停用（仅 active/disabled，pending 走审核流程）
   async setStatus(id: string, status: 'active' | 'disabled') {
-    return this.prisma.master.update({ where: { id }, data: { status } });
+    const locked = await this.prisma.master.updateMany({
+      where: { id, status: { in: ['active', 'disabled'] } },
+      data: { status },
+    });
+    if (locked.count === 0) {
+      const existing = await this.prisma.master.findUnique({ where: { id } });
+      if (!existing) throw new NotFoundException('师傅不存在');
+      throw new BadRequestException(`师傅当前状态为 ${existing.status}，不可直接启停`);
+    }
+    return this.prisma.master.findUnique({ where: { id } });
   }
 
   // 师傅完善自身专属资料（实名/身份证/技能/服务区域），按当前登录用户的 userId 定位
