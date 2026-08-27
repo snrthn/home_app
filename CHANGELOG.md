@@ -42,6 +42,16 @@
 - 未通过审核师傅不可接单：`GET /orders/pool` 和 `POST /orders/:id/grab` 增加 `master.status === 'active'` 校验
 - 新增 21 个单元测试（masters 6 + auth 9 + orders 6），全量 233 通过
 
+### Added — P3 事务原子性加固与余额对账
+- `transition()` 接受可选 `tx` 参数，支持在 `$transaction` 内执行乐观锁 + 状态流转 + orderLog
+- `confirm()` 包 `$transaction`：验收状态流转 + 结算创建原子化，结算失败状态回滚，消除"已验收但无结算"
+- `applyPaid()` 走 `transition()` 统一状态机入口 + `$transaction`：支付状态更新与订单状态流转原子化，补审计日志
+- `refund()` 第三方退款后 DB 操作包 `$transaction`：状态流转(Refunding→Refunded) + payment 标记 + 补偿单创建原子化，失败可重试
+- `grab()` / `assign()` 占位 + 流转包 `$transaction`：masterId 占位与 status 流转原子化，流转失败占位回滚，消除孤儿单
+- `releaseToMaster()` / `createCompensation()` P2002 catch + `masterId` null 守卫
+- `reconcile()` 余额一致性对账巡检：每 6 小时自动检测孤儿订单/不一致结算/负余额；管理端手动触发 `GET /settlements/reconcile`
+- 新增 14 个单元测试（settlements 5 + payments 4 + orders 5），全量 247 通过
+
 ### Fixed
 - 生产环境 socket 推送失效（`NEXT_PUBLIC_API_BASE` 加 `/v1` 后正则未同步，socket.io 连到错误 namespace）
 - 师傅端接单池 WebSocket 推送失效（`join-pool` / `subscribe-order` 未在 `connect` 回调中重新订阅，断线重连后收不到推送）

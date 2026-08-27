@@ -1,14 +1,30 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CommissionService } from '../commission/commission.service';
 import { round2, sub2, lt } from '../common/money';
 
 @Injectable()
-export class SettlementsService {
+export class SettlementsService implements OnModuleInit {
+  private readonly logger = new Logger(SettlementsService.name);
+  private readonly RECONCILE_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 小时
+
   constructor(
     private prisma: PrismaService,
     private commission: CommissionService,
   ) {}
+
+  onModuleInit() {
+    setInterval(() => {
+      this.reconcile().then((r) => {
+        if (r.issues.length > 0) {
+          this.logger.warn(`[对账巡检] 发现 ${r.issues.length} 项异常`);
+        }
+      }).catch((err) => {
+        this.logger.error('[对账巡检] 执行失败:', err);
+      });
+    }, this.RECONCILE_INTERVAL_MS);
+  }
 
   // ===== 管理端 =====
 
@@ -292,5 +308,128 @@ export class SettlementsService {
         orderBy: { createdAt: 'desc' },
       })
       .then((rows) => this.withRefundAmount(rows));
+  }
+
+  // ===== 余额一致性对账巡检 =====
+
+  /** 定时 + 手动触发：检测结算/提现/订单三类数据的一致性。
+   *  不自动修复，仅产出异常报告供运营介入。 */
+  async reconcile() {
+    const issues: any[] = [];
+
+    // 1. 孤儿订单：已验收(reviewed/evaluated)但无结算单
+    const orphanOrders = await this.prisma.order.findMany({
+      where: {
+        status: { in: ['reviewed', 'evaluated'] },
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        orderNo: true,
+        masterId: true,
+        amount: true,
+        status: true,
+      },
+    });
+    for (const o of orphanOrders) {
+      const s = await this.prisma.settlement.findUnique({
+        where: { orderId: o.id },
+        select: { id: true },
+      });
+      if (!s) {
+        issues.push({
+          type: 'orphan_order',
+          orderId: o.id,
+          orderNo: o.orderNo,
+          masterId: o.masterId,
+          amount: Number(o.amount),
+          detail: '已验收订单无结算单，需调用 syncForPaidOrders 补偿',
+        });
+      }
+    }
+
+    // 2. 不一致结算单：结算单存在但订单不在已验收/已退款状态
+    const settlements = await this.prisma.settlement.findMany({
+      where: { deletedAt: null },
+      select: {
+        id: true,
+        orderId: true,
+        masterId: true,
+        type: true,
+        status: true,
+        masterAmount: true,
+      },
+    });
+    for (const s of settlements) {
+      const o = await this.prisma.order.findUnique({
+        where: { id: s.orderId },
+        select: { status: true, orderNo: true },
+      });
+      if (o && !['reviewed', 'evaluated', 'refunded', 'refunding'].includes(o.status)) {
+        issues.push({
+          type: 'inconsistent_settlement',
+          settlementId: s.id,
+          orderId: s.orderId,
+          orderNo: o.orderNo,
+          orderStatus: o.status,
+          settlementType: s.type,
+          detail: `订单状态为 ${o.status} 但存在结算单`,
+        });
+      }
+    }
+
+    // 3. 负余额师傅：可提现 < 0（提现超出入账）
+    const creditedByMaster = await this.prisma.settlement.groupBy({
+      by: ['masterId'],
+      where: { status: 'credited', deletedAt: null },
+      _sum: { masterAmount: true },
+    });
+    const paidByMaster = await this.prisma.withdrawal.groupBy({
+      by: ['masterId'],
+      where: { status: 'paid', deletedAt: null },
+      _sum: { amount: true },
+    });
+    const pendingByMaster = await this.prisma.withdrawal.groupBy({
+      by: ['masterId'],
+      where: { status: 'pending', deletedAt: null },
+      _sum: { amount: true },
+    });
+    const masterIds = new Set([
+      ...creditedByMaster.map((r) => r.masterId),
+      ...paidByMaster.map((r) => r.masterId),
+      ...pendingByMaster.map((r) => r.masterId),
+    ]);
+    for (const masterId of masterIds) {
+      if (!masterId) continue;
+      const credited = round2(
+        creditedByMaster.find((r) => r.masterId === masterId)?._sum.masterAmount ?? 0,
+      );
+      const paid = round2(
+        paidByMaster.find((r) => r.masterId === masterId)?._sum.amount ?? 0,
+      );
+      const pending = round2(
+        pendingByMaster.find((r) => r.masterId === masterId)?._sum.amount ?? 0,
+      );
+      const available = sub2(credited, paid + pending);
+      if (available < 0) {
+        issues.push({
+          type: 'negative_balance',
+          masterId,
+          credited,
+          totalWithdrawn: paid,
+          withdrawing: pending,
+          available,
+          detail: `师傅可提现余额为负 ¥${available.toFixed(2)}，提现超出入账`,
+        });
+      }
+    }
+
+    return {
+      checkedAt: new Date().toISOString(),
+      totalMasters: masterIds.size,
+      totalSettlements: settlements.length,
+      totalOrders: orphanOrders.length,
+      issues,
+    };
   }
 }

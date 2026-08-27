@@ -76,6 +76,16 @@ export class SettlementsController {
     return this.s.syncForPaidOrders();
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard, PermGuard)
+  @Roles(Role.Admin)
+  @RequirePerm('finance:manage')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '余额一致性对账巡检' })
+  @Get('reconcile')
+  reconcile() {
+    return this.s.reconcile();
+  }
+
   /** 按订单查结算单（含退款补偿单），三端订单详情展示补偿说明用 */
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.Customer, Role.Master, Role.Admin)

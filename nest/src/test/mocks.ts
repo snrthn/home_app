@@ -23,12 +23,14 @@ export function createMockPrisma() {
       aggregate: jest.fn(),
       updateMany: jest.fn(),
       findMany: jest.fn(),
+      groupBy: jest.fn(),
     },
     withdrawal: {
       create: jest.fn(),
       aggregate: jest.fn(),
       updateMany: jest.fn(),
       findUnique: jest.fn(),
+      groupBy: jest.fn(),
     },
     master: {
       findUnique: jest.fn(),

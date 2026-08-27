@@ -618,7 +618,7 @@ docker compose -f docker-compose.prod.yml down
 | `pnpm prisma:generate` | 生成 Prisma Client |
 | `pnpm prisma:migrate` | 执行数据库迁移 |
 | `pnpm prisma:studio` | Prisma Studio 数据库 GUI |
-| `pnpm test` | 单元测试（P0 纯函数 + P1 金额守卫，195 tests） |
+| `pnpm test` | 单元测试（P0 纯函数 + P1 金额守卫 + P2 竞态防护 + P3 事务原子性，247 tests） |
 | `pnpm test:e2e` | E2E 测试（正向全链 + 售后链，16 tests，需先启动后端） |
 
 **后端 `nest/`**
@@ -628,7 +628,7 @@ docker compose -f docker-compose.prod.yml down
 | `pnpm dev` | 热重载启动（`nest start --watch`） |
 | `pnpm build` | 编译到 `dist/` |
 | `pnpm start:prod` | 生产启动（`node dist/main`，需先 build） |
-| `pnpm test` | 单元测试（P0 纯函数 + P1 金额守卫，195 tests） |
+| `pnpm test` | 单元测试（P0 纯函数 + P1 金额守卫 + P2 竞态防护 + P3 事务原子性，247 tests） |
 | `pnpm test:e2e` | E2E 测试（正向全链 + 售后链，16 tests） |
 | `pnpm lint` | ESLint |
 | `pnpm seed` | 写入权限种子数据（安装向导自动调用） |
@@ -642,12 +642,36 @@ docker compose -f docker-compose.prod.yml down
 | TypeScript | tsc EXIT=0 | 三端 `strict: true`，零 `@ts-ignore` |
 | `any` 治理 | 288→139（-52%） | 保留的为第三方 SDK / Prisma JSON / catch 块 |
 | ESLint | 0 error / 90 warn | `no-explicit-any` warn 级 |
-| 单元测试 | 10 suites / 195 tests | P0 纯函数 + P1 金额守卫 |
+| 单元测试 | 14 suites / 247 tests | P0 纯函数 + P1 金额守卫 + P2 竞态防护 + P3 事务原子性 |
 | E2E 测试 | 2 suites / 16 tests | 正向全链 + 售后链 |
 | CI 门禁 | typecheck + lint + commitlint | 失败即阻断部署 |
 | Git 规范 | commitlint + husky | Conventional Commits，本地 + CI 双重拦截 |
 
 详见 `docs/engineering.md`（E-01 ~ E-14）。
+
+## 安全加固与资金流防护
+
+### P2 竞态防护
+
+| 防护点 | 机制 |
+|--------|------|
+| 师傅审核 | `updateMany` + `where: { status: 'pending' }` 乐观锁，防止并发重复审核 |
+| 订单号唯一 | `randomUUID` 替代 `Math.random`，高并发碰撞概率趋近零 |
+| SMS 限流 | per-phone 60 秒发送间隔；验证码从内存 `Map` 改为 DB `SmsCode` 表存储，支持多实例 |
+| 登录安全 | 连续 5 次失败锁定 15 分钟；管理员和用户登录均受保护 |
+| 师傅状态校验 | 未审核（pending）/已禁用（disabled）师傅不可访问接单池、不可抢单 |
+
+### P3 事务原子性加固
+
+| 链路 | 防护机制 |
+|------|----------|
+| 验收 → 结算 | `confirm()` 包 `$transaction`：状态流转 + 结算创建原子化，结算失败状态回滚 |
+| 支付 → 入池 | `applyPaid()` 走 `transition()` 统一状态机入口 + `$transaction`：支付状态更新与订单状态流转原子化 |
+| 退款链路 | `refund()` 第三方退款后 DB 操作包 `$transaction`：状态流转(Refunding→Refunded) + payment 标记 + 补偿单创建原子化 |
+| 抢单 | `grab()` 占位 + 流转包 `$transaction`：masterId 占位与 status 流转原子化，流转失败占位回滚 |
+| 派单 | `assign()` 同抢单事务化口径 |
+| 结算并发 | `releaseToMaster()` / `createCompensation()` P2002 catch + `masterId` null 守卫 |
+| 余额对账 | `reconcile()` 定时巡检（6h）：孤儿订单、不一致结算、负余额检测 |
 
 ## 文档索引
 

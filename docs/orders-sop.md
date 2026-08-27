@@ -97,10 +97,10 @@ Cancelled(已取消,终态,无退款)        Refunding(退款中)          Accep
 |---|---|---|---|
 | POST | `/orders` | Customer | 下单；`status=PendingPayment`（待支付，支付前置）；`serviceSnapshot` + `commissionSnapshot` 双快照、`city=addr.city`、`amount=item.price`；地域闸门校验开通区域 |
 | GET | `/orders/mine` | Customer | 我的订单（含 serviceItem / master） |
-| GET | `/orders/pool` | Master（**已加鉴权 + 地域过滤**） | 抢单池，按「所在地 ∪ 接单范围」并集过滤 `PendingAccept && masterId:null`（仅支付成功入池） |
+| GET | `/orders/pool` | Master（**已加鉴权 + 地域过滤 + 状态校验**） | 抢单池，按「所在地 ∪ 接单范围」并集过滤 `PendingAccept && masterId:null`（仅支付成功入池）；**师傅 `status !== 'active'` 时返回空数组**（未审核/已禁用不可见池） |
 | GET | `/orders/master?city=` | Master | 师傅视角订单（含客户手机号/昵称/本单评价） |
 | GET | `/orders/all` | Admin | 全部订单（后台台账基础） |
-| POST | `/orders/:id/grab` | Master | 抢单：`updateMany` 原子抢占（`status=PendingAccept && masterId:null`，count=0 即已被接走）+ 转 `Accepted` |
+| POST | `/orders/:id/grab` | Master | 抢单：`updateMany` 原子抢占（`status=PendingAccept && masterId:null`，count=0 即已被接走）+ 转 `Accepted`；**师傅 `status !== 'active'` 时 403 Forbidden**（未审核/已禁用不可抢单） |
 | POST | `/orders/:id/assign` | Admin | 指派：`orders:edit` 权限 + 审计 |
 | POST | `/orders/:id/depart` | Master | 师傅出发，转 `Departing`（越权校验 `masterId === mid`） |
 | POST | `/orders/:id/generate-arrive-code` | Customer | 客户生成到达码（本人订单） |
@@ -124,13 +124,15 @@ Cancelled(已取消,终态,无退款)        Refunding(退款中)          Accep
 2. **平台担保托管 + 分账**：`applyPaid()`（`payments.service.ts:143`）把订单 `PendingPayment→PendingAccept`、支付单置 `paid`，资金视为进入平台托管；直到客户 `confirm` 验收才经 `settlements.releaseToMaster` 生成常规结算单（`type=normal`，即时入账 `credited`）。平台留成按分账规则引擎（`CommissionRule`）在退款/结算时拆分，不再「全额给师傅」（见下条）。
 3. **快照隔离（双快照）**：`create` 时 `serviceSnapshot: item`（服务项整行）+ `commissionSnapshot`（分账规则快照，按 服务项→类目树→全局 三级解析并固化）写入订单（R-新4），后续改价/调佣金不影响历史订单。
 4. **地域跟随订单 + 地域闸门**：`city = addr.city`（取自用户收货地址），服务项本身不绑区域；地域闸门（ServiceArea）已接入 `create()` 校验（P0）+ `pool()`/`grab()` 按「所在地 ∪ 接单范围」并集过滤（P1），2026-08-20（详见 HANDOFF.md 第 10 节）。
-5. **抢单 / 派单双模式并存**：师傅 `grab`（原子抢占）或管理员 `assign`，都到 `Accepted`。
-6. **PaymentProvider 接缝（可插拔支付通道）**：`payments/provider.ts` 定义 `PaymentProvider` 接口（createCharge / verifyNotify / refund）；order 侧只依赖接口，后期微信/支付宝只需新增实现类 + admin 配置切换，业务零改动。`getProvider()` 现按 `MerchantConfig` 切换（`enabled && provider!=='mock'` 时返回 Wechat/Alipay 实现，否则恒 mock）。
-7. **Mock 走「异步回调」范式**：`MockPaymentProvider.createCharge` 返回 `payParams:{type:'mock',token:tradeNo}`；前端点「模拟支付」后调 `POST /payments/mock/notify` 携带 `token`，经 `verifyNotify` 校验后 `applyPaid`。**该回调路径与真实通道 notify 完全一致**，保证后期换真通道仅配置切换、代码零改动。
-8. **阶梯退款**：支付后任意阶段取消 → `Refunding` → 调 `payments.refund` → 按 `commissionSnapshot` 的 `refundPolicy` 分档（默认：`departing` 退 80% / `arrived` 退 50% / 其余全额），平台留成 + 师傅补偿拆分写日志；`masterCompensation>0` 时生成补偿结算单（`type=compensation`，`pending`，待 admin `POST /payments/:id/confirm` 审核入账）；最后**统一走状态机** `→Refunded`（`action='refund'` 写 orderLog）。仅 `PendingPayment` 阶段取消 = `Cancelled`（无退款）。
-9. **审计轨迹**：`transition()` 每次写 `orderLog`；`applyPaid`/`refund` 也各写一条 orderLog（action=pay/refund）。
-10. **商户密钥不落前端**：`MerchantConfigStore`（`merchant-config.store.ts`）对 `appSecret/apiKey/certContent` 做 AES-256-GCM 加密落盘 `config/merchant.json`；`getConfig()` 回显脱敏副本（删敏感字段），前端绝不回显明文。
-11. **实时推送（WS 网关已挂载）**：`create`/`transition`/`applyPaid` 经 `gateway?.broadcast...` 推 `new-order`（`to('pool')`）/`order-update`（`to('order:<id>')`）；网关已挂入 `app.module`（`orders.module`/`payments.module` 均 import），JWT 鉴权 + 房间订阅（`subscribe-order`/`unsubscribe-order`/`join-pool`/`leave-pool`）。**剩余 P2：pool 广播未按区域过滤**。
+5. **抢单 / 派单双模式并存**：师傅 `grab`（原子抢占）或管理员 `assign`，都到 `Accepted`。`grab`/`assign` 占位与流转在 `$transaction` 内原子执行，流转失败占位回滚。
+6. **师傅状态约束（P2 安全加固）**：`GET /orders/pool` 和 `POST /orders/:id/grab` 均校验 `master.status === 'active'`；pending（未审核）/ disabled（已禁用）师傅不可见池、不可抢单（pool 返回空数组，grab 抛 403）。
+7. **PaymentProvider 接缝（可插拔支付通道）**：`payments/provider.ts` 定义 `PaymentProvider` 接口（createCharge / verifyNotify / refund）；order 侧只依赖接口，后期微信/支付宝只需新增实现类 + admin 配置切换，业务零改动。`getProvider()` 现按 `MerchantConfig` 切换（`enabled && provider!=='mock'` 时返回 Wechat/Alipay 实现，否则恒 mock）。
+8. **Mock 走「异步回调」范式**：`MockPaymentProvider.createCharge` 返回 `payParams:{type:'mock',token:tradeNo}`；前端点「模拟支付」后调 `POST /payments/mock/notify` 携带 `token`，经 `verifyNotify` 校验后 `applyPaid`。**该回调路径与真实通道 notify 完全一致**，保证后期换真通道仅配置切换、代码零改动。
+9. **阶梯退款**：支付后任意阶段取消 → `Refunding` → 调 `payments.refund` → 按 `commissionSnapshot` 的 `refundPolicy` 分档（默认：`departing` 退 80% / `arrived` 退 50% / 其余全额），平台留成 + 师傅补偿拆分写日志；`masterCompensation>0` 时生成补偿结算单（`type=compensation`，`pending`，待 admin `POST /payments/:id/confirm` 审核入账）；最后**统一走状态机** `→Refunded`（`action='refund'` 写 orderLog）。仅 `PendingPayment` 阶段取消 = `Cancelled`（无退款）。**退款链路事务化（P3）**：provider 退款后 DB 操作（状态流转 + payment 标记 + 补偿单）包在 `$transaction` 内，任一步失败回滚，订单保持 `Refunding` 可重试。
+10. **审计轨迹**：`transition()` 每次写 `orderLog`；`applyPaid` 走 `transition()` 统一入口（含 `action='pay'` orderLog）；`refund` 也各写一条 orderLog（action=refund）。
+11. **商户密钥不落前端**：`MerchantConfigStore`（`merchant-config.store.ts`）对 `appSecret/apiKey/certContent` 做 AES-256-GCM 加密落盘 `config/merchant.json`；`getConfig()` 回显脱敏副本（删敏感字段），前端绝不回显明文。
+12. **实时推送（WS 网关已挂载）**：`create`/`transition`/`applyPaid` 经 `gateway?.broadcast...` 推 `new-order`（`to('pool')`）/`order-update`（`to('order:<id>')`）；网关已挂入 `app.module`（`orders.module`/`payments.module` 均 import），JWT 鉴权 + 房间订阅（`subscribe-order`/`unsubscribe-order`/`join-pool`/`leave-pool`）。**剩余 P2：pool 广播未按区域过滤**。
+13. **余额对账巡检（P3）**：`SettlementsService.reconcile()` 每 6 小时自动执行，检测孤儿订单（已验收无结算）、不一致结算单、师傅负余额；管理端可手动触发 `GET /settlements/reconcile`。
 
 ---
 

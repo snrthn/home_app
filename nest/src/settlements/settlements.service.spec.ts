@@ -287,3 +287,76 @@ describe('SettlementsService.reject - 补偿单驳回', () => {
     );
   });
 });
+
+describe('SettlementsService.reconcile - 余额一致性对账', () => {
+  function setupReconcileService(opts?: {
+    orders?: any[];
+    settlements?: any[];
+    creditedByMaster?: any[];
+    paidByMaster?: any[];
+    pendingByMaster?: any[];
+  }) {
+    const prisma = createMockPrisma();
+    const commission = createMockCommission();
+
+    prisma.order.findMany.mockResolvedValue(opts?.orders ?? []);
+    prisma.settlement.findMany.mockResolvedValue(opts?.settlements ?? []);
+    prisma.settlement.findUnique.mockResolvedValue(null);
+    prisma.settlement.groupBy.mockResolvedValue(opts?.creditedByMaster ?? []);
+    prisma.withdrawal.groupBy.mockResolvedValue(opts?.paidByMaster ?? []);
+
+    // withdrawal.groupBy needs to handle two calls (paid + pending)
+    const paidReturn = opts?.paidByMaster ?? [];
+    const pendingReturn = opts?.pendingByMaster ?? [];
+    let groupByCallCount = 0;
+    prisma.withdrawal.groupBy.mockImplementation(() => {
+      groupByCallCount++;
+      return Promise.resolve(groupByCallCount === 1 ? paidReturn : pendingReturn);
+    });
+
+    const service = new SettlementsService(prisma, commission);
+    return { service, prisma };
+  }
+
+  it('无异常数据 → issues 为空', async () => {
+    const { service } = setupReconcileService({
+      orders: [],
+      settlements: [],
+      creditedByMaster: [],
+      paidByMaster: [],
+      pendingByMaster: [],
+    });
+    const result = await service.reconcile();
+    expect(result.issues).toHaveLength(0);
+  });
+
+  it('已验收订单无结算单 → orphan_order', async () => {
+    const { service, prisma } = setupReconcileService({
+      orders: [{ id: 'o-1', orderNo: 'LM001', masterId: 'm-1', amount: 100, status: 'reviewed' }],
+    });
+    prisma.settlement.findUnique.mockResolvedValue(null);
+    const result = await service.reconcile();
+    expect(result.issues).toContainEqual(
+      expect.objectContaining({
+        type: 'orphan_order',
+        orderId: 'o-1',
+      }),
+    );
+  });
+
+  it('师傅负余额 → negative_balance', async () => {
+    const { service } = setupReconcileService({
+      creditedByMaster: [{ masterId: 'm-1', _sum: { masterAmount: 100 } }],
+      paidByMaster: [{ masterId: 'm-1', _sum: { amount: 150 } }],
+      pendingByMaster: [],
+    });
+    const result = await service.reconcile();
+    expect(result.issues).toContainEqual(
+      expect.objectContaining({
+        type: 'negative_balance',
+        masterId: 'm-1',
+        available: -50,
+      }),
+    );
+  });
+});
