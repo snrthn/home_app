@@ -33,6 +33,15 @@
 - 根路径按权重自动跳转（用户端 > 师傅端 > 管理端）
 - 401 被踢时管理端自动定位到管理员登录 tab
 
+### Added — P2 竞态防护与安全加固
+- 师傅审核乐观锁：`approve()` / `setStatus()` 改用 `updateMany` + `where` 条件原子更新，防止并发重复审核
+- 订单号防重复：`genOrderNo()` 改用 `randomUUID()` 替代 `Math.random()`，碰撞概率趋近零
+- SMS per-phone 限流：同一手机号 60 秒内不可重复发送验证码
+- SMS 验证码 DB 存储：real 模式验证码写入 `SmsCode` 表，支持多实例部署（mock 模式仍用内存）
+- 登录失败锁定：连续 5 次密码错误锁定 15 分钟，登录成功自动清零
+- 未通过审核师傅不可接单：`GET /orders/pool` 和 `POST /orders/:id/grab` 增加 `master.status === 'active'` 校验
+- 新增 21 个单元测试（masters 6 + auth 9 + orders 6），全量 233 通过
+
 ### Fixed
 - 生产环境 socket 推送失效（`NEXT_PUBLIC_API_BASE` 加 `/v1` 后正则未同步，socket.io 连到错误 namespace）
 - 师傅端接单池 WebSocket 推送失效（`join-pool` / `subscribe-order` 未在 `connect` 回调中重新订阅，断线重连后收不到推送）

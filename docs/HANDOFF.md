@@ -177,7 +177,7 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 
 | 模块 | 路径 | 要点 |
 |---|---|---|
-| auth | `nest/src/auth/` | JWT(access+refresh) + bcrypt；手机号验证码 + 管理员账密 |
+| auth | `nest/src/auth/` | JWT(access+refresh) + bcrypt；手机号验证码 + 管理员账密；SMS 限流(per-phone 60s) + 验证码 DB 存储；登录失败 5 次锁定 15 分钟 |
 | orders | `nest/src/orders/` | 状态机 transition() + canTransition 校；create 写快照；confirm 释放金 |
 | payments | `nest/src/payments/` | Provider 接缝(mock/wechat/alipay)；AES-256-GCM 加密落 `config/merchant.json` |
 | settlements | `nest/src/settlements/` | 余额实时聚合(无冗余字段)；releaseToMaster 幂等 |
@@ -334,7 +334,7 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 
 ---
 
-## 13. 当前完成状态（截至 2026-08-24）
+## 13. 当前完成状态（截至 2026-08-27）
 
 ### 已完成 ✅
 
@@ -396,6 +396,8 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 - [x] 生产环境模拟支付不触发新单推送修复（2026-08-25）：`mockNotify()` 调用 `getProvider()`，生产环境配置了真实支付通道时返回 wechat/alipay，mock token 校验失败导致 `applyPaid` 不执行、`broadcastNewOrder` 不触发；修复为 `mockNotify` 直接使用 `this.mock`，语义上模拟支付回调就该走 mock 校验
 - [x] WS join-pool 遗漏师傅所在地房间修复（2026-08-25）：`handleJoinPool` 只按 `serviceAreas` 加入 zone 房间，漏掉了师傅所在地，导致「所在地订单在 API 池子里可见但 WS 收不到推送」；修复为与 `masterCoversOrder` 同口径：所在地 ∪ 接单范围 并集加入房间；**根因证据链：ECS 日志 + DB 直查（师傅所在地甘肃/接单范围北京，订单全在甘肃，WS 只加入北京房间）**
 - [x] 下单成功后返回逻辑修复（2026-08-25）：`router.push` 改 `router.replace`，避免历史栈中保留已失效的下单页导致重复下单
+- [x] 未通过审核师傅不可接单修复（2026-08-27）：`GET /orders/pool` 和 `POST /orders/:id/grab` 增加 `master.status === 'active'` 校验，pending/disabled 师傅获取空池或 ForbiddenException
+- [x] P2 竞态防护与安全加固（2026-08-27，详见第 24 节）：师傅审核乐观锁 + 订单号 randomUUID 防重复 + SMS per-phone 60 秒限流与 DB 存储 + 登录失败 5 次锁定 15 分钟 + 21 个新单元测试（全量 233 通过）
 
 ### 待办 / 已知缺口
 
@@ -521,7 +523,7 @@ NEXT_PUBLIC_API_BASE=http://127.0.0.1:3721/api next dev -p 3824
 cd nest && PORT=3721 pnpm start:dev
 
 # 测试（根目录直接跑）
-pnpm test          # 单元测试（P0 纯函数 + P1 金额守卫，195 tests）
+pnpm test          # 单元测试（P0 纯函数 + P1 金额守卫 + P2 竞态防护，233 tests）
 pnpm test:e2e      # E2E 测试（需先启动后端 3721 端口）
 ```
 
@@ -767,6 +769,54 @@ UPDATE systemconfig SET installed = 1, installedAt = NOW() WHERE id = 1;
 ```
 
 然后重启后端清除缓存即可。
+
+---
+
+## 24. P2 竞态防护与安全加固（2026-08-27 落地）
+
+> 覆盖：师傅审核乐观锁、订单号防重复、SMS 限流与 DB 存储、登录失败锁定
+
+### 24.1 师傅审核乐观锁
+
+- **问题**：管理员并发审核同一师傅时，`approve()` / `setStatus()` 使用 `findUnique → update` 两步操作，中间窗口可被另一请求抢占，导致重复审核或状态不一致
+- **修复**：改为 `updateMany` + `where` 条件原子更新——`approve()` 仅当 `status === 'pending'` 时更新（`where: { id, status: 'pending' }`）；`setStatus()` 仅当 `status in ['active', 'disabled']` 时更新。`count === 0` 时查当前状态给出明确错误（`BadRequestException`）
+- **文件**：`nest/src/masters/masters.service.ts`
+- **测试**：`masters.concurrency.spec.ts`（6 个用例：正常审核/驳回、并发 count=0 拦截、不存在 404、setStatus 正常/并发）
+
+### 24.2 订单号高并发防重复
+
+- **问题**：`genOrderNo()` 用 `Date.now() + Math.random()` 生成订单号，高并发下时间戳相同且 `Math.random()` 碰撞概率不可忽略
+- **修复**：改用 `randomUUID()` 替代 `Math.random()`，取前 8 位十六进制，碰撞概率趋近零
+- **文件**：`nest/src/orders/orders.service.ts`
+
+### 24.3 SMS per-phone 限流 + DB 存储
+
+- **问题**：① 无发送频率限制，可被短信轰炸；② 验证码存内存 `Map`，多实例部署时不共享
+- **修复**：
+  - **限流**：`sendSmsCode()` 新增 `lastSentAt` Map，同一手机号 60 秒内不可重复发送，超限抛 `BadRequestException`（含剩余秒数）
+  - **DB 存储**：real 模式验证码写入 `SmsCode` 表（`phone`/`code`/`expires`/`consumed`），`verifyCode()` 从 DB 查询验证；mock 模式仍用内存 `Map`（开发调试用）
+  - **旧码失效**：新码创建后 `updateMany` 标记同手机号旧码为 `consumed=true`
+  - **索引**：`SmsCode` 表 `@@index([phone, consumed, expires])` 保证查询性能
+- **Schema**：`prisma/schema.prisma` 新增 `SmsCode` 模型
+- **文件**：`nest/src/auth/auth.service.ts`
+
+### 24.4 登录失败锁定
+
+- **问题**：密码登录无失败次数限制，可被暴力破解
+- **修复**：
+  - **计数**：`User` 模型新增 `failedLoginAttempts Int @default(0)` + `lockedUntil DateTime?`
+  - **锁定逻辑**：`recordLoginFailure()` 累加失败次数，达到 5 次设置 `lockedUntil = now + 15min` 并清零计数
+  - **拦截**：`checkLock()` 在 `adminLogin()` / `loginByPassword()` 开头检查 `lockedUntil`，未过期抛 `BadRequestException`（含剩余分钟数）；过期自动放行
+  - **成功清零**：`recordLoginSuccess()` 登录成功时清空 `failedLoginAttempts` 和 `lockedUntil`
+- **Schema**：`prisma/schema.prisma` 的 `User` 模型新增字段
+- **文件**：`nest/src/auth/auth.service.ts`
+- **测试**：`auth.service.spec.ts`（9 个用例：SMS 首次发送/重复发送拦截/不同手机号互不影响 + 密码错误计数/5 次锁定/已锁定拒登/锁定过期可登录/成功清零/loginByPassword 受保护）
+
+### 24.5 部署须知
+
+- `prisma db push` 会自动创建 `smscode` 表和 `User` 新字段（均为加列/加表，不删数据）
+- mock 模式不受影响（限流仍生效，验证码仍走内存）
+- 切 real 模式后验证码从 DB 读写，支持多实例
 
 ---
 

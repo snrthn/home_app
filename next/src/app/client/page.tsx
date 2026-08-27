@@ -59,7 +59,7 @@ export default function ClientHome() {
         menu={[{ label: '关于我们', href: '/client/about' }]}
       />
       <div className="laoma-container">
-        <h3 style={{ margin: '8px 4px 10px', fontSize: 16 }}>推荐服务</h3>
+        <h3 style={{ margin: '0 0 10px', fontSize: 16 }}>推荐服务</h3>
 
         {isLoading ? (
           <p className="data-loading">加载中…</p>

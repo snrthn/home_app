@@ -117,6 +117,7 @@
 - **影响**：任意字符串（非手机号）都能触发发码；real 模式下等于免费短信轰炸接口（若接真网关无频控成本风险），体验上无效号码也能「获取验证码」
 - **建议**：`phone` 加 `@IsMobilePhone('zh-CN')`（class-validator 内置）；需确认 mock 模式测试假号（如 `13800000000`）仍合法——合法格式内假号不受影响；若存在故意用非手机号串的场景再单独评估
 - **状态**：📋 待处理（低风险快改，1 行 DTO；待虎哥确认 mock 假号兼容后动手）
+- **P2 部分缓解**（2026-08-27）：`sendSmsCode()` 已加 per-phone 60 秒限流，real 模式验证码改 DB 存储（`SmsCode` 表），短信轰炸成本大幅上升；但 DTO 层手机号格式校验仍待补 `@IsMobilePhone('zh-CN')`
 
 #### E-13　Git 提交信息无规范
 
@@ -273,7 +274,7 @@
 | E-09 | 前端统一错误边界                            | P3  | 📋 待处理 | 视 api 封装现状                                             |
 | E-10 | 依赖安全审计                              | P3  | 📋 待处理 | pnpm audit / Dependabot                                |
 | E-11 | 前端性能/可访问性                           | P3  | 📋 待处理 | 排期后续                                                   |
-| E-12 | 短信验证码 DTO 校验不严（`phone` 仅 `IsString`） | P1  | 📋 待处理 | `POST /api/auth/send-code` 传 `phone:"123"` 可通过校验并真发码；建议 `IsMobilePhone`，需确认 mock 假号测试兼容性（见 §1 P1） |
+| E-12 | 短信验证码 DTO 校验不严（`phone` 仅 `IsString`） | P1  | 📋 待处理 | `POST /api/auth/send-code` 传 `phone:"123"` 可通过校验并真发码；建议 `IsMobilePhone`，需确认 mock 假号测试兼容性（见 §1 P1）；**P2 部分缓解**：per-phone 60s 限流 + DB 存储 已加 |
 | E-13 | Git 提交信息无规范                       | P1  | ✅ 已完成 | commitlint + husky + .gitmessage 模板 + CI 校验步骤；详见 [`docs/commit-convention.md`](commit-convention.md) |
 | E-14 | TypeScript `any` 类型安全治理            | P1  | ✅ 已完成 | 288→139 处 any（-149，52%）；新建 @CurrentUser 装饰器 + 4 DTO + 3 interface + Gateway 类型；三端 tsc EXIT=0；211 tests PASS |
 | E-15 | API 缺少版本控制                         | P2  | ✅ 已完成 | `enableVersioning(URI, v1)`；前端 baseURL + E2E 路径全替换 `/api/v1/`；附修 ServiceArea upsert 竞态；tsc+lint+211 tests PASS |
