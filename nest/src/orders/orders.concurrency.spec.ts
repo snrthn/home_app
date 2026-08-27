@@ -197,4 +197,61 @@ describe('OrdersService 竞态 & 幂等防护', () => {
       expect(result.status).toBe(OrderStatus.PendingPayment);
     });
   });
+
+  describe('confirm() 事务原子性', () => {
+    function setupConfirmService(opts?: { releaseFail?: boolean }) {
+      const prisma = createMockPrisma();
+      const commission = createMockCommission();
+      const payments = createMockOrders();
+      const settlements = createMockSettlements();
+      const gateway = createMockGateway();
+
+      const order = makeOrder({
+        status: OrderStatus.PendingConfirm,
+        customerId: CUSTOMER_ID,
+        masterId: MASTER_ID,
+      });
+      prisma.order.findUnique.mockResolvedValue(order);
+      prisma.order.updateMany.mockResolvedValue({ count: 1 });
+      prisma.orderLog.create.mockResolvedValue({ id: 'log-1' });
+
+      // $transaction mock：执行回调并传入 prisma 作为 tx
+      prisma.$transaction.mockImplementation(async (fn: any) => fn(prisma));
+
+      // releaseToMaster mock：可注入失败
+      settlements.releaseToMaster.mockImplementation(async () => {
+        if (opts?.releaseFail) throw new Error('结算创建失败');
+        return { id: 'settle-1', orderId: ORDER_ID };
+      });
+
+      const service = new OrdersService(prisma, settlements, payments as any, commission, gateway);
+      return { service, prisma, settlements };
+    }
+
+    it('confirm() 在 $transaction 内执行 transition + releaseToMaster', async () => {
+      const { service, prisma, settlements } = setupConfirmService();
+      await service.confirm(ORDER_ID, CUSTOMER_ID);
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      // transition 乐观锁在事务内执行
+      expect(prisma.order.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: ORDER_ID, status: OrderStatus.PendingConfirm },
+          data: { status: OrderStatus.Reviewed },
+        }),
+      );
+      // releaseToMaster 收到 tx 参数
+      expect(settlements.releaseToMaster).toHaveBeenCalledWith(ORDER_ID, expect.anything());
+    });
+
+    it('releaseToMaster 失败 → 事务抛错（不出现已验收但无结算）', async () => {
+      const { service } = setupConfirmService({ releaseFail: true });
+      await expect(service.confirm(ORDER_ID, CUSTOMER_ID)).rejects.toThrow('结算创建失败');
+    });
+
+    it('非订单所有者 → ForbiddenException', async () => {
+      const { service } = setupConfirmService();
+      await expect(service.confirm(ORDER_ID, 'other-user')).rejects.toThrow();
+    });
+  });
 });

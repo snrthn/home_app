@@ -194,8 +194,9 @@ export class OrdersService {
   /**
    * 订单状态机执行器（全局唯一）：
    * 统一做 canTransition 校验 + 写库 + 统一日志 + 实时广播。
-   * 评价(reviews)、退款(payments) 等业务动作统一复用本方法，不再各自手写 update+broadcast。
-   * @param action 写入 orderLog 的语义动作，默认 'transition'；评价传 'review'、退款传 'refund'，保留业务语义便于后台追溯。
+   * 评价(reviews)、退款(payments)、支付回调(payments.applyPaid) 等业务动作统一复用本方法。
+   * @param action 写入 orderLog 的语义动作，默认 'transition'；评价传 'review'、退款传 'refund'、支付传 'pay'。
+   * @param tx 可选的 Prisma 事务客户端，传入时所有 DB 操作在事务内执行（乐观锁在事务内仍互斥）。
    */
   public async transition(
     orderId: string,
@@ -204,25 +205,27 @@ export class OrdersService {
     note?: string,
     extraData?: { cancelReason: string },
     action = 'transition',
+    tx?: any,
   ) {
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    const db = tx ?? this.prisma;
+    const order = await db.order.findUnique({ where: { id: orderId } });
     if (!order) throw new NotFoundException('订单不存在');
     if (!canTransition(order.status, to))
       throw new BadRequestException(
         `状态不可从 ${order.status} 流转到 ${to}`,
       );
     // 乐观锁：仅当当前状态与读取时一致才更新，防止并发流转绕过状态机
-    const locked = await this.prisma.order.updateMany({
+    const locked = await db.order.updateMany({
       where: { id: orderId, status: order.status },
       data: { status: to, ...(extraData ?? {}) },
     });
     if (locked.count === 0)
       throw new BadRequestException('订单状态已被并发修改，请刷新后重试');
-    const updated = await this.prisma.order.findUnique({
+    const updated = await db.order.findUnique({
       where: { id: orderId },
       include: { address: true },
     });
-    await this.prisma.orderLog.create({
+    await db.orderLog.create({
       data: {
         orderId,
         action,
@@ -626,20 +629,27 @@ export class OrdersService {
     );
   }
 
-  /** 客户验收：待验收 → 已评价，并释放平台托管金给师傅（结算台账） */
+  /** 客户验收：待验收 → 已评价，并释放平台托管金给师傅（结算台账）。
+   *  transition + releaseToMaster 包在事务内，保证状态变更与结算创建原子化：
+   *  结算创建失败则状态回滚，不会出现"已验收但无结算"的不一致。 */
   async confirm(orderId: string, userId: string) {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order) throw new NotFoundException('订单不存在');
     if (order.customerId !== userId)
       throw new ForbiddenException('无权操作该订单');
-    const updated = await this.transition(
-      orderId,
-      OrderStatus.Reviewed,
-      userId,
-      '客户验收完成',
-    );
-    await this.settlements.releaseToMaster(orderId);
-    return updated;
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await this.transition(
+        orderId,
+        OrderStatus.Reviewed,
+        userId,
+        '客户验收完成',
+        undefined,
+        'transition',
+        tx,
+      );
+      await this.settlements.releaseToMaster(orderId, tx);
+      return updated;
+    });
   }
 
   /** 取消：需填写取消原因（必填，写入 orderLog）；支付前取消无退款；支付后取消走阶梯退款。

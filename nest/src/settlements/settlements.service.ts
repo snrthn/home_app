@@ -146,11 +146,15 @@ export class SettlementsService {
   }
 
   /** 释放平台托管金给师傅：订单验收(reviewed)后生成结算台账（幂等）。
-   *  常规单验收即时自动入账（status=credited）。 */
-  async releaseToMaster(orderId: string) {
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+   *  常规单验收即时自动入账（status=credited）。
+   *  @param tx 可选事务客户端，传入时与 transition() 在同一事务内原子执行。 */
+  async releaseToMaster(orderId: string, tx?: any) {
+    const db = tx ?? this.prisma;
+    const order = await db.order.findUnique({ where: { id: orderId } });
     if (!order) throw new NotFoundException('订单不存在');
-    const exist = await this.prisma.settlement.findUnique({
+    if (!order.masterId)
+      throw new BadRequestException('该订单无师傅接单，无法生成结算');
+    const exist = await db.settlement.findUnique({
       where: { orderId },
     });
     if (exist) return exist;
@@ -160,51 +164,69 @@ export class SettlementsService {
       Number(order.amount),
       snap,
     );
-    return this.prisma.settlement.create({
-      data: {
-        orderId,
-        masterId: order.masterId!,
-        orderAmount: order.amount,
-        platformFee,
-        masterAmount,
-        type: 'normal',
-        status: 'credited',
-        settledAt: new Date(),
-        note: `常规结算｜平台佣金率 ${(snap.platformRate * 100).toFixed(2)}%（规则：${snap.source}）`,
-      },
-    });
+    try {
+      return await db.settlement.create({
+        data: {
+          orderId,
+          masterId: order.masterId,
+          orderAmount: order.amount,
+          platformFee,
+          masterAmount,
+          type: 'normal',
+          status: 'credited',
+          settledAt: new Date(),
+          note: `常规结算｜平台佣金率 ${(snap.platformRate * 100).toFixed(2)}%（规则：${snap.source}）`,
+        },
+      });
+    } catch (e: any) {
+      // 并发场景：另一个事务已创建结算单，唯一约束拦截 → 返回已有记录
+      if (e?.code === 'P2002') {
+        return db.settlement.findUnique({ where: { orderId } });
+      }
+      throw e;
+    }
   }
 
   /** 阶梯退款时为师傅生成补偿单。三方金额由调用方 payments.refund 依订单快照算出：
    *  未退给用户的留成 = platformKeep（平台佣金留成）+ compensation（师傅补偿）。
-   *  补偿单不即时入账，需管理端审核确认。幂等：该订单已有结算单则跳过。 */
+   *  补偿单不即时入账，需管理端审核确认。幂等：该订单已有结算单则跳过。
+   *  @param tx 可选事务客户端，传入时与退款状态流转在同一事务内执行。 */
   async createCompensation(
     orderId: string,
     compensation: number,
     platformKeep = 0,
     ruleSource?: string,
+    tx?: any,
   ) {
+    const db = tx ?? this.prisma;
     const comp = round2(compensation);
     if (lt(comp, 0) || comp === 0) return null;
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    const order = await db.order.findUnique({ where: { id: orderId } });
     if (!order || !order.masterId) return null;
-    const exist = await this.prisma.settlement.findUnique({ where: { orderId } });
+    const exist = await db.settlement.findUnique({ where: { orderId } });
     if (exist) return exist;
     const keep = round2(platformKeep);
-    return this.prisma.settlement.create({
-      data: {
-        orderId,
-        masterId: order.masterId,
-        orderAmount: order.amount,
-        platformFee: keep,
-        masterAmount: comp,
-        type: 'compensation',
-        status: 'pending',
-        note:
-          `阶梯退款补偿（待管理端审核入账）｜平台留成 ¥${keep.toFixed(2)}` +
-          (ruleSource ? `｜规则：${ruleSource}` : ''),
-      },
-    });
+    try {
+      return await db.settlement.create({
+        data: {
+          orderId,
+          masterId: order.masterId,
+          orderAmount: order.amount,
+          platformFee: keep,
+          masterAmount: comp,
+          type: 'compensation',
+          status: 'pending',
+          note:
+            `阶梯退款补偿（待管理端审核入账）｜平台留成 ¥${keep.toFixed(2)}` +
+            (ruleSource ? `｜规则：${ruleSource}` : ''),
+        },
+      });
+    } catch (e: any) {
+      if (e?.code === 'P2002') {
+        return db.settlement.findUnique({ where: { orderId } });
+      }
+      throw e;
+    }
   }
 
   // ===== 师傅端：收入汇总与明细 =====

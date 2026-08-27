@@ -147,38 +147,38 @@ export class PaymentsService {
     await this.applyPaid(result.orderId, result.tradeNo);
   }
 
-  /** 支付成功 → 平台托管：订单置「待接单」，资金进入托管（验收后由结算释放给师傅） */
+  /** 支付成功 → 平台托管：订单置「待接单」，资金进入托管（验收后由结算释放给师傅）。
+   *  走 transition() 统一状态机入口（含乐观锁 + orderLog + 广播），
+   *  payment 状态更新与订单状态流转在同一 $transaction 内原子执行。 */
   private async applyPaid(orderId: string, tradeNo?: string) {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order) throw new NotFoundException('订单不存在');
     if (order.status !== OrderStatus.PendingPayment) return; // 幂等
 
-    // 乐观锁：仅当订单仍为待支付时才原子置为待接单，防止并发回调重复入池
-    const locked = await this.prisma.order.updateMany({
-      where: { id: orderId, status: OrderStatus.PendingPayment },
-      data: { status: OrderStatus.PendingAccept },
-    });
-    if (locked.count === 0) return; // 已被并发处理，幂等返回
-
-    await this.prisma.payment.updateMany({
-      where: { orderId },
-      data: { status: 'paid', paidAt: new Date() },
-    });
-    const updated = await this.prisma.order.findUnique({
-      where: { id: orderId },
-      include: { address: true },
-    });
-    await this.prisma.orderLog.create({
-      data: {
-        orderId,
-        action: 'pay',
-        fromStatus: OrderStatus.PendingPayment,
-        toStatus: OrderStatus.PendingAccept,
-        note: '客户支付成功（平台托管）',
-      },
-    });
-    // 支付成功入池：实时推送给在线师傅端（网关已挂入，非 mock 场景亦生效）
-    this.gateway?.broadcastNewOrder(updated!);
+    try {
+      const updated = await this.prisma.$transaction(async (tx) => {
+        const result = await this.orders.transition(
+          orderId,
+          OrderStatus.PendingAccept,
+          undefined,
+          '客户支付成功（平台托管）',
+          undefined,
+          'pay',
+          tx,
+        );
+        await tx.payment.updateMany({
+          where: { orderId },
+          data: { status: 'paid', paidAt: new Date() },
+        });
+        return result;
+      });
+      // 支付成功入池：实时推送给在线师傅端（网关已挂入，非 mock 场景亦生效）
+      this.gateway?.broadcastNewOrder(updated);
+    } catch (e) {
+      // 并发回调：乐观锁 count=0，幂等返回不抛错（支付平台重复回调不应返回错误）
+      if (e instanceof BadRequestException) return;
+      throw e;
+    }
   }
 
   /** 退款：支付后取消时调用，退款完成后置「已退款」。

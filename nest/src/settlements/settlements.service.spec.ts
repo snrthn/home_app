@@ -48,6 +48,13 @@ describe('SettlementsService.releaseToMaster - 幂等', () => {
       prisma.order.findUnique.mockResolvedValue(null);
       await expect(service.releaseToMaster(ORDER_ID)).rejects.toThrow(NotFoundException);
     });
+
+    it('masterId 为 null → BadRequestException（防崩溃）', async () => {
+      const { service, prisma } = setupService();
+      prisma.order.findUnique.mockResolvedValue(makeOrder({ masterId: null }));
+      await expect(service.releaseToMaster(ORDER_ID)).rejects.toThrow(BadRequestException);
+      expect(prisma.settlement.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('幂等', () => {
@@ -64,6 +71,19 @@ describe('SettlementsService.releaseToMaster - 幂等', () => {
       const { service, prisma } = setupService({ existing: null });
       await service.releaseToMaster(ORDER_ID);
       expect(prisma.settlement.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('并发创建 P2002 → 返回已有记录，不抛错', async () => {
+      const existing = { id: 'settle-concurrent', orderId: ORDER_ID, status: 'credited' };
+      const { service, prisma } = setupService({ existing: null });
+      // 模拟并发：create 抛 P2002 唯一约束冲突
+      const p2002 = Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
+      prisma.settlement.create.mockRejectedValue(p2002);
+      // findUnique 在 P2002 后应返回另一个事务创建的记录
+      prisma.settlement.findUnique.mockResolvedValueOnce(null) // 首次检查无记录
+        .mockResolvedValueOnce(existing); // P2002 后查到已有记录
+      const result = await service.releaseToMaster(ORDER_ID);
+      expect(result).toBe(existing);
     });
   });
 
@@ -194,6 +214,17 @@ describe('SettlementsService.createCompensation - 补偿单', () => {
     await service.createCompensation(ORDER_ID, 18, 2, 'service:abc');
     const call = prisma.settlement.create.mock.calls[0][0];
     expect(call.data.note).toContain('service:abc');
+  });
+
+  it('并发创建 P2002 → 返回已有记录，不抛错', async () => {
+    const existing = { id: 'settle-comp-concurrent', orderId: ORDER_ID, status: 'pending' };
+    const { service, prisma } = setupService();
+    const p2002 = Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
+    prisma.settlement.create.mockRejectedValue(p2002);
+    prisma.settlement.findUnique.mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(existing);
+    const result = await service.createCompensation(ORDER_ID, 18, 2, 'default');
+    expect(result).toBe(existing);
   });
 });
 

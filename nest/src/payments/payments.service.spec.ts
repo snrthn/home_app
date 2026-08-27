@@ -259,15 +259,18 @@ describe('PaymentsService.mockNotify - 模拟支付回调', () => {
       status: opts?.orderStatus ?? OrderStatus.PendingPayment,
       customerId: CUSTOMER_ID,
     });
+    const updatedOrder = { ...order, status: OrderStatus.PendingAccept };
+
     prisma.order.findUnique.mockResolvedValue(order);
-    prisma.order.update.mockResolvedValue({ ...order, status: OrderStatus.PendingAccept });
-    prisma.order.updateMany.mockResolvedValue({ count: 1 });
     prisma.payment.updateMany.mockResolvedValue({ count: 1 });
-    prisma.orderLog.create.mockResolvedValue({ id: 'log-1' });
+    // $transaction mock：执行回调并传入 prisma 作为 tx
+    prisma.$transaction.mockImplementation(async (fn: any) => fn(prisma));
+    // transition 走 mock：返回支付后的订单
+    orders.transition.mockResolvedValue(updatedOrder);
 
     const service = new PaymentsService(prisma, gateway, settlements, commission, orders, createMockMerchantStore() as any);
 
-    return { service, prisma, gateway };
+    return { service, prisma, gateway, orders };
   }
 
   it('模拟支付成功 → 触发 broadcastNewOrder（师傅端新单推送）', async () => {
@@ -276,23 +279,37 @@ describe('PaymentsService.mockNotify - 模拟支付回调', () => {
     expect(gateway.broadcastNewOrder).toHaveBeenCalled();
   });
 
-  it('模拟支付成功 → 订单状态从 PendingPayment 变为 PendingAccept', async () => {
+  it('模拟支付成功 → 通过 transition() 统一流转到 PendingAccept', async () => {
+    const { service, orders } = setupMockNotifyService({ orderStatus: OrderStatus.PendingPayment });
+    await service.mockNotify(ORDER_ID, 'mock-token-123');
+    expect(orders.transition).toHaveBeenCalledWith(
+      ORDER_ID,
+      OrderStatus.PendingAccept,
+      undefined,
+      '客户支付成功（平台托管）',
+      undefined,
+      'pay',
+      expect.anything(), // tx 事务客户端
+    );
+  });
+
+  it('模拟支付成功 → payment 状态在事务内更新为 paid', async () => {
     const { service, prisma } = setupMockNotifyService({ orderStatus: OrderStatus.PendingPayment });
     await service.mockNotify(ORDER_ID, 'mock-token-123');
-    expect(prisma.order.updateMany).toHaveBeenCalledWith(
+    expect(prisma.payment.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: ORDER_ID, status: OrderStatus.PendingPayment },
-        data: { status: OrderStatus.PendingAccept },
+        where: { orderId: ORDER_ID },
+        data: expect.objectContaining({ status: 'paid' }),
       }),
     );
   });
 
   it('非 PendingPayment 状态 → 幂等跳过，不重复广播', async () => {
-    const { service, prisma, gateway } = setupMockNotifyService({
+    const { service, gateway, orders } = setupMockNotifyService({
       orderStatus: OrderStatus.PendingAccept,
     });
     await service.mockNotify(ORDER_ID, 'mock-token-123');
-    expect(prisma.order.update).not.toHaveBeenCalled();
+    expect(orders.transition).not.toHaveBeenCalled();
     expect(gateway.broadcastNewOrder).not.toHaveBeenCalled();
   });
 
