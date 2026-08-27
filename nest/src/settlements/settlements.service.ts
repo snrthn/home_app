@@ -1,13 +1,14 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
-import { OnModuleInit } from '@nestjs/common';
+import { OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CommissionService } from '../commission/commission.service';
 import { round2, sub2, lt } from '../common/money';
 
 @Injectable()
-export class SettlementsService implements OnModuleInit {
+export class SettlementsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(SettlementsService.name);
   private readonly RECONCILE_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 小时
+  private reconcileTimer: NodeJS.Timeout | null = null;
 
   constructor(
     private prisma: PrismaService,
@@ -15,7 +16,7 @@ export class SettlementsService implements OnModuleInit {
   ) {}
 
   onModuleInit() {
-    setInterval(() => {
+    this.reconcileTimer = setInterval(() => {
       this.reconcile().then((r) => {
         if (r.issues.length > 0) {
           this.logger.warn(`[对账巡检] 发现 ${r.issues.length} 项异常`);
@@ -24,6 +25,13 @@ export class SettlementsService implements OnModuleInit {
         this.logger.error('[对账巡检] 执行失败:', err);
       });
     }, this.RECONCILE_INTERVAL_MS);
+  }
+
+  onModuleDestroy() {
+    if (this.reconcileTimer) {
+      clearInterval(this.reconcileTimer);
+      this.reconcileTimer = null;
+    }
   }
 
   // ===== 管理端 =====

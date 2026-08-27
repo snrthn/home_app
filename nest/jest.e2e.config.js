@@ -12,6 +12,7 @@ const config = {
   testEnvironment: 'node',
   testTimeout: 30000,
   maxWorkers: 1,
+  forceExit: true,
 };
 
 module.exports = config;
