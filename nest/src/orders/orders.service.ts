@@ -261,31 +261,41 @@ export class OrdersService {
     if (!masterCoversOrder(master, order?.address)) {
       throw new BadRequestException('您不在该订单的服务区域');
     }
-    // 乐观锁：仅当订单处于「待接单」且尚无师傅接走(masterId=null)时原子抢占，
-    // 避免并发被多师傅同时抢走（第二个抢单者 count=0 即失败）。
-    const locked = await this.prisma.order.updateMany({
-      where: { id: orderId, status: OrderStatus.PendingAccept, masterId: null },
-      data: { masterId: mid },
+    // 乐观锁 + 事务：占位(masterId)与流转(Accepted)在同一事务内原子执行，
+    // 流转失败则占位回滚，不会出现 masterId 已设但状态仍为 PendingAccept 的孤儿单。
+    return this.prisma.$transaction(async (tx) => {
+      const locked = await tx.order.updateMany({
+        where: { id: orderId, status: OrderStatus.PendingAccept, masterId: null },
+        data: { masterId: mid },
+      });
+      if (locked.count === 0)
+        throw new BadRequestException('手慢了，该订单已被其他师傅接走');
+      return this.transition(
+        orderId, OrderStatus.Accepted, userId, '师傅抢单',
+        undefined, 'transition', tx,
+      );
     });
-    if (locked.count === 0)
-      throw new BadRequestException('手慢了，该订单已被其他师傅接走');
-    return this.transition(orderId, OrderStatus.Accepted, userId, '师傅抢单');
   }
 
   async assign(orderId: string, masterId: string, adminUserId: string) {
-    // 乐观锁：仅当订单仍为待接单且无师傅时才原子占位，与 grab() 同口径
-    const locked = await this.prisma.order.updateMany({
-      where: { id: orderId, status: OrderStatus.PendingAccept, masterId: null },
-      data: { masterId },
+    // 与 grab() 同口径：占位 + 流转在同一事务内原子执行
+    return this.prisma.$transaction(async (tx) => {
+      const locked = await tx.order.updateMany({
+        where: { id: orderId, status: OrderStatus.PendingAccept, masterId: null },
+        data: { masterId },
+      });
+      if (locked.count === 0)
+        throw new BadRequestException('该订单已被接走或不在待接单状态');
+      return this.transition(
+        orderId,
+        OrderStatus.Accepted,
+        adminUserId,
+        '管理员指派',
+        undefined,
+        'transition',
+        tx,
+      );
     });
-    if (locked.count === 0)
-      throw new BadRequestException('该订单已被接走或不在待接单状态');
-    return this.transition(
-      orderId,
-      OrderStatus.Accepted,
-      adminUserId,
-      '管理员指派',
-    );
   }
 
   // 在手中订单状态（用于负载统计）

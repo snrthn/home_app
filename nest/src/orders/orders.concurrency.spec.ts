@@ -37,6 +37,8 @@ function setupRealTransitionService(opts?: { order?: any; updateManyResult?: { c
 
   prisma.order.findUnique.mockResolvedValue(opts?.order ?? makeOrder());
   prisma.order.updateMany.mockResolvedValue(opts?.updateManyResult ?? { count: 1 });
+  prisma.$transaction.mockImplementation(async (fn: any) => fn(prisma));
+  prisma.orderLog.create.mockResolvedValue({ id: 'log-1' });
 
   const service = new OrdersService(prisma, settlements, payments as any, commission, gateway);
   return { service, prisma, gateway };
@@ -52,6 +54,7 @@ function setupService(opts?: { order?: any; updateManyResult?: { count: number }
 
   prisma.order.findUnique.mockResolvedValue(opts?.order ?? makeOrder());
   prisma.order.updateMany.mockResolvedValue(opts?.updateManyResult ?? { count: 1 });
+  prisma.$transaction.mockImplementation(async (fn: any) => fn(prisma));
   prisma.master.findUnique.mockResolvedValue(opts?.master ?? {
     id: MASTER_ID,
     status: 'active',
@@ -118,6 +121,7 @@ describe('OrdersService 竞态 & 幂等防护', () => {
       await service.assign(ORDER_ID, MASTER_ID, ADMIN_ID);
       expect(transitionSpy).toHaveBeenCalledWith(
         ORDER_ID, OrderStatus.Accepted, ADMIN_ID, '管理员指派',
+        undefined, 'transition', expect.anything(),
       );
     });
 
@@ -140,6 +144,22 @@ describe('OrdersService 竞态 & 幂等防护', () => {
 
       await service.grab(ORDER_ID, MASTER_USER_ID);
       await expect(service.assign(ORDER_ID, 'other-master', ADMIN_ID)).rejects.toThrow(BadRequestException);
+    });
+
+    it('grab() 在 $transaction 内执行占位+流转', async () => {
+      const { service, prisma } = setupService({
+        order: makeOrder({ status: OrderStatus.PendingAccept, masterId: null }),
+      });
+      await service.grab(ORDER_ID, MASTER_USER_ID);
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('assign() 在 $transaction 内执行占位+流转', async () => {
+      const { service, prisma } = setupService({
+        order: makeOrder({ status: OrderStatus.PendingAccept, masterId: null }),
+      });
+      await service.assign(ORDER_ID, MASTER_ID, ADMIN_ID);
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
     });
   });
 

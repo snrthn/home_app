@@ -235,12 +235,10 @@ export class PaymentsService {
       reason: opts?.reason ?? '订单取消退款',
     });
 
-    await this.prisma.payment.updateMany({
-      where: { orderId },
-      data: { status: 'refunded' },
-    });
+    // 第三方退款已执行（不可逆），后续 DB 操作包在单一事务内：
+    // 状态流转(Refunding→Refunded) + payment 标记 + 补偿单创建原子化，
+    // 任一步失败则事务回滚，订单保持 Refunding 状态可重试。
     const noteRatio = ratio < 1 ? `（实退 ${Math.round(ratio * 100)}%）` : '';
-    // 留成拆分写入日志，便于事后对账（谁拿了没退给用户的那部分钱）
     const noteSplit =
       ratio < 1
         ? `｜留成拆分：平台 ¥${platformKeep.toFixed(2)} / 师傅补偿 ¥${masterCompensation.toFixed(2)}｜规则：${snap.source}`
@@ -249,39 +247,46 @@ export class PaymentsService {
       `退款完成 ¥${refundAmount.toFixed(2)}${noteRatio} ` +
       refundRes.refundNo +
       noteSplit;
-    // 退款完成统一走订单状态机：
-    // 两段式收口——先确保经 refunding 中间态（OrdersService.cancel 已先行流转，
-    // 此处 order.status 已为 Refunding，跳过第一段），再置 refunded。
-    // canTransition 校验 + 统一日志(action='refund') + 实时广播，双端详情页即时可见。
-    if (order.status !== OrderStatus.Refunding) {
+
+    await this.prisma.$transaction(async (tx) => {
+      // 两段式收口：先确保经 refunding 中间态（cancel 已先行流转则跳过）
+      if (order.status !== OrderStatus.Refunding) {
+        await this.orders.transition(
+          orderId,
+          OrderStatus.Refunding,
+          customerId,
+          (opts?.reason ?? '取消（发起退款）') + '｜退款流转',
+          undefined,
+          'refund',
+          tx,
+        );
+      }
+      // payment 标记退款完成
+      await tx.payment.updateMany({
+        where: { orderId },
+        data: { status: 'refunded' },
+      });
+      // 订单流转到 refunded
       await this.orders.transition(
         orderId,
-        OrderStatus.Refunding,
+        OrderStatus.Refunded,
         customerId,
-        (opts?.reason ?? '取消（发起退款）') + '｜退款流转',
+        refundNote,
         undefined,
         'refund',
+        tx,
       );
-    }
-    await this.orders.transition(
-      orderId,
-      OrderStatus.Refunded,
-      customerId,
-      refundNote,
-      undefined,
-      'refund',
-    );
-
-    // 留成中属于师傅的部分生成补偿结算单（pending，待管理端审核入账）。
-    // 平台留成部分本就在平台账上，无需台账流转，仅记录在补偿单 platformFee 与日志中。
-    if (gt(masterCompensation, 0) && order.masterId) {
-      await this.settlements.createCompensation(
-        orderId,
-        masterCompensation,
-        platformKeep,
-        snap.source,
-      );
-    }
+      // 留成中属于师傅的部分生成补偿结算单（pending，待管理端审核入账）
+      if (gt(masterCompensation, 0) && order.masterId) {
+        await this.settlements.createCompensation(
+          orderId,
+          masterCompensation,
+          platformKeep,
+          snap.source,
+          tx,
+        );
+      }
+    });
     return split;
   }
 

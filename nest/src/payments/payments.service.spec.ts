@@ -53,6 +53,10 @@ function setupService(opts?: {
   });
   prisma.payment.updateMany.mockResolvedValue({ count: 1 });
   prisma.order.updateMany.mockResolvedValue({ count: 1 });
+  // $transaction mock：执行回调并传入 prisma 作为 tx
+  prisma.$transaction.mockImplementation(async (fn: any) => fn(prisma));
+  // transition mock：refund 内部调用 transition(Refunding→Refunded)
+  orders.transition.mockResolvedValue({ id: ORDER_ID });
 
   commission.snapshotFromOrder.mockResolvedValue(opts?.snap ?? {
     platformRate: 0.1,
@@ -172,12 +176,12 @@ describe('PaymentsService.refund - 三策略守卫', () => {
       // 第一段：→ Refunding
       expect(orders.transition).toHaveBeenNthCalledWith(
         1, ORDER_ID, OrderStatus.Refunding, CUSTOMER_ID,
-        expect.any(String), undefined, 'refund',
+        expect.any(String), undefined, 'refund', expect.anything(),
       );
       // 第二段：→ Refunded
       expect(orders.transition).toHaveBeenNthCalledWith(
         2, ORDER_ID, OrderStatus.Refunded, CUSTOMER_ID,
-        expect.any(String), undefined, 'refund',
+        expect.any(String), undefined, 'refund', expect.anything(),
       );
     });
 
@@ -187,7 +191,7 @@ describe('PaymentsService.refund - 三策略守卫', () => {
       expect(orders.transition).toHaveBeenCalledTimes(1);
       expect(orders.transition).toHaveBeenCalledWith(
         ORDER_ID, OrderStatus.Refunded, CUSTOMER_ID,
-        expect.any(String), undefined, 'refund',
+        expect.any(String), undefined, 'refund', expect.anything(),
       );
     });
   });
@@ -199,7 +203,7 @@ describe('PaymentsService.refund - 三策略守卫', () => {
       });
       await service.refund(CUSTOMER_ID, ORDER_ID, 'departing');
       expect(settlements.createCompensation).toHaveBeenCalledWith(
-        ORDER_ID, 18, 2, 'default',
+        ORDER_ID, 18, 2, 'default', expect.anything(),
       );
     });
 
@@ -243,6 +247,24 @@ describe('PaymentsService.refund - 三策略守卫', () => {
         platformKeep: 2,
         masterCompensation: 18,
       });
+    });
+  });
+
+  describe('事务原子性', () => {
+    it('provider 退款后 DB 操作包在 $transaction 内', async () => {
+      const { service, prisma, provider } = setupService();
+      await service.refund(CUSTOMER_ID, ORDER_ID, 'departing');
+      // provider 先退款
+      expect(provider.refund).toHaveBeenCalledTimes(1);
+      // $transaction 在 provider 退款之后调用
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('provider 退款失败 → 不进入 $transaction', async () => {
+      const { service, prisma, provider } = setupService();
+      provider.refund.mockRejectedValue(new Error('退款通道异常'));
+      await expect(service.refund(CUSTOMER_ID, ORDER_ID, 'departing')).rejects.toThrow('退款通道异常');
+      expect(prisma.$transaction).not.toHaveBeenCalled();
     });
   });
 });

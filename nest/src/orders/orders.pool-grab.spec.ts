@@ -59,6 +59,7 @@ function setupService(opts?: {
     address: { provinceCode: '11', cityCode: null, districtCode: null },
   });
   prisma.order.updateMany.mockResolvedValue(opts?.updateManyResult ?? { count: 1 });
+  prisma.$transaction.mockImplementation(async (fn: any) => fn(prisma));
 
   const service = new OrdersService(prisma, settlements, payments as any, commission, gateway);
   const transitionSpy = jest.spyOn(service as any, 'transition').mockResolvedValue({ id: ORDER_ID });
@@ -105,6 +106,7 @@ describe('OrdersService.grab - 师傅审核状态校验', () => {
     await service.grab(ORDER_ID, MASTER_USER_ID);
     expect(transitionSpy).toHaveBeenCalledWith(
       ORDER_ID, OrderStatus.Accepted, MASTER_USER_ID, '师傅抢单',
+      undefined, 'transition', expect.anything(),
     );
   });
 
