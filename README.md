@@ -618,7 +618,7 @@ docker compose -f docker-compose.prod.yml down
 | `pnpm prisma:generate` | 生成 Prisma Client |
 | `pnpm prisma:migrate` | 执行数据库迁移 |
 | `pnpm prisma:studio` | Prisma Studio 数据库 GUI |
-| `pnpm test` | 单元测试（P0 纯函数 + P1 金额守卫 + P2 竞态防护 + P3 事务原子性，247 tests） |
+| `pnpm test` | 单元测试（P0 纯函数 + P1 金额守卫 + P2 竞态防护 + P3 事务原子性，276 tests） |
 | `pnpm test:e2e` | E2E 测试（正向全链 + 售后链，16 tests，需先启动后端） |
 
 **后端 `nest/`**
@@ -628,7 +628,7 @@ docker compose -f docker-compose.prod.yml down
 | `pnpm dev` | 热重载启动（`nest start --watch`） |
 | `pnpm build` | 编译到 `dist/` |
 | `pnpm start:prod` | 生产启动（`node dist/main`，需先 build） |
-| `pnpm test` | 单元测试（P0 纯函数 + P1 金额守卫 + P2 竞态防护 + P3 事务原子性，247 tests） |
+| `pnpm test` | 单元测试（P0 纯函数 + P1 金额守卫 + P2 竞态防护 + P3 事务原子性，276 tests） |
 | `pnpm test:e2e` | E2E 测试（正向全链 + 售后链，16 tests） |
 | `pnpm lint` | ESLint |
 | `pnpm seed` | 写入权限种子数据（安装向导自动调用） |
@@ -642,8 +642,8 @@ docker compose -f docker-compose.prod.yml down
 | TypeScript | tsc EXIT=0 | 三端 `strict: true`，零 `@ts-ignore` |
 | `any` 治理 | 288→139（-52%） | 保留的为第三方 SDK / Prisma JSON / catch 块 |
 | ESLint | 0 error / 90 warn | `no-explicit-any` warn 级 |
-| 单元测试 | 14 suites / 247 tests | P0 纯函数 + P1 金额守卫 + P2 竞态防护 + P3 事务原子性 |
-| E2E 测试 | 2 suites / 16 tests | 正向全链 + 售后链 |
+| 单元测试 | 14 suites / 276 tests | P0 纯函数 + P1 金额守卫 + P2 竞态防护 + P3 事务原子性 |
+| E2E 测试 | 2 suites / 16 tests | 正向全链 + 售后链（下一步扩展派单/工单分支流程） |
 | CI 门禁 | typecheck + lint + commitlint | 失败即阻断部署 |
 | Git 规范 | commitlint + husky | Conventional Commits，本地 + CI 双重拦截 |
 

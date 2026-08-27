@@ -12,7 +12,7 @@
 | ---------- | ----------------------------------------------------------------------------------------- | ------------- |
 | 类型检查       | `nest` / `next` 均 `tsc --noEmit` EXIT=0                                                   | ✅ 通过          |
 | `any` 类型安全 | 三端共 139 处 `any`（nest 58 / next 81 / shared 0），较修复前 288 处减少 149 处（52%）；零 `@ts-ignore`/`@ts-nocheck` | 🟡 大幅改善，剩余为合理保留 |
-| 单元测试       | jest + ts-jest 就位；P0 纯函数 + P1 金额守卫 + P2 竞态防护 + P3 事务原子性，14 suites / 247 tests PASS | ✅ 已完成 |
+| 单元测试       | jest + ts-jest 就位；P0 纯函数 + P1 金额守卫 + P2 竞态防护 + P3 事务原子性，14 suites / 276 tests PASS | ✅ 已完成 |
 | E2E 测试     | 2 suites / 16 tests PASS（正向全链 + 售后链）                                                       | ✅ 已完成 |
 | Lint / 格式化 | eslint 9 flat config 打通，`pnpm lint` 0 error / 81 warn（原 188 warn，any 清理+round2+日志改造后降 107）；prettier 配置就位，存量 55 文件格式债未统一 | 🟡 部分完成       |
 | CI 门禁      | `.github/workflows/deploy.yml` 现跑 `pnpm prisma:generate` + `pnpm typecheck` + `pnpm lint` + commitlint，失败即阻断部署             | ✅ 门禁生效       |

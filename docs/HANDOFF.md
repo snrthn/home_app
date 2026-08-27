@@ -398,7 +398,7 @@ pending_payment → pending_accept → accepted → departing → arrived → se
 - [x] 下单成功后返回逻辑修复（2026-08-25）：`router.push` 改 `router.replace`，避免历史栈中保留已失效的下单页导致重复下单
 - [x] 未通过审核师傅不可接单修复（2026-08-27）：`GET /orders/pool` 和 `POST /orders/:id/grab` 增加 `master.status === 'active'` 校验，pending/disabled 师傅获取空池或 ForbiddenException
 - [x] P2 竞态防护与安全加固（2026-08-27，详见第 24 节）：师傅审核乐观锁 + 订单号 randomUUID 防重复 + SMS per-phone 60 秒限流与 DB 存储 + 登录失败 5 次锁定 15 分钟 + 21 个新单元测试（全量 233 通过）
-- [x] P3 事务原子性加固与余额对账（2026-08-27，详见第 25 节）：transition() 事务化 + confirm/applyPaid/refund/grab/assign 链路 $transaction 包裹 + 结算 P2002 catch + 余额对账巡检 + 14 个新单元测试（全量 247 通过）
+- [x] P3 事务原子性加固与余额对账（2026-08-27，详见第 25 节）：transition() 事务化 + confirm/applyPaid/refund/grab/assign 链路 $transaction 包裹 + 结算 P2002 catch + 余额对账巡检 + 14 个新单元测试（全量 276 通过）
 
 ### 待办 / 已知缺口
 
@@ -524,7 +524,7 @@ NEXT_PUBLIC_API_BASE=http://127.0.0.1:3721/api next dev -p 3824
 cd nest && PORT=3721 pnpm start:dev
 
 # 测试（根目录直接跑）
-pnpm test          # 单元测试（P0 纯函数 + P1 金额守卫 + P2 竞态防护 + P3 事务原子性，247 tests）
+pnpm test          # 单元测试（P0 纯函数 + P1 金额守卫 + P2 竞态防护 + P3 事务原子性，276 tests）
 pnpm test:e2e      # E2E 测试（需先启动后端 3721 端口）
 ```
 
@@ -872,7 +872,7 @@ UPDATE systemconfig SET installed = 1, installedAt = NOW() WHERE id = 1;
 - 第 1 批新增 7 个测试（confirm 事务/grab 事务/assign 事务/null 守卫/P2002 ×2/支付事务）
 - 第 2 批新增 4 个测试（退款事务/provider 失败/抢单事务/派单事务）
 - 第 3 批新增 3 个测试（对账无异常/孤儿订单/负余额）
-- **全量 247 tests PASS**（14 suites）
+- **全量 276 tests PASS**（14 suites）
 
 ---
 

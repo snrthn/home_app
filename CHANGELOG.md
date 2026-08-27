@@ -50,7 +50,7 @@
 - `grab()` / `assign()` 占位 + 流转包 `$transaction`：masterId 占位与 status 流转原子化，流转失败占位回滚，消除孤儿单
 - `releaseToMaster()` / `createCompensation()` P2002 catch + `masterId` null 守卫
 - `reconcile()` 余额一致性对账巡检：每 6 小时自动检测孤儿订单/不一致结算/负余额；管理端手动触发 `GET /settlements/reconcile`
-- 新增 14 个单元测试（settlements 5 + payments 4 + orders 5），全量 247 通过
+- 新增 14 个单元测试（settlements 5 + payments 4 + orders 5），全量 276 通过
 
 ### Fixed
 - 生产环境 socket 推送失效（`NEXT_PUBLIC_API_BASE` 加 `/v1` 后正则未同步，socket.io 连到错误 namespace）
