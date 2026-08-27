@@ -153,14 +153,20 @@ export class PaymentsService {
     if (!order) throw new NotFoundException('订单不存在');
     if (order.status !== OrderStatus.PendingPayment) return; // 幂等
 
+    // 乐观锁：仅当订单仍为待支付时才原子置为待接单，防止并发回调重复入池
+    const locked = await this.prisma.order.updateMany({
+      where: { id: orderId, status: OrderStatus.PendingPayment },
+      data: { status: OrderStatus.PendingAccept },
+    });
+    if (locked.count === 0) return; // 已被并发处理，幂等返回
+
     await this.prisma.payment.updateMany({
       where: { orderId },
       data: { status: 'paid', paidAt: new Date() },
     });
-    const updated = await this.prisma.order.update({
+    const updated = await this.prisma.order.findUnique({
       where: { id: orderId },
-      data: { status: OrderStatus.PendingAccept },
-      include: { address: true }, // 带上地址地域，供网关按区域投递新单
+      include: { address: true },
     });
     await this.prisma.orderLog.create({
       data: {
@@ -172,7 +178,7 @@ export class PaymentsService {
       },
     });
     // 支付成功入池：实时推送给在线师傅端（网关已挂入，非 mock 场景亦生效）
-    this.gateway?.broadcastNewOrder(updated);
+    this.gateway?.broadcastNewOrder(updated!);
   }
 
   /** 退款：支付后取消时调用，退款完成后置「已退款」。
@@ -204,6 +210,13 @@ export class PaymentsService {
       (!!opts?.allowCompleted && COMPLETED_STATES.includes(order.status as OrderStatus));
     if (!refundable)
       throw new BadRequestException('该订单当前不可退款');
+
+    // 幂等守卫：已有退款记录则拒绝重复退款，防止并发双扣
+    const existingRefund = await this.prisma.payment.findFirst({
+      where: { orderId, status: 'refunded' },
+    });
+    if (existingRefund)
+      throw new BadRequestException('订单已退款，请勿重复操作');
 
     // 按订单快照解析分账规则，一次算清三方金额
     const snap = await this.commission.snapshotFromOrder(order);

@@ -23,6 +23,7 @@ function setupService(opts?: { order?: any; existing?: any; snap?: any; split?: 
   prisma.settlement.findUnique.mockResolvedValue(opts?.existing ?? null);
   prisma.settlement.create.mockResolvedValue({ id: 'settle-1', orderId: ORDER_ID });
   prisma.settlement.update.mockResolvedValue({ id: 'settle-1', status: 'credited' });
+  prisma.settlement.updateMany.mockResolvedValue({ count: 1 });
 
   commission.snapshotFromOrder.mockResolvedValue(opts?.snap ?? {
     platformRate: 0.1,
@@ -213,9 +214,9 @@ describe('SettlementsService.credit - 补偿单入账', () => {
     const { service, prisma } = setupService();
     prisma.settlement.findUnique.mockResolvedValue({ id: 'settle-1', status: 'pending', note: 'old' });
     await service.credit('settle-1', '审核通过', 'admin-1');
-    expect(prisma.settlement.update).toHaveBeenCalledWith(
+    expect(prisma.settlement.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'settle-1' },
+        where: { id: 'settle-1', status: 'pending' },
         data: expect.objectContaining({
           status: 'credited',
           note: '审核通过',
@@ -243,9 +244,9 @@ describe('SettlementsService.reject - 补偿单驳回', () => {
     const { service, prisma } = setupService();
     prisma.settlement.findUnique.mockResolvedValue({ id: 'settle-1', status: 'pending', note: 'old' });
     await service.reject('settle-1', '金额有误', 'admin-1');
-    expect(prisma.settlement.update).toHaveBeenCalledWith(
+    expect(prisma.settlement.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'settle-1' },
+        where: { id: 'settle-1', status: 'pending' },
         data: expect.objectContaining({
           status: 'rejected',
           note: '金额有误',

@@ -47,8 +47,12 @@ function setupService(opts?: {
   const gateway = createMockGateway();
 
   prisma.order.findUnique.mockResolvedValue(opts?.order ?? makeOrder());
-  prisma.payment.findFirst.mockResolvedValue(opts?.payment ?? { id: 'pay-1' });
+  prisma.payment.findFirst.mockImplementation((args: any) => {
+    if (args?.where?.status === 'refunded') return Promise.resolve(null);
+    return Promise.resolve(opts?.payment ?? { id: 'pay-1' });
+  });
   prisma.payment.updateMany.mockResolvedValue({ count: 1 });
+  prisma.order.updateMany.mockResolvedValue({ count: 1 });
 
   commission.snapshotFromOrder.mockResolvedValue(opts?.snap ?? {
     platformRate: 0.1,
@@ -257,6 +261,7 @@ describe('PaymentsService.mockNotify - 模拟支付回调', () => {
     });
     prisma.order.findUnique.mockResolvedValue(order);
     prisma.order.update.mockResolvedValue({ ...order, status: OrderStatus.PendingAccept });
+    prisma.order.updateMany.mockResolvedValue({ count: 1 });
     prisma.payment.updateMany.mockResolvedValue({ count: 1 });
     prisma.orderLog.create.mockResolvedValue({ id: 'log-1' });
 
@@ -274,9 +279,9 @@ describe('PaymentsService.mockNotify - 模拟支付回调', () => {
   it('模拟支付成功 → 订单状态从 PendingPayment 变为 PendingAccept', async () => {
     const { service, prisma } = setupMockNotifyService({ orderStatus: OrderStatus.PendingPayment });
     await service.mockNotify(ORDER_ID, 'mock-token-123');
-    expect(prisma.order.update).toHaveBeenCalledWith(
+    expect(prisma.order.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: ORDER_ID },
+        where: { id: ORDER_ID, status: OrderStatus.PendingPayment },
         data: { status: OrderStatus.PendingAccept },
       }),
     );

@@ -92,6 +92,21 @@ export class OrdersService {
     // 之后退款/结算只读快照，后期调整类目佣金不会污染历史订单。
     const commissionSnapshot = await this.commission.resolve(dto.serviceItemId);
 
+    // 幂等去重：同一客户对同一服务项+地址+预约时段，5 分钟内不重复创建
+    const dedupSince = new Date(Date.now() - 5 * 60 * 1000);
+    const existing = await this.prisma.order.findFirst({
+      where: {
+        customerId,
+        serviceItemId: dto.serviceItemId,
+        addressId: dto.addressId,
+        status: OrderStatus.PendingPayment,
+        createdAt: { gte: dedupSince },
+        ...(dto.appointmentDate ? { appointmentDate: new Date(dto.appointmentDate) } : {}),
+        ...(dto.appointmentSlot ? { appointmentSlot: dto.appointmentSlot } : {}),
+      },
+    });
+    if (existing) return existing;
+
     // 下单即进入「待支付」态（支付前置模型）；支付成功后再入抢单池。
     const order = await this.prisma.order.create({
       data: {
@@ -199,10 +214,16 @@ export class OrdersService {
       throw new BadRequestException(
         `状态不可从 ${order.status} 流转到 ${to}`,
       );
-    const updated = await this.prisma.order.update({
-      where: { id: orderId },
+    // 乐观锁：仅当当前状态与读取时一致才更新，防止并发流转绕过状态机
+    const locked = await this.prisma.order.updateMany({
+      where: { id: orderId, status: order.status },
       data: { status: to, ...(extraData ?? {}) },
-      include: { address: true }, // 带上地址地域，供网关按区域刷新接单池
+    });
+    if (locked.count === 0)
+      throw new BadRequestException('订单状态已被并发修改，请刷新后重试');
+    const updated = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { address: true },
     });
     await this.prisma.orderLog.create({
       data: {
@@ -252,10 +273,13 @@ export class OrdersService {
   }
 
   async assign(orderId: string, masterId: string, adminUserId: string) {
-    await this.prisma.order.update({
-      where: { id: orderId },
+    // 乐观锁：仅当订单仍为待接单且无师傅时才原子占位，与 grab() 同口径
+    const locked = await this.prisma.order.updateMany({
+      where: { id: orderId, status: OrderStatus.PendingAccept, masterId: null },
       data: { masterId },
     });
+    if (locked.count === 0)
+      throw new BadRequestException('该订单已被接走或不在待接单状态');
     return this.transition(
       orderId,
       OrderStatus.Accepted,

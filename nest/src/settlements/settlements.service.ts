@@ -108,8 +108,9 @@ export class SettlementsService {
     if (!s) throw new NotFoundException('结算单不存在');
     if (s.status !== 'pending')
       throw new BadRequestException('仅待审核的补偿单可确认入账');
-    return this.prisma.settlement.update({
-      where: { id },
+    // 乐观锁：仅当仍为 pending 时才原子置为 credited，防止并发审批
+    const locked = await this.prisma.settlement.updateMany({
+      where: { id, status: 'pending' },
       data: {
         status: 'credited',
         settledAt: new Date(),
@@ -118,6 +119,9 @@ export class SettlementsService {
         reviewedAt: new Date(),
       },
     });
+    if (locked.count === 0)
+      throw new BadRequestException('该结算单已被并发审批，请刷新后重试');
+    return this.prisma.settlement.findUnique({ where: { id } });
   }
 
   /** 补偿单驳回：pending → rejected（不入账，需填原因） */
@@ -126,8 +130,9 @@ export class SettlementsService {
     if (!s) throw new NotFoundException('结算单不存在');
     if (s.status !== 'pending')
       throw new BadRequestException('仅待审核的补偿单可驳回');
-    return this.prisma.settlement.update({
-      where: { id },
+    // 乐观锁：仅当仍为 pending 时才原子置为 rejected，防止并发审批
+    const locked = await this.prisma.settlement.updateMany({
+      where: { id, status: 'pending' },
       data: {
         status: 'rejected',
         note: reason,
@@ -135,6 +140,9 @@ export class SettlementsService {
         reviewedAt: new Date(),
       },
     });
+    if (locked.count === 0)
+      throw new BadRequestException('该结算单已被并发审批，请刷新后重试');
+    return this.prisma.settlement.findUnique({ where: { id } });
   }
 
   /** 释放平台托管金给师傅：订单验收(reviewed)后生成结算台账（幂等）。
